@@ -202,6 +202,15 @@ export function NotePane(props: Props) {
     };
   }, [loadedPath]);
 
+  // 编辑/分屏/预览切换时容器尺寸或显隐发生变化，CodeMirror 不会自动重排，
+  // 需手动触发重新测量，否则分屏/切回时左侧原文区会空白或错位。
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const id = requestAnimationFrame(() => view.requestMeasure());
+    return () => cancelAnimationFrame(id);
+  }, [tab]);
+
   // 实时预览 HTML（基于 liveContent，分屏编辑即时同步）
   const [previewHtml, setPreviewHtml] = useState('');
   useEffect(() => {

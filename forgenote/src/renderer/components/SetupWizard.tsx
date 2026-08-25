@@ -91,6 +91,17 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
       <div className="absolute top-0 left-0 right-0 h-10" />
 
       <div className="w-full max-w-xl bg-content rounded-xl shadow-2xl border border-border-soft overflow-hidden">
+        {/* 品牌头部 */}
+        <div className="flex items-center gap-3 px-6 pt-6">
+          <div className="w-10 h-10 rounded-xl bg-brand-soft flex items-center justify-center">
+            <Icon name="sparkles" className="w-5 h-5 text-brand" />
+          </div>
+          <div>
+            <h1 className="text-base font-semibold text-fg leading-tight">欢迎使用锦囊笔记</h1>
+            <p className="text-xs text-fg-muted">几步即可创建属于你的本地知识库</p>
+          </div>
+        </div>
+
         {/* 步骤指示 */}
         <div className="flex items-center gap-2 px-6 pt-5 text-xs text-fg-faint">
           <span className={`flex items-center gap-1 ${step !== 'done' ? 'text-brand' : 'text-fg-muted'}`}>
@@ -106,7 +117,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
 
         {/* 第 1 步：选择知识库目录 */}
         {step === 'dir' && (
-          <div className="px-6 py-6">
+          <div className="px-6 py-7">
             <h2 className="text-xl font-semibold text-fg mb-2">创建你的知识库</h2>
             <p className="text-sm text-fg-secondary mb-6">
               选择一个本地文件夹作为知识库根目录。所有笔记将以 Markdown 文件形式存放在这里，完全由你本地掌控。
@@ -132,7 +143,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
 
         {/* 第 2 步：可选内嵌模板 */}
         {step === 'template' && (
-          <div className="px-6 py-6">
+          <div className="px-6 py-7">
             <h2 className="text-xl font-semibold text-fg mb-2">是否应用内嵌目录模板？</h2>
             <p className="text-sm text-fg-secondary mb-4">
               模板会在你的知识库里创建一套预设目录结构（如灵感库、项目库等），帮助你更快上手。这是可选步骤，后续也能随时在模板页应用。
@@ -191,8 +202,10 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
 
         {/* 完成态 */}
         {step === 'done' && (
-          <div className="px-6 py-10 flex flex-col items-center">
-            <Icon name="check-circle" className="w-12 h-12 text-brand mb-3" />
+          <div className="px-6 py-12 flex flex-col items-center">
+            <div className="w-14 h-14 rounded-2xl bg-brand-soft flex items-center justify-center mb-4">
+              <Icon name="check-circle" className="w-8 h-8 text-brand" />
+            </div>
             <h2 className="text-lg font-semibold text-fg mb-1">知识库已就绪</h2>
             <p className="text-sm text-fg-secondary">正在进入锦囊笔记…</p>
           </div>

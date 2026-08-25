@@ -231,8 +231,7 @@
 
 /* 分屏浏览：去掉中间硬线，用画布色分隔带区分原文/预览 */
 .pane-split-divider {
-  background: var(--bg-canvas);
-  width: 12px;
+  border-right: 1px solid var(--border-soft);
 }
 
 html, body, #root {

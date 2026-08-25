@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
+import { Icon } from './Icon';
 
 export function Onboarding() {
   const { activeKb, applied } = useKBStore();
@@ -49,9 +50,12 @@ export function Onboarding() {
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-content rounded-xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold mb-2">{s.title}</h2>
-        <p className="text-sm text-fg-secondary mb-5">{s.body}</p>
+      <div className="bg-content rounded-xl shadow-xl w-full max-w-md p-7">
+        <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+          <Icon name="sparkles" className="w-5 h-5 text-brand" />
+          {s.title}
+        </h2>
+        <p className="text-sm text-fg-secondary mb-6 leading-relaxed">{s.body}</p>
         <div className="flex items-center justify-between">
           <div className="text-xs text-fg-faint">第 {step + 1} / {steps.length} 步</div>
           <div className="flex gap-2">
