@@ -5,7 +5,7 @@ import { SearchPanel } from './SearchPanel';
 
 export function Sidebar() {
   const nav = useNavigate();
-  const { tree, activeKb, kbs, setActiveKb, setTree, setApplied, pushToast } = useKBStore();
+  const { tree, activeKb, kbs, setActiveKb, setTree, setApplied, pushToast, openCreateNote } = useKBStore();
 
   async function handleAddKb() {
     const kb = await window.forge.kb.add();
@@ -49,9 +49,14 @@ export function Sidebar() {
               </option>
             ))}
           </select>
-          <button onClick={handleAddKb} className="icon-btn text-base" title="添加知识库">
-            +
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button onClick={() => openCreateNote()} className="icon-btn text-base" title="新建笔记">
+              ✎
+            </button>
+            <button onClick={handleAddKb} className="icon-btn text-base" title="添加知识库">
+              +
+            </button>
+          </div>
         </div>
         {activeKb?.templateId && (
           <div className="mt-1 text-xs text-ink-500 flex items-center gap-1">

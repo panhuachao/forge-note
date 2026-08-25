@@ -41,13 +41,6 @@ export function parseFrontMatter(raw: string): { content: string; data: Record<s
 }
 
 /**
- * 序列化为带 FrontMatter 的 Markdown
- */
-export function serializeFrontMatter(content: string, data: Record<string, unknown>): string {
-  return matter.stringify(content, data as matter.Input);
-}
-
-/**
  * 简单的标题与正文章节切分（用于 RAG 切块）
  */
 export interface Chunk {

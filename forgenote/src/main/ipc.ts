@@ -108,6 +108,12 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.TPL_GET_DIR_README, async (_e, kbId: string, dirPath: string) => templateService.getDirReadme(kbId, dirPath));
   ipcMain.handle(IPC.TPL_SAVE_DIR_README, async (_e, kbId: string, dirPath: string, c: string) => templateService.saveDirReadme(kbId, dirPath, c));
 
+  // Note templates
+  ipcMain.handle(IPC.TPL_GET_NOTE_TEMPLATE, async (_e, kbId: string, dirPath: string) => templateService.getNoteTemplateInfo(kbId, dirPath));
+  ipcMain.handle(IPC.TPL_SAVE_NOTE_TEMPLATE, async (_e, kbId: string, dirPath: string, c: string) => templateService.saveNoteTemplate(kbId, dirPath, c));
+  ipcMain.handle(IPC.TPL_RESET_NOTE_TEMPLATE, async (_e, kbId: string, dirPath: string) => templateService.resetNoteTemplate(kbId, dirPath));
+  ipcMain.handle(IPC.TPL_PREVIEW_NOTE_TEMPLATE, async (_e, kbId: string, dirPath: string, name?: string) => templateService.previewNoteTemplate(kbId, dirPath, name));
+
   // AI 预设
   ipcMain.handle('ai:listPresets', async (_e, kbId: string) => getAIPresets(kbId));
   ipcMain.handle('ai:savePreset', async (_e, kbId: string, preset: { name: string; content: string; active: boolean }) => {

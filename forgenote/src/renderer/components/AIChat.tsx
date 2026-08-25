@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
-import { useNavigate } from 'react-router-dom';
+import { useLayoutStore } from '../stores/layout-store';
 
 interface Props {
   mode: 'ask' | 'search';
@@ -8,10 +8,10 @@ interface Props {
 
 export function AIChat({ mode }: Props) {
   const { activeKb, pushToast } = useKBStore();
+  const { openTab, setMainView } = useLayoutStore();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  const nav = useNavigate();
 
   async function send() {
     if (!activeKb || !input.trim()) return;

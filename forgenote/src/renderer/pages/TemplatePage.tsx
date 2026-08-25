@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { TemplateMeta, AppliedTemplate } from '@shared/types';
+import type { TemplateMeta, AppliedTemplate, NoteTemplateInfo } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
-import { useNavigate } from 'react-router-dom';
 
 export function TemplatePage() {
   const { activeKb, applied, setApplied, pushToast } = useKBStore();
@@ -10,7 +9,9 @@ export function TemplatePage() {
   const [selections, setSelections] = useState<string[]>([]);
   const [aiConfigContent, setAiConfigContent] = useState('');
   const [dirReadmeEdit, setDirReadmeEdit] = useState<{ dirId: string; content: string } | null>(null);
-  const nav = useNavigate();
+  // 笔记模板编辑
+  const [noteTemplateEdit, setNoteTemplateEdit] = useState<NoteTemplateInfo | null>(null);
+  const [noteTemplateDraft, setNoteTemplateDraft] = useState('');
 
   useEffect(() => {
     if (!activeKb) return;
@@ -136,7 +137,6 @@ export function TemplatePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {applied.meta.dirs.map((d) => (
                   <div key={d.id} className="p-3 rounded border border-ink-200 flex items-center gap-2">
-                    <span style={{ color: d.color }} className="text-lg">{d.icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm">{d.id} {d.name}</div>
                       <div className="text-xs text-ink-500">
@@ -144,15 +144,29 @@ export function TemplatePage() {
                         {d.sink ? ' · 终态' : ''}
                       </div>
                     </div>
-                    <button
-                      className="btn btn-ghost text-xs"
-                      onClick={async () => {
-                        const c = await window.forge.template.getDirReadme(activeKb.id, `${d.id} ${d.name}`);
-                        setDirReadmeEdit({ dirId: d.id, content: c });
-                      }}
-                    >
-                      编辑说明
-                    </button>
+                    <div className="flex flex-col items-end gap-1">
+                      <button
+                        className="btn btn-ghost text-xs"
+                        onClick={async () => {
+                          const c = await window.forge.template.getDirReadme(activeKb.id, `${d.id} ${d.name}`);
+                          setDirReadmeEdit({ dirId: d.id, content: c });
+                        }}
+                      >
+                        说明
+                      </button>
+                      <button
+                        className="btn btn-ghost text-xs"
+                        onClick={async () => {
+                          const info = await window.forge.template.getNoteTemplate(activeKb.id, `${d.id} ${d.name}`);
+                          if (info) {
+                            setNoteTemplateDraft(info.content);
+                            setNoteTemplateEdit(info);
+                          }
+                        }}
+                      >
+                        笔记模板
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -198,7 +212,6 @@ export function TemplatePage() {
                       else setSelections(selections.filter((x) => x !== d.id));
                     }}
                   />
-                  <span style={{ color: d.color }}>{d.icon}</span>
                   <span className="text-sm">{d.id} {d.name}</span>
                 </label>
               ))}
@@ -236,6 +249,65 @@ export function TemplatePage() {
                   setDirReadmeEdit(null);
                 }}
                 className="btn btn-primary"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 笔记模板编辑 */}
+      {noteTemplateEdit && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+            <div className="px-5 py-3 border-b border-ink-200 flex items-center justify-between">
+              <h2 className="font-semibold">
+                编辑笔记模板 · {noteTemplateEdit.dirId} {noteTemplateEdit.dirName}
+              </h2>
+              <button onClick={() => setNoteTemplateEdit(null)} className="text-ink-400 hover:text-ink-800">×</button>
+            </div>
+            <div className="px-5 py-2 text-xs text-ink-400 flex items-center justify-between">
+              <span>可用变量：{noteTemplateEdit.variables.join(' ')}</span>
+              {noteTemplateEdit.hasCustom && (
+                <button
+                  className="text-brand-600 hover:underline"
+                  onClick={async () => {
+                    const info = await window.forge.template.resetNoteTemplate(
+                      activeKb.id,
+                      noteTemplateEdit.dirPath
+                    );
+                    if (info) {
+                      setNoteTemplateEdit(info);
+                      setNoteTemplateDraft(info.content);
+                      pushToast({ level: 'success', text: '已重置为默认模板' });
+                    }
+                  }}
+                >
+                  重置为默认
+                </button>
+              )}
+            </div>
+            <textarea
+              value={noteTemplateDraft}
+              onChange={(e) => setNoteTemplateDraft(e.target.value)}
+              className="flex-1 m-5 mt-1 p-4 font-mono text-xs outline-none resize-none border border-ink-200 rounded"
+              rows={16}
+              placeholder="# {{name}}
+
+## 内容
+
+（在此输入该目录下新建笔记的默认内容，支持 {{name}} {{kbName}} {{date}} {{time}} {{timestamp}} 变量）"
+            />
+            <div className="px-5 py-3 border-t border-ink-200 flex justify-end gap-2">
+              <button onClick={() => setNoteTemplateEdit(null)} className="btn btn-secondary">取消</button>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  await window.forge.template.saveNoteTemplate(activeKb.id, noteTemplateEdit.dirPath, noteTemplateDraft);
+                  pushToast({ level: 'success', text: '笔记模板已保存' });
+                  setNoteTemplateEdit(null);
+                }}
               >
                 保存
               </button>

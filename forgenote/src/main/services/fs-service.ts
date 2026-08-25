@@ -81,8 +81,11 @@ class FSService {
     if (opts?.useTemplate !== false) {
       // 查找该目录对应的模板
       const dirTemplate = await templateService.getNoteTemplateForDir(kbId, dirPath);
-      if (dirTemplate) {
-        content = this.fillTemplate(dirTemplate, { name: basename(fileName, '.md'), kbName: basename(root) });
+      if (dirTemplate && dirTemplate.trim()) {
+        content = templateService.fillTemplateVars(dirTemplate, {
+          name: basename(fileName, '.md'),
+          kbName: basename(root)
+        });
       }
     }
 
@@ -111,17 +114,6 @@ class FSService {
       mtime: stat.mtimeMs,
       size: stat.size
     };
-  }
-
-  private fillTemplate(tpl: string, vars: { name: string; kbName: string }): string {
-    const now = new Date();
-    const date = now.toISOString().slice(0, 10);
-    const time = now.toTimeString().slice(0, 5);
-    return tpl
-      .replace(/\{\{name\}\}/g, vars.name)
-      .replace(/\{\{kbName\}\}/g, vars.kbName)
-      .replace(/\{\{date\}\}/g, date)
-      .replace(/\{\{time\}\}/g, time);
   }
 
   async deleteNote(kbId: string, notePath: string): Promise<void> {

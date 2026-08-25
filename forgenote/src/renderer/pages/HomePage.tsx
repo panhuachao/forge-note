@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useKBStore } from '../stores/kb-store';
+import { useLayoutStore } from '../stores/layout-store';
 import { AIChat } from '../components/AIChat';
-import { useNavigate } from 'react-router-dom';
 
 export function HomePage() {
   const { activeKb, kbs, setActiveKb, setTree, setApplied, pushToast, aiConfig } = useKBStore();
-  const nav = useNavigate();
+  const { setMainView } = useLayoutStore();
   const [mode, setMode] = useState<'ask' | 'search'>('ask');
 
   // 有知识库但无 active：自动激活第一个
@@ -77,7 +77,7 @@ export function HomePage() {
           <div className="border-2 border-brand-600 rounded-lg bg-white overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 text-sm">
               <button
-                onClick={() => nav('/graph')}
+                onClick={() => setMainView('graph')}
                 className="text-brand-600 hover:underline"
               >
                 选择目录
@@ -105,7 +105,7 @@ export function HomePage() {
           </div>
           {aiConfig.provider === 'none' && (
             <div className="mt-4 text-center text-xs text-ink-400">
-              未配置 AI 模型 · <button className="text-brand-600 hover:underline" onClick={() => nav('/settings')}>前往设置</button>
+              未配置 AI 模型 · <button className="text-brand-600 hover:underline" onClick={() => setMainView('settings')}>前往设置</button>
             </div>
           )}
         </div>

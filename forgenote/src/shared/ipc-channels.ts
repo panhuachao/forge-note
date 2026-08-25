@@ -52,6 +52,12 @@ export const IPC = {
   SEARCH: 'search:query',
   SEARCH_REINDEX: 'search:reindex',
 
+  // Note templates
+  TPL_GET_NOTE_TEMPLATE: 'tpl:getNoteTemplate',
+  TPL_SAVE_NOTE_TEMPLATE: 'tpl:saveNoteTemplate',
+  TPL_RESET_NOTE_TEMPLATE: 'tpl:resetNoteTemplate',
+  TPL_PREVIEW_NOTE_TEMPLATE: 'tpl:previewNoteTemplate',
+
   // Audit
   AUDIT_LIST: 'audit:list',
   AUDIT_UNDO: 'audit:undo',

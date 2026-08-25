@@ -1,42 +1,53 @@
 import { useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useKBStore } from './stores/kb-store';
-import { Sidebar } from './components/Sidebar';
+import { useLayoutStore } from './stores/layout-store';
+import { MainMenuRail } from './components/MainMenuRail';
 import { TitleBar } from './components/TitleBar';
 import { ToastContainer } from './components/Toast';
+import { LeftPanel } from './components/LeftPanel';
+import { RightPanel } from './components/RightPanel';
+import { MultiNoteEditor } from './components/MultiNoteEditor';
 import { HomePage } from './pages/HomePage';
-import { NotePage } from './pages/NotePage';
 import { GraphPage } from './pages/GraphPage';
 import { TemplatePage } from './pages/TemplatePage';
-import { SettingsPage } from './pages/SettingsPage';
 import { AuditPage } from './pages/AuditPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
+import { CreateNoteModal } from './components/CreateNoteModal';
+import { TopToolbar } from './components/TopToolbar';
+import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
 
 export function App() {
-  const { setKBs, setActiveKb, setTree, setApplied, setTheme, theme, setAIConfig } = useKBStore();
-  const location = useLocation();
+  const {
+    setKBs, setActiveKb, setTree, setApplied, setAIConfig,
+    openCreateNote, createNoteOpen, createNoteDir, closeCreateNote
+  } = useKBStore();
+  const { mainView, leftPanelCollapsed, rightPanelCollapsed } = useLayoutStore();
 
   useEffect(() => {
-    // 初始化
     (async () => {
       const kbs = await window.forge.kb.list();
       setKBs(kbs);
       const active = await window.forge.kb.getActive();
-      if (active) {
-        await openKb(active.id);
-      }
+      if (active) await openKb(active.id);
       const aiCfg = await window.forge.ai.getConfig();
       setAIConfig(aiCfg);
     })();
-    // 监听文件系统变动
-    const off = window.forge.events.onFsChange(async (e) => {
+    const off = window.forge.events.onFsChange(async () => {
       const { activeKb } = useKBStore.getState();
       if (!activeKb) return;
-      // 重建树
       const tree = await window.forge.fs.listTree(activeKb.id);
       setTree(tree);
     });
-    return () => off();
+    const offMenu = window.forge.events.onMenuNewNote(() => {
+      const { activeKb } = useKBStore.getState();
+      if (activeKb) openCreateNote();
+    });
+    return () => {
+      off();
+      offMenu();
+    };
   }, []);
 
   async function openKb(kbId: string) {
@@ -51,33 +62,35 @@ export function App() {
     }
   }
 
-  useEffect(() => {
-    if (theme === 'dark') document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [theme]);
+  function renderMain() {
+    if (mainView === 'home') return <HomePage />;
+    if (mainView === 'graph') return <GraphPage />;
+    if (mainView === 'template') return <TemplatePage />;
+    if (mainView === 'audit') return <AuditPage />;
+    if (mainView === 'settings') return <SettingsPage />;
+    return <MultiNoteEditor />;
+  }
 
-  const { activeKb } = useKBStore();
-  const showSidebar = !!activeKb;
+  const isNoteView = mainView === 'note';
+  const showLeft = isNoteView && !leftPanelCollapsed;
+  const showRight = isNoteView && !rightPanelCollapsed;
 
   return (
     <div className="h-screen w-screen flex flex-col bg-ink-50">
       <TitleBar />
       <div className="flex-1 flex overflow-hidden">
-        {showSidebar && <Sidebar />}
-        <main className="flex-1 flex overflow-hidden">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/note/*" element={<NotePage />} />
-            <Route path="/graph" element={<GraphPage />} />
-            <Route path="/template" element={<TemplatePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/audit" element={<AuditPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
+        <MainMenuRail />
+        {isNoteView && (showLeft ? <LeftPanel /> : <CollapsedLeftHandle />)}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {isNoteView && <TopToolbar />}
+          <div className="flex-1 flex overflow-hidden">{renderMain()}</div>
+        </div>
+        {isNoteView && (showRight ? <RightPanel /> : <CollapsedRightHandle />)}
       </div>
+      <StatusBar />
       <ToastContainer />
       <Onboarding />
+      <CreateNoteModal open={createNoteOpen} initialDirPath={createNoteDir} onClose={closeCreateNote} />
     </div>
   );
 }

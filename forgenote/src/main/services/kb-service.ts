@@ -130,7 +130,8 @@ class KBService {
               dirNode.templateDirId = id;
               dirNode.templateIcon = meta.icon;
               dirNode.templateColor = meta.color;
-              dirNode.name = meta.name ? `${meta.icon} ${e.name.split(' ').slice(1).join(' ') || e.name}` : e.name;
+              // 目录名不显示图标，直接使用磁盘上的真实名称（如 "00 灵感库"）
+              dirNode.name = e.name;
             }
             break;
           }

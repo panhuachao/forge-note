@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useKBStore } from '../stores/kb-store';
+import { useLayoutStore } from '../stores/layout-store';
 import type { SearchResult } from '@shared/types';
 
-export function SearchPanel() {
-  const nav = useNavigate();
+interface Props {
+  onResultClick?: () => void;
+}
+
+export function SearchPanel({ onResultClick }: Props = {}) {
   const { activeKb, applied } = useKBStore();
+  const { openTab, setMainView } = useLayoutStore();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -61,7 +65,7 @@ export function SearchPanel() {
                 className={`badge ${on ? 'badge-brand' : 'badge-gray'} cursor-pointer`}
                 title="按目录过滤"
               >
-                {d.icon} {d.name}
+                {d.name}
               </button>
             );
           })}
@@ -74,9 +78,11 @@ export function SearchPanel() {
               key={r.notePath}
               className="px-2 py-1 rounded hover:bg-ink-100 text-xs cursor-pointer"
               onClick={() => {
-                nav(`/note/${encodeURIComponent(r.notePath)}`);
+                setMainView('note');
+                openTab(r.notePath);
                 setResults([]);
                 setQ('');
+                onResultClick?.();
               }}
               title={r.notePath}
             >

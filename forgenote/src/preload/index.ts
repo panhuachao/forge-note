@@ -16,7 +16,8 @@ import type {
   AIConfigPreset,
   SearchResult,
   AuditEntry,
-  FSChangeEvent
+  FSChangeEvent,
+  NoteTemplateInfo
 } from '@shared/types';
 
 const api = {
@@ -68,7 +69,15 @@ const api = {
     getAIConfig: (kbId: string) => ipcRenderer.invoke(IPC.TPL_GET_AI_CONFIG, kbId) as Promise<string>,
     saveAIConfig: (kbId: string, c: string) => ipcRenderer.invoke(IPC.TPL_SAVE_AI_CONFIG, kbId, c) as Promise<void>,
     getDirReadme: (kbId: string, dirPath: string) => ipcRenderer.invoke(IPC.TPL_GET_DIR_README, kbId, dirPath) as Promise<string>,
-    saveDirReadme: (kbId: string, dirPath: string, c: string) => ipcRenderer.invoke(IPC.TPL_SAVE_DIR_README, kbId, dirPath, c) as Promise<void>
+    saveDirReadme: (kbId: string, dirPath: string, c: string) => ipcRenderer.invoke(IPC.TPL_SAVE_DIR_README, kbId, dirPath, c) as Promise<void>,
+    getNoteTemplate: (kbId: string, dirPath: string) =>
+      ipcRenderer.invoke(IPC.TPL_GET_NOTE_TEMPLATE, kbId, dirPath) as Promise<NoteTemplateInfo | null>,
+    saveNoteTemplate: (kbId: string, dirPath: string, content: string) =>
+      ipcRenderer.invoke(IPC.TPL_SAVE_NOTE_TEMPLATE, kbId, dirPath, content) as Promise<void>,
+    resetNoteTemplate: (kbId: string, dirPath: string) =>
+      ipcRenderer.invoke(IPC.TPL_RESET_NOTE_TEMPLATE, kbId, dirPath) as Promise<NoteTemplateInfo | null>,
+    previewNoteTemplate: (kbId: string, dirPath: string, name?: string) =>
+      ipcRenderer.invoke(IPC.TPL_PREVIEW_NOTE_TEMPLATE, kbId, dirPath, name) as Promise<string>
   },
   aiPresets: {
     list: (kbId: string) => ipcRenderer.invoke('ai:listPresets', kbId) as Promise<AIConfigPreset[]>,
@@ -88,6 +97,16 @@ const api = {
       const fn = (_: IpcRendererEvent, payload: FSChangeEvent) => cb(payload);
       ipcRenderer.on(IPC.EV_FS_CHANGE, fn);
       return () => ipcRenderer.off(IPC.EV_FS_CHANGE, fn);
+    },
+    onMenuNewNote: (cb: () => void) => {
+      const fn = () => cb();
+      ipcRenderer.on('menu:newNote', fn);
+      return () => ipcRenderer.off('menu:newNote', fn);
+    },
+    onMenuAddKb: (cb: () => void) => {
+      const fn = () => cb();
+      ipcRenderer.on('menu:addKb', fn);
+      return () => ipcRenderer.off('menu:addKb', fn);
     }
   }
 };

@@ -23,6 +23,11 @@ interface KBState {
   pushToast: (t: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
   setAIConfig: (c: AIModelConfig) => void;
+  // 新建笔记弹窗
+  createNoteOpen: boolean;
+  createNoteDir: string;
+  openCreateNote: (dirPath?: string) => void;
+  closeCreateNote: () => void;
 }
 
 export const useKBStore = create<KBState>((set) => ({
@@ -58,5 +63,10 @@ export const useKBStore = create<KBState>((set) => ({
     }, t.duration ?? 3000);
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })),
-  setAIConfig: (aiConfig) => set({ aiConfig })
+  setAIConfig: (aiConfig) => set({ aiConfig }),
+  // 新建笔记弹窗
+  createNoteOpen: false,
+  createNoteDir: '',
+  openCreateNote: (dirPath?: string) => set({ createNoteOpen: true, createNoteDir: dirPath || '' }),
+  closeCreateNote: () => set({ createNoteOpen: false })
 }));

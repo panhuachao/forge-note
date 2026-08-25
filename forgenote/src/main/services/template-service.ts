@@ -4,18 +4,19 @@ import { join, basename } from 'path';
 import { nanoid } from 'nanoid';
 import { app } from 'electron';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import type { AppliedTemplate, TemplateMeta, TemplateDir } from '@shared/types';
+import type { AppliedTemplate, TemplateMeta, TemplateDir, NoteTemplateInfo } from '@shared/types';
 import { atomicWrite, ensureDir, safeJoin, copyDir } from '../utils/fs';
 import { getKB, updateKBTemplate, addAudit } from './store';
 import { kbService } from './kb-service';
 
 // 内置模板路径
 function builtinTemplatePath(): string {
-  // electron-vite 打包后 resources 在 process.resourcesPath，开发期在项目根
+  // electron-vite 打包后 resources 在 process.resourcesPath
+  // 开发期 __dirname = <root>/dist/main，向上两级到 <root>，再进 resources
   if (app.isPackaged) {
     return join(process.resourcesPath, 'templates', 'para-plus');
   }
-  return join(__dirname, '..', '..', '..', 'resources', 'templates', 'para-plus');
+  return join(__dirname, '..', '..', 'resources', 'templates', 'para-plus');
 }
 
 class TemplateService {
@@ -238,6 +239,114 @@ class TemplateService {
     if (!kb) return;
     await atomicWrite(join(kb.rootPath, dirPath, 'README.md'), content);
     kbService.invalidateMeta(kb.rootPath);
+  }
+
+  /**
+   * 获取某目录的笔记模板信息（含内置默认，用于预览/重置）
+   */
+  async getNoteTemplateInfo(kbId: string, dirPath: string): Promise<NoteTemplateInfo | null> {
+    const kb = getKB(kbId);
+    if (!kb) return null;
+    const applied = await this.loadApplied(kbId);
+    if (!applied) return null;
+    const name = basename(dirPath);
+    const dir = applied.meta.dirs.find(
+      (d) => `${d.id} ${d.name}` === name || d.name === name
+    );
+    if (!dir) return null;
+
+    const realDir = `${dir.id} ${dir.name}`;
+    let content = '';
+    try {
+      content = await fs.readFile(join(kb.rootPath, realDir, '.template.md'), 'utf-8');
+    } catch {}
+
+    // 内置默认模板（从模板资源目录读取）
+    let builtinContent = '';
+    try {
+      const srcDir = join(builtinTemplatePath(), realDir);
+      builtinContent = await fs.readFile(join(srcDir, '.template.md'), 'utf-8');
+    } catch {}
+
+    return {
+      dirId: dir.id,
+      dirName: dir.name,
+      dirPath: realDir,
+      content,
+      builtinContent: builtinContent || undefined,
+      hasCustom: !!content && content !== builtinContent,
+      variables: ['{{name}}', '{{kbName}}', '{{date}}', '{{time}}', '{{timestamp}}']
+    };
+  }
+
+  /**
+   * 保存某目录的笔记模板
+   */
+  async saveNoteTemplate(kbId: string, dirPath: string, content: string): Promise<void> {
+    const kb = getKB(kbId);
+    if (!kb) return;
+    await atomicWrite(join(kb.rootPath, dirPath, '.template.md'), content);
+    kbService.invalidateMeta(kb.rootPath);
+  }
+
+  /**
+   * 重置某目录笔记模板为内置默认
+   */
+  async resetNoteTemplate(kbId: string, dirPath: string): Promise<NoteTemplateInfo | null> {
+    const kb = getKB(kbId);
+    if (!kb) return null;
+    const applied = await this.loadApplied(kbId);
+    if (!applied) return null;
+    const name = basename(dirPath);
+    const dir = applied.meta.dirs.find(
+      (d) => `${d.id} ${d.name}` === name || d.name === name
+    );
+    if (!dir) return null;
+    const realDir = `${dir.id} ${dir.name}`;
+    const srcDir = join(builtinTemplatePath(), realDir);
+    try {
+      const builtin = await fs.readFile(join(srcDir, '.template.md'), 'utf-8');
+      await atomicWrite(join(kb.rootPath, realDir, '.template.md'), builtin);
+      kbService.invalidateMeta(kb.rootPath);
+      return await this.getNoteTemplateInfo(kbId, realDir);
+    } catch {
+      // 无内置模板则置空
+      await atomicWrite(join(kb.rootPath, realDir, '.template.md'), '');
+      kbService.invalidateMeta(kb.rootPath);
+      return await this.getNoteTemplateInfo(kbId, realDir);
+    }
+  }
+
+  /**
+   * 预览填充变量后的笔记模板
+   */
+  async previewNoteTemplate(kbId: string, dirPath: string, noteName?: string): Promise<string> {
+    const kb = getKB(kbId);
+    if (!kb) return '';
+    const applied = await this.loadApplied(kbId);
+    if (!applied) return '';
+    const info = await this.getNoteTemplateInfo(kbId, dirPath);
+    if (!info) return '';
+    const name = basename(dirPath);
+    const dir = applied.meta.dirs.find((d) => `${d.id} ${d.name}` === name || d.name === name);
+    const realName = noteName || '示例笔记';
+    return this.fillTemplateVars(info.content, { name: realName, kbName: kb.name });
+  }
+
+  /**
+   * 模板变量填充（统一入口，供 fs-service 复用）
+   */
+  fillTemplateVars(tpl: string, vars: { name: string; kbName: string }): string {
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const time = now.toTimeString().slice(0, 5);
+    const timestamp = String(Math.floor(now.getTime() / 1000));
+    return tpl
+      .replace(/\{\{name\}\}/g, vars.name)
+      .replace(/\{\{kbName\}\}/g, vars.kbName)
+      .replace(/\{\{date\}\}/g, date)
+      .replace(/\{\{time\}\}/g, time)
+      .replace(/\{\{timestamp\}\}/g, timestamp);
   }
 
   /**

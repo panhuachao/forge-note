@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
-import { useNavigate } from 'react-router-dom';
+import { useLayoutStore } from '../stores/layout-store';
 
 export function Onboarding() {
-  const { activeKb, applied, pushToast } = useKBStore();
+  const { activeKb, applied } = useKBStore();
+  const { setMainView } = useLayoutStore();
   const [step, setStep] = useState(0);
   const [show, setShow] = useState(false);
-  const nav = useNavigate();
 
   useEffect(() => {
     if (!activeKb || !applied) return;
@@ -27,7 +27,7 @@ export function Onboarding() {
     {
       title: '👋 欢迎来到锦囊笔记',
       body: '已为你应用「' + (applied?.meta.name || '') + '」模板。点击查看各目录说明开始使用。',
-      action: () => nav('/template')
+      action: () => setMainView('template')
     },
     {
       title: '📝 创建第一条灵感',

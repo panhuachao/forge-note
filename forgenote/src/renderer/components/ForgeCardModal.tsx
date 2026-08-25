@@ -65,7 +65,7 @@ export function ForgeCardModal({ draft, onClose, onConfirm }: Props) {
                     onChange={() => setTarget(d.id)}
                     className="hidden"
                   />
-                  {d.icon} {d.name}
+                  {d.id} {d.name}
                 </label>
               ))}
             </div>

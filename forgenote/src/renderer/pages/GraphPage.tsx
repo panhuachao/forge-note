@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useKBStore } from '../stores/kb-store';
+import { useLayoutStore } from '../stores/layout-store';
 
 export function GraphPage() {
   const { activeKb, applied } = useKBStore();
+  const { openTab } = useLayoutStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nav = useNavigate();
   const stateRef = useRef<{ nodes: { x: number; y: number; vx: number; vy: number; path: string; name: string; color: string }[]; edges: { a: number; b: number }[]; drag?: number }>({ nodes: [], edges: [] });
 
   useEffect(() => {
@@ -160,7 +160,7 @@ export function GraphPage() {
     for (const n of nodes) {
       const d = Math.hypot(n.x - x, n.y - y);
       if (d < 8) {
-        nav(`/note/${encodeURIComponent(n.path)}`);
+        openTab(n.path);
         return;
       }
     }

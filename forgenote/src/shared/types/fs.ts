@@ -42,3 +42,14 @@ export interface LinkInfo {
   reason: string;
   score: number;
 }
+
+// 目录级笔记模板信息
+export interface NoteTemplateInfo {
+  dirId: string;
+  dirName: string;
+  dirPath: string; // 真实目录相对路径
+  content: string;
+  builtinContent?: string; // 内置默认模板内容（用于"重置"）
+  hasCustom: boolean; // 用户是否自定义过
+  variables: string[]; // 支持的变量列表
+}
