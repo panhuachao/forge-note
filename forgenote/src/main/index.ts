@@ -10,6 +10,13 @@ let mainWindow: BrowserWindow | null = null;
 
 const isDev = !app.isPackaged;
 
+// 开发模式下为 win/linux 显式指定图标（mac 由 dock 决定，无需）
+function resolveIcon(): string | undefined {
+  if (process.platform === 'darwin') return undefined;
+  if (process.platform === 'win32') return join(__dirname, '../../resources/icons/icon.ico');
+  return join(__dirname, '../../resources/icons/icon.png');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -17,6 +24,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     title: '锦囊笔记 ForgeNote',
+    icon: resolveIcon(),
     backgroundColor: '#fafaf9',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 14 },

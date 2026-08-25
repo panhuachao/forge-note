@@ -36,6 +36,7 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.28.4",
     "@electron/rebuild": "^4.2.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.14.10",
     "@types/react": "^18.3.3",
@@ -53,6 +54,7 @@
   "build": {
     "appId": "ai.forgenote.app",
     "productName": "锦囊笔记",
+    "icon": "resources/icons/icon",
     "directories": {
       "output": "release"
     },
