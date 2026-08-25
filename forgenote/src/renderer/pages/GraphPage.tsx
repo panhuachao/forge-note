@@ -59,6 +59,9 @@ export function GraphPage() {
   useEffect(() => {
     hiddenDirsRef.current = hiddenDirs;
   }, [hiddenDirs]);
+  // 图谱数据存在 ref 中（RAF 绘制直接读 ref），但 ref 赋值不会触发 React 重渲染，
+  // 因此用 graphVersion 在数据加载完成后 +1 来驱动依赖它的 UI（目录列表等）刷新。
+  const [graphVersion, setGraphVersion] = useState(0);
 
   // 加载图谱数据
   useEffect(() => {
@@ -164,6 +167,7 @@ export function GraphPage() {
       setSelectedNodeIdx(null);
       setSelectedNote(null);
       viewRef.current = { zoom: 1, panX: 0, panY: 0 };
+      setGraphVersion((v) => v + 1); // 触发目录列表等 UI 刷新
     })();
   }, [activeKb?.id, applied?.appliedAt]);
 
@@ -405,7 +409,8 @@ export function GraphPage() {
     viewRef.current.panY = sy - h / 2 - wyBefore * newZoom;
   }
 
-  // 目录列表（去重）
+  // 目录列表（去重）。依赖 graphVersion（而非 nodesRef.current.length），
+  // 因为 nodesRef 是 ref，赋值不会触发重渲染，必须用 graphVersion 驱动刷新。
   const dirs = useMemo(() => {
     const map = new Map<string, { name: string; color: string; count: number }>();
     for (const n of nodesRef.current) {
@@ -415,7 +420,8 @@ export function GraphPage() {
       map.set(n.dir, e);
     }
     return Array.from(map.entries()).map(([k, v]) => ({ key: k, ...v }));
-  }, [nodesRef.current.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphVersion]);
 
   const visibleNodeCount = nodesRef.current.filter(n => !hiddenDirs.has(n.dir)).length;
   const visibleEdgeCount = edgesRef.current.filter(e => {
