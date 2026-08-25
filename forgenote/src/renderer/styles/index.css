@@ -38,9 +38,9 @@
   --text-faint: #b6b3ae;
 
   /* 品牌色（brand 是强调色；brand-soft 作为"中性高亮"用浅灰——不泛粉） */
-  --brand: #e53935;
-  --brand-soft: #f0eeec;
-  --brand-hover: #b91c1c;
+  --brand: #ef4444;
+  --brand-soft: #fdeceb;
+  --brand-hover: #dc2626;
   --brand-fg: #ffffff;
 
   /* Tailwind 语义色绑定（rgb 数字，让 <alpha-value> 生效）
@@ -58,9 +58,9 @@
   --c-text-secondary: 92 92 92;
   --c-text-muted: 140 140 140;
   --c-text-faint: 180 180 180;
-  --c-brand: 229 57 53;
-  --c-brand-soft: 240 238 236;
-  --c-brand-hover: 185 28 28;
+  --c-brand: 239 68 68;
+  --c-brand-soft: 253 236 235;
+  --c-brand-hover: 220 38 38;
   --c-brand-fg: 255 255 255;
 
   /* 兼容旧变量（不破坏现有引用） */
@@ -92,10 +92,10 @@
   --text-muted: #78716c;
   --text-faint: #57534e;
 
-  --brand: #f87171;
+  --brand: #ef4444;
   --brand-soft: #450a0a;
-  --brand-hover: #fca5a5;
-  --brand-fg: #1c1917;
+  --brand-hover: #dc2626;
+  --brand-fg: #ffffff;
 
   /* Tailwind 语义色绑定（暗色，R=G=B 纯中性） */
   --c-canvas: 24 24 24;
@@ -111,10 +111,10 @@
   --c-text-secondary: 168 162 158;
   --c-text-muted: 120 113 108;
   --c-text-faint: 87 83 78;
-  --c-brand: 248 113 113;
+  --c-brand: 239 68 68;
   --c-brand-soft: 60 56 54;
-  --c-brand-hover: 252 165 165;
-  --c-brand-fg: 28 25 23;
+  --c-brand-hover: 220 38 38;
+  --c-brand-fg: 255 255 255;
 
   --color-bg: var(--bg-canvas);
   --color-bg-elevated: var(--bg-content);

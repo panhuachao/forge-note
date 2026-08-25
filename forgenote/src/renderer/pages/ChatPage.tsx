@@ -156,7 +156,10 @@ export default function ChatPage() {
       {/* 左侧：对话历史 */}
       <div className="w-64 border-r border-border bg-panel flex flex-col">
         <div className="h-9 px-3 flex items-center justify-between border-b border-border-soft">
-          <span className="text-xs font-semibold text-fg-secondary">对话历史</span>
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-fg-secondary">
+            <Icon name="chat-bubble" className="w-4 h-4 text-brand" />
+            对话历史
+          </span>
           <button
             onClick={startNewConversation}
             title="新建对话"
@@ -268,7 +271,7 @@ export default function ChatPage() {
               {activeConv.messages.map((m, i) => (
                 <div
                   key={i}
-                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
                   <div
                     className={`max-w-[80%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
@@ -279,6 +282,20 @@ export default function ChatPage() {
                   >
                     {m.text}
                   </div>
+                  {m.role === 'assistant' && (
+                    <button
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent('forgenote:open-quicknote', { detail: { content: m.text } })
+                        )
+                      }
+                      className="mt-1 flex items-center gap-1 px-2 py-1 text-[11px] text-fg-muted hover:text-brand hover:bg-hover-bg rounded-md transition-colors"
+                      title="将这段回答整理为笔记"
+                    >
+                      <Icon name="document-plus" className="w-3.5 h-3.5" />
+                      添加笔记
+                    </button>
+                  )}
                 </div>
               ))}
               {loading && (

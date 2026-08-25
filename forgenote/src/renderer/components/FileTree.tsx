@@ -30,6 +30,44 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
   const { activeKb, pushToast, setTree, openCreateNote } = useKBStore();
   const { sortMode } = useLayoutStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // 目录重命名 / 新建后内联编辑态：{ path, name }
+  const [editing, setEditing] = useState<{ path: string; name: string } | null>(null);
+
+  // 新建目录（根或子目录），初始名“未命名目录”，创建后自动进入重命名态
+  const handleCreateDir = async (parentPath: string) => {
+    if (!activeKb) return;
+    try {
+      const newPath = await window.forge.fs.createDir(activeKb.id, parentPath, '未命名目录');
+      const t = await window.forge.fs.listTree(activeKb.id);
+      setTree(t);
+      // 展开并进入重命名
+      setExpanded((s) => new Set([...s, parentPath]));
+      setEditing({ path: newPath, name: '未命名目录' });
+    } catch (e) {
+      pushToast({ level: 'error', text: String(e) });
+    }
+  };
+
+  // 确认重命名
+  const commitRename = async () => {
+    if (!editing || !activeKb) {
+      setEditing(null);
+      return;
+    }
+    const name = editing.name.trim();
+    const oldPath = editing.path;
+    setEditing(null);
+    if (!name) return;
+    const curName = oldPath.includes('/') ? oldPath.slice(oldPath.lastIndexOf('/') + 1) : oldPath;
+    if (name === curName) return; // 未变化
+    try {
+      await window.forge.fs.renameDir(activeKb.id, oldPath, name);
+      const t = await window.forge.fs.listTree(activeKb.id);
+      setTree(t);
+    } catch (err) {
+      pushToast({ level: 'error', text: String(err) });
+    }
+  };
 
   useEffect(() => {
     if (depth === 0) setExpanded((s) => new Set([...s, node.id]));
@@ -77,19 +115,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
             title="新建笔记"
           ><Icon name="document-plus" className="w-4 h-4" /></button>
           <button
-            onClick={async () => {
-              if (!activeKb) return;
-              const name = prompt('新建目录名称', '新文件夹');
-              if (!name) return;
-              try {
-                await window.forge.fs.createDir(activeKb.id, '', name);
-                const t = await window.forge.fs.listTree(activeKb.id);
-                setTree(t);
-                pushToast({ level: 'success', text: `已创建目录：${name}` });
-              } catch (e) {
-                pushToast({ level: 'error', text: String(e) });
-              }
-            }}
+            onClick={() => handleCreateDir('')}
             className="h-full w-9 flex items-center justify-center border-r border-border-soft text-fg-secondary hover:bg-hover-bg"
             title="新建目录"
           ><Icon name="folder-plus" className="w-4 h-4" /></button>
@@ -157,7 +183,36 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
             className="w-3 h-3 text-fg-muted shrink-0"
           />
           <Icon name="folder" className="w-4 h-4 text-fg-muted shrink-0" solid={node.templateDirId === '00'} />
-          <span className="truncate flex-1">{node.name}</span>
+          {editing?.path === node.path ? (
+            <input
+              autoFocus
+              value={editing.name}
+              onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitRename();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setEditing(null);
+                }
+              }}
+              className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-brand rounded outline-none bg-content"
+            />
+          ) : (
+            <span
+              className="truncate flex-1"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setEditing({ path: node.path, name: node.name });
+              }}
+              title="双击重命名"
+            >
+              {node.name}
+            </span>
+          )}
           {node.templateDirId === '00' && (node.noteCount || 0) > 0 && (
             <span className="badge badge-brand">{node.noteCount}</span>
           )}
@@ -176,18 +231,9 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
           </button>
           <button
             className="icon-btn opacity-0 group-hover:opacity-100 text-xs"
-            onClick={async (e) => {
+            onClick={(e) => {
               e.stopPropagation();
-              if (!activeKb) return;
-              const name = prompt('新建子目录名称', '新文件夹');
-              if (!name) return;
-              try {
-                await window.forge.fs.createDir(activeKb.id, node.path, name);
-                const t = await window.forge.fs.listTree(activeKb.id);
-                setTree(t);
-              } catch (err) {
-                pushToast({ level: 'error', text: String(err) });
-              }
+              handleCreateDir(node.path);
             }}
             title="新建子目录"
           >

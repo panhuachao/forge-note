@@ -5,6 +5,7 @@ import type { TreeNode } from '@shared/types';
 interface Props {
   open: boolean;
   onClose: () => void;
+  initialContent?: string;
 }
 
 function flattenDirs(node: TreeNode, depth = 0): { path: string; label: string; id: string }[] {
@@ -20,7 +21,7 @@ function flattenDirs(node: TreeNode, depth = 0): { path: string; label: string; 
   return out;
 }
 
-export function QuickNoteModal({ open, onClose }: Props) {
+export function QuickNoteModal({ open, onClose, initialContent = '' }: Props) {
   const { activeKb, tree, createQuickNote } = useKBStore();
   const [content, setContent] = useState('');
   const [dirId, setDirId] = useState(''); // 可选：指定归属目录
@@ -30,11 +31,11 @@ export function QuickNoteModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (open) {
-      setContent('');
+      setContent(initialContent);
       setDirId('');
       setSubmitting(false);
     }
-  }, [open]);
+  }, [open, initialContent]);
 
   useEffect(() => {
     if (!open) return;
@@ -107,11 +108,11 @@ export function QuickNoteModal({ open, onClose }: Props) {
 
         {/* 底部 */}
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
-          <button onClick={onClose} className="btn-ghost">取消</button>
+          <button onClick={onClose} className="btn btn-ghost">取消</button>
           <button
             onClick={submit}
             disabled={!content.trim() || submitting || !activeKb}
-            className="btn-primary disabled:opacity-50"
+            className="btn btn-primary disabled:opacity-50"
           >
             {submitting ? 'AI 整理中…' : '确认并整理'}
           </button>

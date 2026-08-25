@@ -53,7 +53,11 @@ export function renderMarkdownPreview(md: string, kbId: string, currentPath: str
     const h = /^(#{1,6})\s+(.+)$/.exec(line);
     if (h) {
       const level = h[1].length;
-      out.push(`<h${level}>${inline(escapeHtml(h[2]))}</h${level}>`);
+      const raw = h[2].trim();
+      const anchor = 'h-' + i; // 行号锚点，便于大纲跳转
+      out.push(
+        `<h${level} id="${anchor}" data-line="${i + 1}">${inline(escapeHtml(raw))}</h${level}>`
+      );
       i++;
       continue;
     }

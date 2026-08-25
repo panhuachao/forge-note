@@ -51,6 +51,8 @@ export type IconName =
   | 'book-open'
   | 'light-bulb'
   | 'folder-open'
+  | 'folder-tree'
+  | 'cards'
   | 'chat-bubble'
   | 'bolt'
   | 'microphone'
@@ -91,6 +93,8 @@ const outlineMap: Record<string, any> = {
   'chevron-up-down': HeroiconsOutline.ChevronUpDownIcon,
   minus: HeroiconsOutline.MinusIcon,
   'square-2-stack': HeroiconsOutline.Squares2X2Icon,
+  'folder-tree': HeroiconsOutline.FolderIcon,
+  cards: HeroiconsOutline.Squares2X2Icon,
   'magnifying-glass': HeroiconsOutline.MagnifyingGlassIcon,
   hashtag: HeroiconsOutline.HashtagIcon,
   'queue-list': HeroiconsOutline.QueueListIcon,

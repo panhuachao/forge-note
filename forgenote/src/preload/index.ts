@@ -41,6 +41,7 @@ const api = {
     renameNote: (kbId: string, old: string, name: string) => ipcRenderer.invoke(IPC.FS_RENAME_NOTE, kbId, old, name) as Promise<string>,
     createDir: (kbId: string, parent: string, name: string) => ipcRenderer.invoke(IPC.FS_CREATE_DIR, kbId, parent, name) as Promise<string>,
     deleteDir: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_DELETE_DIR, kbId, p) as Promise<void>,
+    renameDir: (kbId: string, dirPath: string, name: string) => ipcRenderer.invoke(IPC.FS_RENAME_DIR, kbId, dirPath, name) as Promise<string>,
     readText: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_READ_TEXT, kbId, p) as Promise<string>,
     writeText: (kbId: string, p: string, c: string) => ipcRenderer.invoke(IPC.FS_WRITE_TEXT, kbId, p, c) as Promise<void>
   },
@@ -94,6 +95,12 @@ const api = {
   audit: {
     list: (kbId: string) => ipcRenderer.invoke(IPC.AUDIT_LIST, kbId) as Promise<AuditEntry[]>,
     undo: (kbId: string, id: string) => ipcRenderer.invoke(IPC.AUDIT_UNDO, kbId, id) as Promise<void>
+  },
+  win: {
+    maximizeToggle: () => ipcRenderer.invoke(IPC.WIN_MAXIMIZE_TOGGLE) as Promise<void>,
+    isMaximized: () => ipcRenderer.invoke(IPC.WIN_IS_MAXIMIZED) as Promise<boolean>,
+    minimize: () => ipcRenderer.invoke(IPC.WIN_MINIMIZE) as Promise<void>,
+    close: () => ipcRenderer.invoke(IPC.WIN_CLOSE) as Promise<void>
   },
   events: {
     onFsChange: (cb: (e: FSChangeEvent) => void) => {

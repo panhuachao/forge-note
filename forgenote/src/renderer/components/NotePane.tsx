@@ -14,6 +14,10 @@ import { renderMarkdownPreview } from '../utils/markdown-preview';
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
+// 大纲与正文双向同步用的事件名
+export const EVT_JUMP_HEADING = 'forgenote:jump-heading'; // detail: 行号
+export const EVT_ACTIVE_HEADING = 'forgenote:active-heading'; // detail: 行号
+
 // Markdown 语法高亮：使用中性色，避免默认把 `>`(引用) 等染成红色。
 // 颜色走 CSS 变量，亮色/暗黑自动适配。
 const markdownHighlight = HighlightStyle.define([
@@ -40,16 +44,21 @@ interface Props {
     outlinks: string[];
     inlinks: string[];
     brokenLinks: string[];
+    mtime: number;
+    ctime: number;
+    frontmatter: Record<string, unknown>;
   }) => void;
 }
 
 export function NotePane(props: Props) {
   const { activeKb, pushToast } = useKBStore();
   const { markTabDirty } = useLayoutStore();
-  const [note, setNote] = useState<{ content: string; outlinks: string[]; inlinks: string[]; brokenLinks: string[] } | null>(null);
+  const [note, setNote] = useState<{ content: string; outlinks: string[]; inlinks: string[]; brokenLinks: string[]; mtime: number; ctime: number; frontmatter: Record<string, unknown> } | null>(null);
   const [tab, setTab] = useState<'edit' | 'preview' | 'split'>('split');
-  const [previewHtml, setPreviewHtml] = useState('');
+  // 实时内容：编辑器每次变更都会更新，用于分屏实时预览（不依赖写盘）
+  const [liveContent, setLiveContent] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
   useEffect(() => {
@@ -57,6 +66,7 @@ export function NotePane(props: Props) {
     let cancelled = false;
     // 切换标签时先把内容清空，避免显示上一个文件的内容
     setNote(null);
+    setLiveContent('');
     (async () => {
       try {
         const c = await window.forge.fs.readNote(activeKb.id, props.notePath);
@@ -65,9 +75,13 @@ export function NotePane(props: Props) {
           content: c.content,
           outlinks: c.outlinks,
           inlinks: c.inlinks,
-          brokenLinks: c.brokenLinks
+          brokenLinks: c.brokenLinks,
+          mtime: c.mtime,
+          ctime: c.ctime,
+          frontmatter: c.frontmatter
         };
         setNote(info);
+        setLiveContent(c.content);
         props.onContentChange?.(info);
       } catch (e) {
         if (cancelled) return;
@@ -79,6 +93,7 @@ export function NotePane(props: Props) {
     };
   }, [activeKb?.id, props.notePath]);
 
+  // 初始化 CodeMirror（仅在笔记切换时重建，预览/编辑/分屏切换不再销毁）
   useEffect(() => {
     if (!containerRef.current || !note) return;
     if (viewRef.current) {
@@ -98,6 +113,7 @@ export function NotePane(props: Props) {
         EditorView.updateListener.of((v) => {
           if (v.docChanged) {
             markTabDirty(props.notePath, true);
+            setLiveContent(v.state.doc.toString()); // 实时预览同步
             if (saveTimer) clearTimeout(saveTimer);
             saveTimer = setTimeout(async () => {
               if (activeKb && note) {
@@ -109,7 +125,10 @@ export function NotePane(props: Props) {
                   content: c.content,
                   outlinks: c.outlinks,
                   inlinks: c.inlinks,
-                  brokenLinks: c.brokenLinks
+                  brokenLinks: c.brokenLinks,
+                  mtime: c.mtime,
+                  ctime: c.ctime,
+                  frontmatter: c.frontmatter
                 };
                 setNote(info);
                 props.onContentChange?.(info);
@@ -128,11 +147,57 @@ export function NotePane(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.content, props.notePath]);
 
+  // 实时预览 HTML（基于 liveContent，分屏编辑即时同步）
+  const [previewHtml, setPreviewHtml] = useState('');
   useEffect(() => {
-    if (!note) return;
-    const html = renderMarkdownPreview(note.content, activeKb?.id || '', props.notePath);
+    const html = renderMarkdownPreview(liveContent, activeKb?.id || '', props.notePath);
     setPreviewHtml(html);
-  }, [note?.content, activeKb?.id, props.notePath]);
+  }, [liveContent, activeKb?.id, props.notePath]);
+
+  // 大纲点击跳转：滚动到对应标题
+  useEffect(() => {
+    const onJump = (e: Event) => {
+      const line = (e as CustomEvent<number>).detail;
+      if (!line) return;
+      const el = previewRef.current?.querySelector<HTMLElement>(`[data-line="${line}"]`);
+      if (el && previewRef.current) {
+        previewRef.current.scrollTo({ top: el.offsetTop - 12, behavior: 'smooth' });
+        return;
+      }
+      // 编辑模式下：用 CodeMirror 定位到行
+      const view = viewRef.current;
+      if (view) {
+        const target = Math.max(0, line - 1);
+        const pos = view.state.doc.line(Math.min(target + 1, view.state.doc.lines)).from;
+        view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+        view.focus();
+      }
+    };
+    window.addEventListener(EVT_JUMP_HEADING, onJump);
+    return () => window.removeEventListener(EVT_JUMP_HEADING, onJump);
+  }, []);
+
+  // 滚动时计算当前可见标题，派发 active-heading 事件（大纲高亮双向同步）
+  const activeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleScroll = () => {
+    if (activeTimer.current) clearTimeout(activeTimer.current);
+    activeTimer.current = setTimeout(() => {
+      const scrollEl = previewRef.current;
+      if (!scrollEl) return;
+      const headings = Array.from(
+        scrollEl.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')
+      );
+      if (headings.length === 0) return;
+      const top = scrollEl.scrollTop + 24;
+      let current = headings[0];
+      for (const h of headings) {
+        if (h.offsetTop <= top) current = h;
+        else break;
+      }
+      const line = Number(current.getAttribute('data-line'));
+      if (line) window.dispatchEvent(new CustomEvent(EVT_ACTIVE_HEADING, { detail: line }));
+    }, 80);
+  };
 
   if (!note) {
     return <div className="flex-1 flex items-center justify-center text-fg-muted">加载中…</div>;
@@ -156,14 +221,15 @@ export function NotePane(props: Props) {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {(tab === 'edit' || tab === 'split') && (
-          <div
-            ref={containerRef}
-            className={`h-full overflow-auto ${tab === 'split' ? 'w-1/2 border-r border-border' : 'w-full'}`}
-          />
-        )}
+        {/* 编辑器容器始终挂载（仅用 hidden 控制显隐），避免预览切回时空白 */}
+        <div
+          ref={containerRef}
+          className={`h-full overflow-auto ${tab === 'split' ? 'w-1/2 border-r border-border' : 'w-full'} ${tab === 'preview' ? 'hidden' : ''}`}
+        />
         {(tab === 'preview' || tab === 'split') && (
           <div
+            ref={previewRef}
+            onScroll={handleScroll}
             className={`h-full overflow-auto bg-content p-6 ${tab === 'split' ? 'w-1/2' : 'w-full'}`}
           >
             <article

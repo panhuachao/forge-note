@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useKBStore } from './stores/kb-store';
 import { useLayoutStore } from './stores/layout-store';
 import { MainMenuRail } from './components/MainMenuRail';
@@ -27,6 +27,7 @@ export function App() {
     quickNoteOpen, closeQuickNote
   } = useKBStore();
   const { mainView, leftPanelCollapsed, rightPanelCollapsed } = useLayoutStore();
+  const [quickNoteInitial, setQuickNoteInitial] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -47,9 +48,17 @@ export function App() {
       const { activeKb } = useKBStore.getState();
       if (activeKb) openCreateNote();
     });
+    // 从任意页面（如对话历史）请求打开快速笔记并预填内容
+    const onOpenQuickNote = (e: Event) => {
+      const detail = (e as CustomEvent<{ content?: string }>).detail;
+      setQuickNoteInitial(detail?.content || '');
+      useKBStore.getState().openQuickNote();
+    };
+    window.addEventListener('forgenote:open-quicknote', onOpenQuickNote);
     return () => {
       off();
       offMenu();
+      window.removeEventListener('forgenote:open-quicknote', onOpenQuickNote);
     };
   }, []);
 
@@ -102,7 +111,12 @@ export function App() {
       <ToastContainer />
       <Onboarding />
       <CreateNoteModal open={createNoteOpen} initialDirPath={createNoteDir} onClose={closeCreateNote} />
-      <QuickNoteModal open={quickNoteOpen} onClose={closeQuickNote} />
+      <QuickNoteModal
+        key={quickNoteInitial ? 'qk-filled' : 'qk-empty'}
+        open={quickNoteOpen}
+        initialContent={quickNoteInitial}
+        onClose={closeQuickNote}
+      />
     </div>
   );
 }

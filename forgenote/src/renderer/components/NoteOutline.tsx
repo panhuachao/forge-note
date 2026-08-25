@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
+import { EVT_JUMP_HEADING } from './NotePane';
 
 interface Props {
   content: string;
-  onJump: (line: number) => void;
+  activeLine?: number | null;
+  onJump?: (line: number) => void;
 }
 
 interface Heading {
@@ -18,7 +20,7 @@ interface Heading {
  * - 可折叠：点击父标题前的 chevron 折叠其所有子级
  * - 整行 hover 出现浅色底，点击跳转到对应行
  */
-export function NoteOutline({ content, onJump }: Props) {
+export function NoteOutline({ content, activeLine, onJump }: Props) {
   const headings: Heading[] = useMemo(() => {
     const list: Heading[] = [];
     content.split('\n').forEach((l, i) => {
@@ -95,9 +97,14 @@ export function NoteOutline({ content, onJump }: Props) {
                 />
               )}
               <div
-                className="flex items-center gap-1 cursor-pointer rounded hover:bg-hover-bg pr-2 py-0.5 transition-colors"
+                className={`flex items-center gap-1 cursor-pointer rounded pr-2 py-0.5 transition-colors ${
+                  activeLine === h.line ? 'bg-brand-soft text-brand font-medium' : 'hover:bg-hover-bg'
+                }`}
                 style={{ paddingLeft: indent }}
-                onClick={() => onJump(h.line)}
+                onClick={() => {
+                  if (onJump) onJump(h.line);
+                  else window.dispatchEvent(new CustomEvent(EVT_JUMP_HEADING, { detail: h.line }));
+                }}
                 title={h.text}
               >
                 {/* 折叠按钮 / 占位符（保持对齐） */}

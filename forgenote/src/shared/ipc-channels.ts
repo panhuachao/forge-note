@@ -18,6 +18,7 @@ export const IPC = {
   FS_RENAME_NOTE: 'fs:renameNote',
   FS_CREATE_DIR: 'fs:createDir',
   FS_DELETE_DIR: 'fs:deleteDir',
+  FS_RENAME_DIR: 'fs:renameDir',
   FS_READ_TEXT: 'fs:readText',
   FS_WRITE_TEXT: 'fs:writeText',
 
@@ -67,7 +68,13 @@ export const IPC = {
   EV_FS_CHANGE: 'ev:fsChange',
   EV_TPL_CHANGE: 'ev:tplChange',
   EV_TOAST: 'ev:toast',
-  EV_THEME: 'ev:theme'
+  EV_THEME: 'ev:theme',
+
+  // Window control
+  WIN_MAXIMIZE_TOGGLE: 'win:maximizeToggle',
+  WIN_IS_MAXIMIZED: 'win:isMaximized',
+  WIN_MINIMIZE: 'win:minimize',
+  WIN_CLOSE: 'win:close'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

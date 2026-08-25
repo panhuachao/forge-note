@@ -20,6 +20,9 @@ export function MultiNoteEditor() {
     outlinks: string[];
     inlinks: string[];
     brokenLinks: string[];
+    mtime: number;
+    ctime: number;
+    frontmatter: Record<string, unknown>;
   } | null>(null);
 
   const [linkSuggestions, setLinkSuggestions] = useState<LinkInfo[]>([]);
@@ -43,7 +46,10 @@ export function MultiNoteEditor() {
           content: c.content,
           outlinks: c.outlinks,
           inlinks: c.inlinks,
-          brokenLinks: c.brokenLinks
+          brokenLinks: c.brokenLinks,
+          mtime: c.mtime,
+          ctime: c.ctime,
+          frontmatter: c.frontmatter
         });
       } catch {}
     })();
@@ -182,7 +188,15 @@ export function MultiNoteEditor() {
 
 function NoteDataBridge(props: {
   notePath: string;
-  currentInfo: { content: string; outlinks: string[]; inlinks: string[]; brokenLinks: string[] } | null;
+  currentInfo: {
+    content: string;
+    outlinks: string[];
+    inlinks: string[];
+    brokenLinks: string[];
+    mtime: number;
+    ctime: number;
+    frontmatter: Record<string, unknown>;
+  } | null;
   linkSuggestions: LinkInfo[];
   dirSuggestions: DirSuggestion[];
   summary: string | null;
@@ -192,6 +206,7 @@ function NoteDataBridge(props: {
 }) {
   useEffect(() => {
     (window as any).__forgeNoteData = props;
+    window.dispatchEvent(new Event('forgenote:note-data'));
     return () => {
       if ((window as any).__forgeNoteData === props) delete (window as any).__forgeNoteData;
     };

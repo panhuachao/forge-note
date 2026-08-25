@@ -14,6 +14,24 @@ import { searchService } from './services/search-service';
 import { auditService } from './services/audit-service';
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
+  // Window control（标题栏双击最大化 / 最小化 / 关闭）
+  ipcMain.handle(IPC.WIN_MAXIMIZE_TOGGLE, () => {
+    const win = getMainWindow();
+    if (!win) return;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  });
+  ipcMain.handle(IPC.WIN_IS_MAXIMIZED, () => {
+    const win = getMainWindow();
+    return win ? win.isMaximized() : false;
+  });
+  ipcMain.handle(IPC.WIN_MINIMIZE, () => {
+    getMainWindow()?.minimize();
+  });
+  ipcMain.handle(IPC.WIN_CLOSE, () => {
+    getMainWindow()?.close();
+  });
+
   // KB
   ipcMain.handle(IPC.KB_LIST, async () => {
     return await kbService.listAllSummaries();
@@ -67,6 +85,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.FS_RENAME_NOTE, async (_e, kbId: string, old: string, name: string) => fsService.renameNote(kbId, old, name));
   ipcMain.handle(IPC.FS_CREATE_DIR, async (_e, kbId: string, parent: string, name: string) => fsService.createDir(kbId, parent, name));
   ipcMain.handle(IPC.FS_DELETE_DIR, async (_e, kbId: string, p: string) => fsService.deleteDir(kbId, p));
+  ipcMain.handle(IPC.FS_RENAME_DIR, async (_e, kbId: string, dirPath: string, name: string) => fsService.renameDir(kbId, dirPath, name));
   ipcMain.handle(IPC.FS_READ_TEXT, async (_e, kbId: string, p: string) => fsService.readText(kbId, p));
   ipcMain.handle(IPC.FS_WRITE_TEXT, async (_e, kbId: string, p: string, c: string) => fsService.writeText(kbId, p, c));
 

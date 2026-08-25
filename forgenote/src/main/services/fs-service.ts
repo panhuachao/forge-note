@@ -47,6 +47,7 @@ class FSService {
       content,
       frontmatter: data,
       mtime: stat.mtimeMs,
+      ctime: stat.birthtimeMs || stat.ctimeMs,
       outlinks,
       inlinks,
       brokenLinks: broken
@@ -175,6 +176,23 @@ class FSService {
     await fs.rm(abs, { recursive: true, force: true });
     kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'unlinkDir', path: dirPath });
+  }
+
+  async renameDir(kbId: string, dirPath: string, newName: string): Promise<string> {
+    const root = this.rootOf(kbId);
+    const abs = safeJoin(root, dirPath);
+    const parent = dirname(abs);
+    const newAbs = join(parent, newName);
+    if (abs !== newAbs) {
+      await fs.mkdir(parent, { recursive: true });
+      await fs.rename(abs, newAbs);
+    }
+    const newPath = dirPath.includes('/')
+      ? dirPath.slice(0, dirPath.lastIndexOf('/')) + '/' + newName
+      : newName;
+    kbService.invalidateMeta(root);
+    eventBus.emit('fsChange', { type: 'renameDir', path: dirPath, to: newPath });
+    return newPath;
   }
 
   async readText(kbId: string, filePath: string): Promise<string> {

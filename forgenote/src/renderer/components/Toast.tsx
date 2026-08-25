@@ -7,11 +7,11 @@ export function ToastContainer() {
       {toasts.map((t) => {
         const color =
           t.level === 'success'
-            ? 'bg-green-50 border-green-300 text-green-800'
+            ? 'bg-content border-green-500/40 text-green-600 dark:text-green-400'
             : t.level === 'error'
-            ? 'bg-red-50 border-red-300 text-red-800'
+            ? 'bg-content border-red-500/40 text-red-600 dark:text-red-400'
             : t.level === 'warn'
-            ? 'bg-yellow-50 border-yellow-300 text-yellow-800'
+            ? 'bg-content border-yellow-500/40 text-yellow-600 dark:text-yellow-400'
             : 'bg-content border-border text-fg';
         return (
           <div

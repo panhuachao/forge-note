@@ -30,6 +30,7 @@ export interface NoteContent {
   content: string;
   frontmatter: Record<string, unknown>;
   mtime: number;
+  ctime: number;
   outlinks: string[];
   inlinks: string[];
   brokenLinks: string[];
