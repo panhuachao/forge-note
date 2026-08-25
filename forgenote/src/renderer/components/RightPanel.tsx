@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Icon } from './Icon';
+import {
+  handleTitleBarDoubleClick,
+  TITLEBAR_DRAG_STYLE,
+  TITLEBAR_NO_DRAG_STYLE
+} from '../lib/window-control';
 import { NoteOutline } from './NoteOutline';
 import { LinkPanel } from './LinkPanel';
 import { EVT_ACTIVE_HEADING } from './NotePane';
@@ -139,9 +144,14 @@ export function RightPanel() {
   return (
     <aside className="w-72 shrink-0 border-l border-border bg-panel flex flex-col overflow-hidden">
       {/* 顶部操作区：中间 基本信息/大纲 切换，右侧 更多 */}
-      <div className="h-14 flex items-center gap-2 px-3 border-b border-border-soft shrink-0 relative" ref={moreRef}>
+      <div
+        className="h-14 flex items-center gap-2 px-3 border-b border-border-soft shrink-0 relative"
+        style={TITLEBAR_DRAG_STYLE}
+        ref={moreRef}
+        onDoubleClick={handleTitleBarDoubleClick}
+      >
         {/* 中间：分段切换 */}
-        <div className="flex-1 flex items-center justify-center h-8 bg-panel rounded-md p-0.5 border border-border-soft">
+        <div className="flex-1 flex items-center justify-center h-8 bg-panel rounded-md p-0.5 border border-border-soft" style={TITLEBAR_NO_DRAG_STYLE}>
           <button
             onClick={() => setPanelTab('info')}
             className={`h-7 px-3 rounded text-[12px] transition-colors ${panelTab === 'info' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'}`}
@@ -159,6 +169,7 @@ export function RightPanel() {
         <button
           onClick={() => setMoreOpen((v) => !v)}
           className={`btn btn-ghost h-8 px-3 text-xs gap-1.5 shrink-0 ${moreOpen ? 'bg-hover-bg' : ''}`}
+          style={TITLEBAR_NO_DRAG_STYLE}
         >
           <Icon name="sparkles" className="w-4 h-4 text-brand" />
           更多

@@ -7,6 +7,11 @@ import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import type { SearchResult } from '@shared/types';
 import { Icon } from '../components/Icon';
+import {
+  handleTitleBarDoubleClick,
+  TITLEBAR_DRAG_STYLE,
+  TITLEBAR_NO_DRAG_STYLE
+} from '../lib/window-control';
 
 export default function SearchResultsPage() {
   const activeKb = useKBStore((s) => s.activeKb);
@@ -67,17 +72,25 @@ export default function SearchResultsPage() {
     <div className="flex-1 flex flex-col bg-content overflow-hidden">
       {/* 顶部：返回 + 搜索栏 + 知识库
           与统一标题栏一致：fixed 定位覆盖整个窗口顶部，border-b 贯通 MainMenuRail 至右栏 */}
-      <div className="fixed top-0 left-0 right-0 z-20 h-14 pl-[72px] pr-4 flex items-center gap-3 border-b border-border bg-toolbar">
+      <div
+        className="fixed top-0 left-0 right-0 z-20 h-14 pl-[72px] pr-4 flex items-center gap-3 border-b border-border bg-toolbar"
+        style={TITLEBAR_DRAG_STYLE}
+        onDoubleClick={handleTitleBarDoubleClick}
+      >
         <button
           onClick={() => setMainView('home')}
           className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
           title="返回首页"
+          style={TITLEBAR_NO_DRAG_STYLE}
         >
           <Icon name="arrow-left" className="w-4 h-4" />
         </button>
 
         {/* 搜索输入框（占据主要宽度） */}
-        <div className="flex-1 max-w-2xl flex items-center gap-2 px-3 h-9 rounded-lg border border-border bg-canvas focus-within:border-brand focus-within:bg-content transition-colors">
+        <div
+          className="flex-1 max-w-2xl flex items-center gap-2 px-3 h-9 rounded-lg border border-border bg-canvas focus-within:border-brand focus-within:bg-content transition-colors"
+          style={TITLEBAR_NO_DRAG_STYLE}
+        >
           <Icon name="search" className="w-4 h-4 text-fg-faint flex-shrink-0" />
           <input
             value={query}
@@ -101,7 +114,7 @@ export default function SearchResultsPage() {
         </div>
 
         {/* 知识库切换 */}
-        <div className="relative group">
+        <div className="relative group" style={TITLEBAR_NO_DRAG_STYLE}>
           <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-panel text-xs text-fg-secondary hover:bg-active-bg">
             <Icon name="folder" className="w-3.5 h-3.5" />
             <span>{activeKb?.name || '未选择'}</span>

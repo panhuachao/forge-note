@@ -1,4 +1,5 @@
 import { Icon } from './Icon';
+import { handleTitleBarDoubleClick, TITLEBAR_DRAG_STYLE, TITLEBAR_NO_DRAG_STYLE } from '../lib/window-control';
 
 interface Props {
   icon: string;
@@ -13,14 +14,23 @@ interface Props {
 // "从窗口最左到最右"的标题栏分割线，主菜单整体位于分割线之下。
 // macOS 红黄绿按钮（hiddenInset）始终在最上层，浮于 PageHeader 背景之上。
 // 标题内容 pl-[72px] 推到 macOS 按钮右侧。
+// 整个标题栏支持双击放大/还原、按住拖动（Electron -webkit-app-region: drag）。
 export function PageHeader({ icon, title, children }: Props) {
   return (
-    <div className="fixed top-0 left-0 right-0 z-20 h-14 flex items-center pl-[72px] pr-4 border-b border-border bg-toolbar text-sm">
+    <div
+      className="fixed top-0 left-0 right-0 z-20 h-14 flex items-center pl-[72px] pr-4 border-b border-border bg-toolbar text-sm"
+      style={TITLEBAR_DRAG_STYLE}
+      onDoubleClick={handleTitleBarDoubleClick}
+    >
       <span className="font-semibold flex items-center gap-2 text-base">
         <Icon name={icon} className="w-5 h-5 text-brand" />
         {title}
       </span>
-      {children && <div className="ml-auto flex items-center gap-2">{children}</div>}
+      {children && (
+        <div className="ml-auto flex items-center gap-2" style={TITLEBAR_NO_DRAG_STYLE}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }

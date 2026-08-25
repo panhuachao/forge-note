@@ -4,6 +4,10 @@ import { useLayoutStore } from '../stores/layout-store';
 import { useChatStore } from '../stores/chat-store';
 import { Icon, IconName } from '../components/Icon';
 import { AI_MODELS, ModelOption, AIModelConfig } from '@shared/types/ai';
+import {
+  handleTitleBarDoubleClick,
+  TITLEBAR_DRAG_STYLE
+} from '../lib/window-control';
 
 type ChatMode = 'ask' | 'search';
 
@@ -154,8 +158,13 @@ export function HomePage() {
 
   return (
     <div className="flex-1 flex flex-col bg-canvas overflow-hidden">
-      {/* 顶部统一标题栏条带（不显示图标和标题，仅作为标题栏带，与其他页面一致） */}
-      <div className="fixed top-0 left-0 right-0 z-20 h-14 border-b border-border bg-toolbar" />
+      {/* 顶部统一标题栏条带（不显示图标和标题，仅作为标题栏带，与其他页面一致）
+          支持双击放大/还原、按住拖动 */}
+      <div
+        className="fixed top-0 left-0 right-0 z-20 h-14 border-b border-border bg-toolbar"
+        style={TITLEBAR_DRAG_STYLE}
+        onDoubleClick={handleTitleBarDoubleClick}
+      />
       <div className="flex-1 flex flex-col items-center px-8 py-6 pt-20 overflow-y-auto">
         {/* 标题 */}
         <h1 className="text-2xl font-bold text-fg mt-6 mb-6 text-center">

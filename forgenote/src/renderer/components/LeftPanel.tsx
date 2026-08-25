@@ -60,13 +60,22 @@ export function LeftPanel() {
   // fixed 定位覆盖整个窗口顶部，宽度 = MainMenuRail(56) + LeftPanel 宽度，
   // 从最左贯穿到左栏右边缘，让 macOS 红黄绿按钮浮在其上（bg-toolbar 同色）。
   // pl-[72px] 让出 macOS 红黄绿按钮的横向间距（与统一标题栏一致）。
+  // 支持双击放大/还原、按住拖动（Electron -webkit-app-region: drag）。
   function ViewTabs() {
     return (
       <div
         className="fixed top-0 left-0 z-20 h-14 flex items-center border-b border-border bg-toolbar pr-2 gap-1 text-xs"
-        style={{ width: 56 + leftPanelWidth, paddingLeft: 72 }}
+        style={{
+          width: 56 + leftPanelWidth,
+          paddingLeft: 72,
+          WebkitAppRegion: 'drag'
+        } as React.CSSProperties}
+        onDoubleClick={() => window.forge?.win?.maximizeToggle().catch(() => {})}
       >
-        <div className="flex-1 flex items-center gap-1 min-w-0">
+        <div
+          className="flex-1 flex items-center gap-1 min-w-0"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           {viewTabs.map((t) => {
             const active = treeView === t.id;
             return (
@@ -87,6 +96,7 @@ export function LeftPanel() {
           onClick={toggleLeftPanel}
           className="h-7 w-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-fg-secondary"
           title="收起侧栏"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <Icon name="chevron-left" className="w-4 h-4" />
         </button>

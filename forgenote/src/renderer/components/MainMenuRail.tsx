@@ -34,8 +34,13 @@ export function MainMenuRail() {
       data-testid="main-menu-rail"
     >
       {/* 顶部标题栏区域：与三栏操作栏同高同色（bg-toolbar），
-          macOS 红黄绿按钮（hiddenInset）浮在其上 */}
-      <div className="h-14 w-full bg-toolbar shrink-0" />
+          macOS 红黄绿按钮（hiddenInset）浮在其上。
+          支持双击放大/还原、按住拖动（Electron -webkit-app-region: drag）。 */}
+      <div
+        className="h-14 w-full bg-toolbar shrink-0"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        onDoubleClick={() => window.forge?.win?.maximizeToggle().catch(() => {})}
+      />
       {/* 菜单按钮区顶部间距 */}
       <div className="mt-2" />
 

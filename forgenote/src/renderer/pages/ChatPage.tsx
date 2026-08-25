@@ -8,6 +8,11 @@ import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import { AI_MODELS, ModelOption, AIModelConfig } from '@shared/types/ai';
 import { Icon } from '../components/Icon';
+import {
+  handleTitleBarDoubleClick,
+  TITLEBAR_DRAG_STYLE,
+  TITLEBAR_NO_DRAG_STYLE
+} from '../lib/window-control';
 
 export default function ChatPage() {
   const conversations = useChatStore((s) => s.conversations);
@@ -155,7 +160,11 @@ export default function ChatPage() {
     <div className="flex-1 flex bg-content overflow-hidden">
       {/* 左侧：对话历史 */}
       <div className="w-64 border-r border-border bg-panel flex flex-col">
-        <div className="h-14 pl-[72px] pr-3 flex items-center justify-between border-b border-border bg-toolbar">
+        <div
+          className="h-14 pl-[72px] pr-3 flex items-center justify-between border-b border-border bg-toolbar"
+          style={TITLEBAR_DRAG_STYLE}
+          onDoubleClick={handleTitleBarDoubleClick}
+        >
           <span className="flex items-center gap-1.5 text-sm font-semibold text-fg">
             <Icon name="chat-bubble" className="w-4 h-4 text-brand" />
             对话历史
@@ -164,6 +173,7 @@ export default function ChatPage() {
             onClick={startNewConversation}
             title="新建对话"
             className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
+            style={TITLEBAR_NO_DRAG_STYLE}
           >
             <Icon name="plus" className="w-4 h-4" />
           </button>
@@ -245,11 +255,16 @@ export default function ChatPage() {
       {/* 右侧：聊天区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部栏：返回 + 标题（与统一标题栏样式一致：h-14 pl-[72px] bg-toolbar border-b） */}
-        <div className="h-14 pl-[72px] pr-3 flex items-center gap-2 border-b border-border bg-toolbar">
+        <div
+          className="h-14 pl-[72px] pr-3 flex items-center gap-2 border-b border-border bg-toolbar"
+          style={TITLEBAR_DRAG_STYLE}
+          onDoubleClick={handleTitleBarDoubleClick}
+        >
           <button
             onClick={() => setMainView('home')}
             className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
             title="返回首页"
+            style={TITLEBAR_NO_DRAG_STYLE}
           >
             <Icon name="arrow-left" className="w-4 h-4" />
           </button>
