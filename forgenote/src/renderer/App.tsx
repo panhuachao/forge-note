@@ -11,6 +11,8 @@ import { GraphPage } from './pages/GraphPage';
 import { TemplatePage } from './pages/TemplatePage';
 import { AuditPage } from './pages/AuditPage';
 import { SettingsPage } from './pages/SettingsPage';
+import ChatPage from './pages/ChatPage';
+import SearchResultsPage from './pages/SearchResultsPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { CreateNoteModal } from './components/CreateNoteModal';
@@ -67,6 +69,8 @@ export function App() {
     if (mainView === 'template') return <TemplatePage />;
     if (mainView === 'audit') return <AuditPage />;
     if (mainView === 'settings') return <SettingsPage />;
+    if (mainView === 'chat') return <ChatPage />;
+    if (mainView === 'search-results') return <SearchResultsPage />;
     return <MultiNoteEditor />;
   }
 
@@ -79,7 +83,10 @@ export function App() {
       {/* 主体三栏：MainMenuRail / LeftPanel / Middle / RightPanel
           TopBar 嵌在中列顶部，与主体共用同一水平行
           → 左/中/右的分割线可贯穿到顶（窗口控件行）
-          → 左/右 TopBar 段背景浅灰、中段白底 */}
+          → 左/右 TopBar 段背景浅灰、中段白底
+          非笔记视图（graph/template/...）没有 TopBar，
+          但中列首行仍需让出 macOS 红黄绿按钮（pl-[72px]），
+          避免各 page 自己的 h-10 标题栏与窗口控件重叠 */}
       <div className="flex-1 flex overflow-hidden">
         <MainMenuRail />
         {isNoteView && (showLeft ? <LeftPanel /> : <CollapsedLeftHandle />)}

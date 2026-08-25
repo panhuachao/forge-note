@@ -33,7 +33,8 @@ class AIService {
   }
 
   private isEnabled(cfg: AIModelConfig): boolean {
-    return cfg.provider !== 'none' && !!cfg.model;
+    // 只要求 provider 与 apiKey 有效；model/baseUrl 缺失时由调用方给默认值
+    return cfg.provider !== 'none' && !!cfg.apiKey;
   }
 
   /**
@@ -46,10 +47,17 @@ class AIService {
       return this.localFallback(prompt, sysPrompt);
     }
     if (cfg.provider === 'ollama') {
-      return this.callOllama(cfg, sysPrompt, prompt);
+      const c: AIModelConfig = { ...cfg, baseUrl: cfg.baseUrl || 'http://127.0.0.1:11434', model: cfg.model || 'qwen2.5:7b' };
+      return this.callOllama(c, sysPrompt, prompt);
     }
     if (cfg.provider === 'openai') {
-      return this.callOpenAI(cfg, sysPrompt, prompt);
+      // 提供合理默认值，避免用户漏填 model/baseUrl 直接降级
+      const c: AIModelConfig = {
+        ...cfg,
+        baseUrl: cfg.baseUrl || 'https://api.deepseek.com/v1',
+        model: cfg.model || 'deepseek-chat'
+      };
+      return this.callOpenAI(c, sysPrompt, prompt);
     }
     return this.localFallback(prompt, sysPrompt);
   }
@@ -131,12 +139,168 @@ class AIService {
   async ask(kbId: string, question: string, opts?: { templateDirIds?: string[] }): Promise<string> {
     const kb = getKB(kbId);
     if (!kb) return '';
+    // 诊断：确认主进程实际读到的 AI 配置
+    const diag = await this.getConfig();
+    console.log('[ai.ask] kbId=', kbId, 'provider=', diag.provider, 'model=', diag.model, 'baseUrl=', diag.baseUrl);
+
+    // 1) 关键词检索（局部精确命中）
     const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
-    const context = hits
+    const hitContext = hits
       .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
       .join('\n\n');
-    const sys = `${BASE_SYSTEM}\n\n你将基于以下从用户知识库中检索到的片段回答问题，回答末尾请用 [[笔记名]] 形式列出引用：\n${context || '（未检索到相关笔记）'}`;
+
+    // 2) 知识库目录结构（全局视角）—— 始终附带，让 AI 能基于目录做归纳
+    const dirTree = await this.buildDirOverview(kb.rootPath, kbId);
+
+    // 3) 若用户问的是"某个目录下整体内容"，整目录读取作为上下文
+    const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
+
+    const sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 若问题涉及"归纳/总结/进展/整体情况"，请基于【目录结构 + 目录整体内容】做归纳，引用具体笔记用 [[笔记名]]\n- 若问题涉及"如何使用某目录/目录是否合理"，请基于目录说明（README）和已有笔记分布给出建议\n- 引用时优先用 [[笔记名]] 形式标注`;
     return this.chat(question, sys);
+  }
+
+  /**
+   * 构建知识库目录总览（用于作为 system prompt 的一部分）
+   * 输出格式：
+   *   # 知识库目录结构
+   *   ## 00 灵感库（5 篇）
+   *     - 笔记1
+   *     - 笔记2
+   *     - 笔记3
+   *     ...
+   *     README 摘要: xxx
+   */
+  private async buildDirOverview(rootPath: string, kbId: string): Promise<string> {
+    try {
+      const dirents = await fs.readdir(rootPath, { withFileTypes: true });
+      const dirs: string[] = [];
+      for (const d of dirents) {
+        if (d.isDirectory() && !d.name.startsWith('.')) dirs.push(d.name);
+      }
+      dirs.sort();
+      const lines: string[] = ['# 知识库目录结构（用于全局理解）'];
+      for (const dir of dirs) {
+        const dirPath = join(rootPath, dir);
+        const files = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+        const notes = files.filter((f) => f.isFile() && f.name.toLowerCase().endsWith('.md') && f.name !== 'README.md');
+        const readme = files.find((f) => f.isFile() && f.name === 'README.md');
+        let readmeExcerpt = '';
+        if (readme) {
+          try {
+            const content = await fs.readFile(join(dirPath, 'README.md'), 'utf-8');
+            // 取 README 标题 + 简介（去除 markdown 标记）
+            const plain = content
+              .replace(/^#+\s*/gm, '')
+              .replace(/[*_`~]/g, '')
+              .split('\n')
+              .filter((l) => l.trim())
+              .slice(0, 3)
+              .join(' / ');
+            readmeExcerpt = plain.slice(0, 200);
+          } catch {}
+        }
+        const noteNames = notes.slice(0, 30).map((n) => `  - ${n.name.replace(/\.md$/i, '')}`).join('\n');
+        const more = notes.length > 30 ? `\n  - …（还有 ${notes.length - 30} 篇）` : '';
+        lines.push(`\n## ${dir}（共 ${notes.length} 篇）`);
+        if (readmeExcerpt) lines.push(`  简介: ${readmeExcerpt}`);
+        if (noteNames) {
+          lines.push(noteNames);
+          if (more) lines.push(more);
+        }
+      }
+      if (lines.length === 1) {
+        return '# 知识库目录结构\n（知识库暂无目录）';
+      }
+      return lines.join('\n');
+    } catch (e) {
+      return `# 知识库目录结构\n（读取失败: ${String(e)}）`;
+    }
+  }
+
+  /**
+   * 检测问题是否指向某个目录的整体内容（如"帮我归纳 XX 目录下所有项目进展"）
+   * 命中则读取该目录下所有笔记的完整内容（限制总长度）
+   */
+  private async maybeReadFullDir(rootPath: string, kbId: string, question: string, hits: any[]): Promise<string> {
+    try {
+      // 提取问题中提到的目录关键词（如 "01 项目"、"04 归档"）
+      const dirMentions: string[] = [];
+      // 1) 匹配 "XX 数字+名" 模式，如 "01 项目"、"04 归档"
+      const dirPattern = /(\d{2}\s*[一-龥a-zA-Z]{1,8})/g;
+      const matches = [...question.matchAll(dirPattern)].map((m) => m[1].trim());
+      dirMentions.push(...matches);
+      // 2) 匹配 hits 中涉及的目录路径前缀
+      const hitDirs = new Set<string>();
+      for (const h of hits) {
+        const dir = h.notePath.split('/')[0];
+        if (dir) hitDirs.add(dir);
+      }
+      // 3) 匹配整目录归纳意图的关键词
+      const aggregateIntents = /归纳|总结|汇总|整体|全部|所有|进展|情况|如何|怎么|合理|建议/i.test(question);
+
+      if (!aggregateIntents && dirMentions.length === 0) return '';
+
+      // 选取目标目录
+      const targetDirs = new Set<string>();
+      for (const d of dirMentions) {
+        // 模糊匹配：包含"01 项目"中的"项目"或"01"
+        const numMatch = d.match(/^(\d{2})/);
+        const nameMatch = d.replace(/^\d{2}\s*/, '');
+        const dirents = await fs.readdir(rootPath, { withFileTypes: true });
+        for (const ent of dirents) {
+          if (!ent.isDirectory()) continue;
+          if (numMatch && ent.name.startsWith(numMatch[1])) targetDirs.add(ent.name);
+          else if (nameMatch && ent.name.includes(nameMatch)) targetDirs.add(ent.name);
+        }
+      }
+      // 若用户问的是整体归纳且没有指定目录，取第一个有内容的目录
+      if (targetDirs.size === 0 && aggregateIntents) {
+        const dirents = await fs.readdir(rootPath, { withFileTypes: true });
+        for (const ent of dirents) {
+          if (ent.isDirectory() && !ent.name.startsWith('.')) {
+            targetDirs.add(ent.name);
+            break;
+          }
+        }
+      }
+      // 加入 hits 命中的目录
+      for (const d of hitDirs) targetDirs.add(d);
+
+      if (targetDirs.size === 0) return '';
+
+      const sections: string[] = [];
+      let totalLen = 0;
+      const MAX = 12_000; // 避免上下文超限
+      for (const dir of targetDirs) {
+        const dirPath = join(rootPath, dir);
+        const files = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+        const notes = files.filter((f) => f.isFile() && f.name.toLowerCase().endsWith('.md') && f.name !== 'README.md');
+        if (notes.length === 0) continue;
+        sections.push(`\n## 目录「${dir}」全部笔记（${notes.length} 篇）`);
+        for (const n of notes) {
+          try {
+            const content = await fs.readFile(join(dirPath, n.name), 'utf-8');
+            const stripped = content
+              .replace(/```[\s\S]*?```/g, '[代码]')
+              .replace(/^#+\s*/gm, '')
+              .replace(/!\[[^\]]*\]\([^)]*\)/g, '[图片]')
+              .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+              .replace(/[*_`~]+/g, '')
+              .trim();
+            const block = `\n### [[${n.name.replace(/\.md$/i, '')}]]\n${stripped}`;
+            if (totalLen + block.length > MAX) {
+              sections.push(`\n### [[${n.name.replace(/\.md$/i, '')}]]\n（内容过长已截断）`);
+              continue;
+            }
+            sections.push(block);
+            totalLen += block.length;
+          } catch {}
+        }
+      }
+      return sections.join('\n');
+    } catch (e) {
+      return '';
+    }
   }
 
   /**

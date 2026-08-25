@@ -71,20 +71,22 @@ export function SettingsPage() {
                 <div>
                   <label className="text-xs text-ink-500">Base URL</label>
                   <input
-                    value={cfg.baseUrl || ''}
+                    value={cfg.baseUrl || 'https://api.deepseek.com/v1'}
                     onChange={(e) => setCfg({ ...cfg, baseUrl: e.target.value })}
                     className="input"
                     placeholder="https://api.deepseek.com/v1"
                   />
+                  <p className="text-xs text-ink-400 mt-1">DeepSeek 填 https://api.deepseek.com/v1；OpenAI 填 https://api.openai.com/v1；Moonshot 填 https://api.moonshot.cn/v1</p>
                 </div>
                 <div>
                   <label className="text-xs text-ink-500">模型名称</label>
                   <input
-                    value={cfg.model || ''}
+                    value={cfg.model || 'deepseek-chat'}
                     onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
                     className="input"
                     placeholder="deepseek-chat"
                   />
+                  <p className="text-xs text-ink-400 mt-1">DeepSeek 常用：deepseek-chat / deepseek-reasoner</p>
                 </div>
                 <div>
                   <label className="text-xs text-ink-500">API Key</label>

@@ -1,7 +1,7 @@
 // 布局状态：主菜单视图、打开的标签、面板宽度、折叠状态、排序
 import { create } from 'zustand';
 
-export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home';
+export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results';
 export type TreeView = 'tree' | 'search' | 'tags';
 export type SortMode = 'name' | 'mtime' | 'created';
 

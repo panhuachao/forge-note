@@ -50,7 +50,12 @@ export type IconName =
   | 'bookmark'
   | 'book-open'
   | 'light-bulb'
-  | 'folder-open';
+  | 'folder-open'
+  | 'chat-bubble'
+  | 'bolt'
+  | 'microphone'
+  | 'arrow-up'
+  | 'check-circle';
 
 const outlineMap: Record<string, any> = {
   folder: HeroiconsOutline.FolderIcon,
@@ -99,7 +104,12 @@ const outlineMap: Record<string, any> = {
   bell: HeroiconsOutline.BellIcon,
   bookmark: HeroiconsOutline.BookmarkIcon,
   'book-open': HeroiconsOutline.BookOpenIcon,
-  'light-bulb': HeroiconsOutline.LightBulbIcon
+  'light-bulb': HeroiconsOutline.LightBulbIcon,
+  'chat-bubble': HeroiconsOutline.ChatBubbleLeftRightIcon,
+  bolt: HeroiconsOutline.BoltIcon,
+  microphone: HeroiconsOutline.MicrophoneIcon,
+  'arrow-up': HeroiconsOutline.ArrowUpIcon,
+  'check-circle': HeroiconsOutline.CheckCircleIcon
 };
 
 const solidMap: Record<string, any> = {

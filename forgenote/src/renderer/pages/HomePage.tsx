@@ -1,14 +1,46 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
-import { AIChat } from '../components/AIChat';
+import { useChatStore } from '../stores/chat-store';
+import { Icon, IconName } from '../components/Icon';
+import { AI_MODELS, ModelOption, AIModelConfig } from '@shared/types/ai';
+
+type ChatMode = 'ask' | 'search';
+
+interface ModeItem {
+  id: ChatMode;
+  icon: IconName;
+  label: string;
+  desc: string;
+}
+
+const modes: ModeItem[] = [
+  { id: 'ask', icon: 'chat-bubble', label: '问答模式', desc: 'AI 检索知识库后回答' },
+  { id: 'search', icon: 'magnifying-glass', label: '检索模式', desc: '通过笔记搜索跳转结果' }
+];
 
 export function HomePage() {
-  const { activeKb, kbs, setActiveKb, setTree, setApplied, pushToast, aiConfig } = useKBStore();
+  const { activeKb, kbs, setActiveKb, setTree, setApplied, setKBs, pushToast, aiConfig, setAIConfig } = useKBStore();
   const { setMainView } = useLayoutStore();
-  const [mode, setMode] = useState<'ask' | 'search'>('ask');
+  const [mode, setMode] = useState<ChatMode>('ask');
+  const [input, setInput] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // 有知识库但无 active：自动激活第一个
+  // 自动撑高 textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 240) + 'px';
+  }, [input]);
+
+  // 占位提示（多行输入上方）
+  const placeholder =
+    mode === 'ask'
+      ? '今天帮你做些什么？\n@引用对话文件 · /调用技能与指令'
+      : '在所有笔记中检索关键词…\nEnter 跳转搜索结果';
+
+  // 初始化：有 KB 但无 active 时自动激活第一个
   useEffect(() => {
     if (!activeKb && kbs.length > 0) {
       const first = kbs[0];
@@ -33,7 +65,7 @@ export function HomePage() {
   async function handleAddKb() {
     const kb = await window.forge.kb.add();
     if (kb) {
-      useKBStore.setState({ kbs: await window.forge.kb.list() });
+      setKBs(await window.forge.kb.list());
       setActiveKb(kb);
       const t = await window.forge.fs.listTree(kb.id);
       setTree(t);
@@ -43,7 +75,63 @@ export function HomePage() {
     }
   }
 
-  // 无知识库：显示空状态
+  async function switchKb(kbId: string) {
+    if (!kbId || kbId === activeKb?.id) return;
+    await window.forge.kb.setActive(kbId);
+    const active = await window.forge.kb.getActive();
+    if (active) {
+      setActiveKb(active);
+      const t = await window.forge.fs.listTree(active.id);
+      setTree(t);
+      const a = await window.forge.template.applied(active.id);
+      setApplied(a);
+    }
+  }
+
+  async function switchModel(modelId: string) {
+    // 根据选中的模型 id 推断其所属 provider（DeepSeek 等走 openai 兼容）
+    const providerForModel =
+      (Object.keys(AI_MODELS) as Array<keyof typeof AI_MODELS>).find((p) =>
+        AI_MODELS[p].some((m) => m.id === modelId)
+      ) || aiConfig.provider;
+    const next: AIModelConfig = {
+      ...aiConfig,
+      provider: providerForModel,
+      model: modelId
+    } as AIModelConfig;
+    setAIConfig(next);
+    try {
+      await window.forge.ai.setConfig(next);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function send() {
+    if (!activeKb || !input.trim()) return;
+    const q = input.trim();
+    setInput('');
+
+    if (mode === 'search') {
+      // 检索模式：跳转到独立检索结果页，并传入 query
+      window.dispatchEvent(new CustomEvent('forge:search-init', { detail: { q } }));
+      setMainView('search-results');
+      return;
+    }
+
+    // 问答模式：创建一个新的 AI 对话，跳转到 chat 页
+    const { createConversation } = useChatStore.getState();
+    createConversation({ firstUserText: q, kbId: activeKb.id });
+    setMainView('chat');
+  }
+
+  // 当前 provider 可选模型
+  const currentModels: ModelOption[] =
+    aiConfig.provider === 'ollama' || aiConfig.provider === 'openai'
+      ? AI_MODELS[aiConfig.provider]
+      : [];
+
+  // 无知识库：空状态
   if (kbs.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-ink-50">
@@ -60,54 +148,160 @@ export function HomePage() {
     );
   }
 
-  // 有知识库但无 active：自动激活中
   if (!activeKb) {
     return <div className="flex-1 flex items-center justify-center text-ink-400">加载中…</div>;
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-ink-50">
-      <div className="flex-1 flex flex-col items-center justify-center px-8">
-        <h1 className="text-2xl font-bold text-brand-600 mb-2 text-center">
-          我是你的锦囊笔记，
-          <br />
-          你来问，我来答
+    <div className="flex-1 flex flex-col bg-ink-50 overflow-hidden">
+      <div className="flex-1 flex flex-col items-center px-8 py-6 overflow-y-auto">
+        {/* 标题 */}
+        <h1 className="text-2xl font-bold text-ink-900 mt-6 mb-6 text-center">
+          锦囊笔记，<span className="text-brand-600">我帮你</span>
         </h1>
-        <div className="w-full max-w-2xl mt-12">
-          <div className="border-2 border-brand-600 rounded-lg bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 text-sm">
+
+        {/* 模式切换按钮组（胶囊型） */}
+        <div className="flex items-center gap-2 mb-6">
+          {modes.map((m) => {
+            const active = mode === m.id;
+            return (
               <button
-                onClick={() => setMainView('graph')}
-                className="text-brand-600 hover:underline"
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm transition-colors ${
+                  active
+                    ? 'bg-ink-900 text-white shadow-sm'
+                    : 'bg-white text-ink-700 hover:bg-ink-100 shadow-sm border border-ink-200'
+                }`}
+                title={m.desc}
               >
-                选择目录
+                <Icon name={m.icon} className="w-4 h-4" />
+                <span>{m.label}</span>
               </button>
-              <div className="flex items-center gap-3 text-ink-500">
-                <span>模式：</span>
+            );
+          })}
+        </div>
+
+        {/* 主输入卡片：大圆角，柔和边框（参考图片） */}
+        <div className="w-full max-w-2xl">
+          <div className="rounded-2xl bg-white border border-ink-200 shadow-sm overflow-hidden">
+            {/* 多行输入区（核心强调）：占位提示在上 + textarea 居中 */}
+            <div className="px-5 pt-4 pb-2">
+              {/* 占位提示（灰底胶囊样式，参考图片） */}
+              {!input && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 mb-2 rounded-full bg-ink-100 text-xs text-ink-500">
+                  <span className="whitespace-pre-wrap leading-relaxed">
+                    {placeholder.split('\n')[0]}
+                  </span>
+                </div>
+              )}
+
+              {/* textarea（自动撑高，min-h 80px） */}
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                rows={2}
+                placeholder={input ? '' : placeholder}
+                className="w-full bg-transparent outline-none text-base text-ink-800 placeholder:text-ink-400 resize-none min-h-[80px] max-h-[240px] leading-6"
+              />
+
+              {/* 操作行：左下 + / 右下 模型徽章 + 语音 + 发送 */}
+              <div className="flex items-center justify-between pt-2">
                 <button
-                  className={mode === 'ask' ? 'text-brand-600 font-medium' : 'hover:text-ink-800'}
-                  onClick={() => setMode('ask')}
+                  title="附件（暂未开放）"
+                  className="w-8 h-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded-lg flex-shrink-0"
                 >
-                  问答
+                  <Icon name="plus" className="w-5 h-5" />
                 </button>
-                <span>/</span>
-                <button
-                  className={mode === 'search' ? 'text-brand-600 font-medium' : 'hover:text-ink-800'}
-                  onClick={() => setMode('search')}
-                >
-                  检索
-                </button>
+
+                <div className="flex items-center gap-2">
+                  {/* 模型徽章（按图片右下角"Hy3 ▼"） */}
+                  {aiConfig.provider !== 'none' && currentModels.length > 0 ? (
+                    <div className="relative group">
+                      <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-ink-600 hover:bg-ink-100">
+                        <Icon name="bolt" className="w-3.5 h-3.5" />
+                        <span>{aiConfig.model || currentModels[0].label}</span>
+                        <Icon name="chevron-down" className="w-3 h-3" />
+                      </button>
+                      <div className="absolute right-0 bottom-full mb-1 bg-white border border-ink-200 rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[240px] overflow-hidden">
+                        {currentModels.map((m) => {
+                          const active = (aiConfig.model || currentModels[0].id) === m.id;
+                          return (
+                            <button
+                              key={m.id}
+                              onClick={() => switchModel(m.id)}
+                              className={`flex flex-col items-start w-full text-left px-3 py-2 text-xs hover:bg-ink-100 ${
+                                active ? 'text-brand-600 bg-brand-50' : 'text-ink-700'
+                              }`}
+                            >
+                              <span className="font-medium">{m.label}</span>
+                              {m.desc && <span className="text-ink-400 text-[10px]">{m.desc}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setMainView('settings')}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-ink-500 hover:bg-ink-100"
+                    >
+                      <Icon name="bolt" className="w-3.5 h-3.5" />
+                      <span>未配置</span>
+                    </button>
+                  )}
+
+                  <button
+                    title="语音（暂未开放）"
+                    className="w-8 h-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded-lg flex-shrink-0"
+                  >
+                    <Icon name="microphone" className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={send}
+                    disabled={!input.trim()}
+                    title={mode === 'ask' ? '发送' : '检索'}
+                    className="w-9 h-9 flex items-center justify-center bg-ink-900 hover:bg-ink-700 disabled:bg-ink-300 text-white rounded-full flex-shrink-0 shadow-sm transition-colors"
+                  >
+                    <Icon name="arrow-up" className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="border-t border-ink-200">
-              <AIChat mode={mode} />
+
+            {/* 底部：选择知识库（淡灰色背景胶囊行） */}
+            <div className="border-t border-ink-100 px-5 py-3 flex items-center gap-2 text-xs">
+              <div className="relative group">
+                <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ink-100 text-ink-600 hover:bg-ink-200">
+                  <Icon name="folder" className="w-3.5 h-3.5" />
+                  <span>{activeKb.name}</span>
+                  <Icon name="chevron-down" className="w-3 h-3" />
+                </button>
+                <div className="absolute left-0 bottom-full mb-1 bg-white border border-ink-200 rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[200px] overflow-hidden">
+                  {kbs.map((kb) => (
+                    <button
+                      key={kb.id}
+                      onClick={async () => {
+                        await switchKb(kb.id);
+                      }}
+                      className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-ink-100 ${
+                        activeKb.id === kb.id ? 'text-brand-600 bg-brand-50' : 'text-ink-700'
+                      }`}
+                    >
+                      {kb.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-          {aiConfig.provider === 'none' && (
-            <div className="mt-4 text-center text-xs text-ink-400">
-              未配置 AI 模型 · <button className="text-brand-600 hover:underline" onClick={() => setMainView('settings')}>前往设置</button>
-            </div>
-          )}
         </div>
       </div>
     </div>
