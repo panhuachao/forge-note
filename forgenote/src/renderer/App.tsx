@@ -18,6 +18,7 @@ import { Onboarding } from './components/Onboarding';
 import { CreateNoteModal } from './components/CreateNoteModal';
 import { QuickNoteModal } from './components/QuickNoteModal';
 import { TopBar } from './components/TopBar';
+import { TreeContextMenuRoot } from './components/TreeContextMenuRoot';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
 
 export function App() {
@@ -110,6 +111,7 @@ export function App() {
       <StatusBar />
       <ToastContainer />
       <Onboarding />
+      <TreeContextMenuRoot />
       <CreateNoteModal open={createNoteOpen} initialDirPath={createNoteDir} onClose={closeCreateNote} />
       <QuickNoteModal
         key={quickNoteInitial ? 'qk-filled' : 'qk-empty'}

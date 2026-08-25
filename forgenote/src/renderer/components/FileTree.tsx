@@ -3,6 +3,13 @@ import type { TreeNode } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore, SortMode } from '../stores/layout-store';
 import { Icon } from './Icon';
+import { TREE_CTX_EVENT, type TreeCtxDetail } from './TreeContextMenuRoot';
+
+// 打开文件树右键菜单：派发全局事件，由 App 层的 TreeContextMenuRoot 统一渲染
+function openTreeCtxMenu(type: 'file' | 'dir', path: string, name: string, x: number, y: number) {
+  const detail: TreeCtxDetail = { x, y, type, path, name };
+  window.dispatchEvent(new CustomEvent(TREE_CTX_EVENT, { detail }));
+}
 
 interface Props {
   node: TreeNode;
@@ -105,7 +112,14 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
 
   if (node.kind === 'kb_root') {
     return (
-      <div data-tree>
+      <div
+        data-tree
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openTreeCtxMenu('dir', '', activeKb?.name || node.name, e.clientX, e.clientY);
+        }}
+      >
         {/* 视图内顶部快捷操作栏：新建笔记 / 新建目录 / 排序 / 折叠 / 展开
             （属于知识库视图内的快捷操作，不占用 LeftPanel 顶部） */}
         <div className="h-9 flex items-center border-b border-border-soft bg-toolbar text-xs">
@@ -157,7 +171,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
           ><Icon name="chevron-down" className="w-4 h-4" /></button>
         </div>
         {sortedChildren.map((c) => (
-          <FileTree key={c.id} node={c} depth={depth} onOpenNote={onOpenNote} />
+          <FileTree key={c.id} node={c} depth={depth + 1} onOpenNote={onOpenNote} />
         ))}
       </div>
     );
@@ -176,6 +190,32 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
             if (isOpen) ns.delete(node.id);
             else ns.add(node.id);
             setExpanded(ns);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (depth === 0) return; // 根目录（kb_root）由上层处理
+            openTreeCtxMenu('dir', node.path, node.name, e.clientX, e.clientY);
+          }}
+          onDragOver={(e) => {
+            // 允许笔记拖入本目录
+            if (e.dataTransfer.types.includes('text/note-path')) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
+          }}
+          onDrop={async (e) => {
+            const p = e.dataTransfer.getData('text/note-path');
+            if (!p || !activeKb) return;
+            e.preventDefault();
+            if (p === node.path || p.startsWith(node.path + '/')) return; // 不能拖到自己或子目录
+            try {
+              await window.forge.fs.moveNote(activeKb.id, p, node.path);
+              const t = await window.forge.fs.listTree(activeKb.id);
+              setTree(t);
+            } catch (err) {
+              pushToast({ level: 'error', text: String(err) });
+            }
           }}
         >
           <Icon
@@ -260,27 +300,19 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
       style={indent}
       onClick={() => onOpenNote(node.path)}
       title={node.path}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/note-path', node.path);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openTreeCtxMenu('file', node.path, fileName, e.clientX, e.clientY);
+      }}
     >
       <Icon name="document" className="w-4 h-4 text-fg-muted shrink-0" />
       <span className="truncate flex-1">{fileName}</span>
-      <button
-        className="icon-btn opacity-0 group-hover:opacity-100 text-xs"
-        onClick={async (e) => {
-          e.stopPropagation();
-          if (!activeKb) return;
-          if (!confirm(`确定删除「${fileName}」？`)) return;
-          try {
-            await window.forge.fs.deleteNote(activeKb.id, node.path);
-            const t = await window.forge.fs.listTree(activeKb.id);
-            setTree(t);
-          } catch (err) {
-            pushToast({ level: 'error', text: String(err) });
-          }
-        }}
-        title="删除"
-      >
-        <Icon name="trash" className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }

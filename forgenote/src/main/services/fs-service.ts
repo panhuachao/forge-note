@@ -118,9 +118,12 @@ class FSService {
   }
 
   async deleteNote(kbId: string, notePath: string): Promise<void> {
+    const root = this.rootOf(kbId);
     const abs = this.abs(kbId, notePath);
     await fs.unlink(abs);
     linkIndex.removeNote(kbId, notePath);
+    // 清除 buildTree 的 5 秒缓存，避免 listTree 返回旧树导致删除"看似不生效"
+    kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'unlink', path: notePath, isDir: false });
   }
 
@@ -155,6 +158,8 @@ class FSService {
     const newAbs = safeJoin(root, newPath);
     await fs.rename(oldAbs, newAbs);
     linkIndex.renameNote(kbId, oldPath, newPath);
+    // 清除 buildTree 的 5 秒缓存，让重命名后的最新树被下次 listTree 拿到
+    kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'change', path: newPath });
     return newPath;
   }
@@ -173,6 +178,28 @@ class FSService {
   async deleteDir(kbId: string, dirPath: string): Promise<void> {
     const root = this.rootOf(kbId);
     const abs = safeJoin(root, dirPath);
+    // 递归收集该目录下所有笔记，先清理双链索引（避免已删除笔记残留在索引中）
+    const collected: string[] = [];
+    const walk = (p: string, rel: string) => {
+      const entries = fs.readdirSync(p, { withFileTypes: true });
+      for (const e of entries) {
+        const full = join(p, e.name);
+        const relPath = rel ? join(rel, e.name) : e.name;
+        if (e.isDirectory()) {
+          walk(full, relPath);
+        } else if (e.isFile() && e.name.toLowerCase().endsWith('.md') && !e.name.startsWith('.')) {
+          collected.push(relPath);
+        }
+      }
+    };
+    try {
+      walk(abs, dirPath);
+    } catch {
+      // 目录不存在等忽略
+    }
+    for (const notePath of collected) {
+      linkIndex.removeNote(kbId, notePath);
+    }
     await fs.rm(abs, { recursive: true, force: true });
     kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'unlinkDir', path: dirPath });
