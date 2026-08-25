@@ -171,7 +171,7 @@ export function GraphPage() {
     <div className="flex-1 flex flex-col bg-content">
       <div className="h-10 flex items-center px-4 border-b border-border text-sm">
         <span className="font-medium flex items-center gap-1.5"><Icon name="globe" className="w-4 h-4 text-brand" /> 知识图谱</span>
-        <span className="ml-3 text-ink-500 text-xs">
+        <span className="ml-3 text-fg-muted text-xs">
           {stateRef.current.nodes.length} 个节点 · {stateRef.current.edges.length} 条链接
         </span>
         {applied && (

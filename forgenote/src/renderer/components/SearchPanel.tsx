@@ -35,7 +35,7 @@ export function SearchPanel({ onResultClick }: Props = {}) {
   }
 
   return (
-    <div className="border-b border-ink-200 px-2 py-2">
+    <div className="border-b border-border px-2 py-2">
       <div className="flex items-center gap-1">
         <input
           value={q}
@@ -77,7 +77,7 @@ export function SearchPanel({ onResultClick }: Props = {}) {
           {results.map((r) => (
             <div
               key={r.notePath}
-              className="px-2 py-1 rounded hover:bg-ink-100 text-xs cursor-pointer"
+              className="px-2 py-1 rounded hover:bg-hover-bg text-xs cursor-pointer"
               onClick={() => {
                 setMainView('note');
                 openTab(r.notePath);
@@ -88,7 +88,7 @@ export function SearchPanel({ onResultClick }: Props = {}) {
               title={r.notePath}
             >
               <div className="font-medium truncate">{r.noteName.replace(/\.md$/i, '')}</div>
-              <div className="text-ink-500 line-clamp-1">{r.snippet}</div>
+              <div className="text-fg-muted line-clamp-1">{r.snippet}</div>
             </div>
           ))}
         </div>

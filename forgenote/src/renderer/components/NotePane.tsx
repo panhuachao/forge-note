@@ -5,12 +5,32 @@ import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { tags as t } from '@lezer/highlight';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import { Icon } from './Icon';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Markdown 语法高亮：使用中性色，避免默认把 `>`(引用) 等染成红色。
+// 颜色走 CSS 变量，亮色/暗黑自动适配。
+const markdownHighlight = HighlightStyle.define([
+  { tag: t.heading, color: 'rgb(var(--c-brand))', fontWeight: '600' },
+  { tag: t.strong, fontWeight: '700', color: 'rgb(var(--c-text))' },
+  { tag: t.emphasis, fontStyle: 'italic', color: 'rgb(var(--c-text-secondary))' },
+  { tag: t.link, color: 'rgb(var(--c-brand))', textDecoration: 'underline' },
+  { tag: t.url, color: 'rgb(var(--c-text-muted))' },
+  { tag: t.quote, color: 'rgb(var(--c-text-faint))' },
+  { tag: t.monospace, color: 'rgb(var(--c-text-secondary))' },
+  { tag: t.list, color: 'rgb(var(--c-text-muted))' },
+  { tag: t.contentSeparator, color: 'rgb(var(--c-text-faint))' },
+  { tag: [t.processingInstruction, t.meta], color: 'rgb(var(--c-text-faint))' },
+  { tag: t.keyword, color: 'rgb(var(--c-text-muted))' },
+  { tag: t.comment, color: 'rgb(var(--c-text-faint))' },
+  { tag: t.atom, color: 'rgb(var(--c-text-secondary))' },
+]);
 
 interface Props {
   notePath: string;
@@ -73,6 +93,7 @@ export function NotePane(props: Props) {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         markdown(),
+        syntaxHighlighting(markdownHighlight),
         EditorView.lineWrapping,
         EditorView.updateListener.of((v) => {
           if (v.docChanged) {
@@ -138,7 +159,7 @@ export function NotePane(props: Props) {
         {(tab === 'edit' || tab === 'split') && (
           <div
             ref={containerRef}
-            className={`h-full overflow-auto ${tab === 'split' ? 'w-1/2 border-r border-ink-200' : 'w-full'}`}
+            className={`h-full overflow-auto ${tab === 'split' ? 'w-1/2 border-r border-border' : 'w-full'}`}
           />
         )}
         {(tab === 'preview' || tab === 'split') && (

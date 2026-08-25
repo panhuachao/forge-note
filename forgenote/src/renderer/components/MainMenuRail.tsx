@@ -40,7 +40,7 @@ export function MainMenuRail() {
         className="group relative w-10 h-10 flex items-center justify-center rounded-xl bg-brand text-brand-fg shadow-sm hover:bg-brand-hover hover:shadow transition-all"
       >
         <Icon name="sparkles" className="w-5 h-5" />
-        <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+        <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
           快速笔记
         </span>
       </button>
@@ -61,14 +61,14 @@ export function MainMenuRail() {
               title={it.label}
               className={`group relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
                 active
-                  ? 'bg-white text-brand shadow-sm'
+                  ? 'bg-content text-brand shadow-sm'
                   : disabled
                   ? 'text-fg-faint cursor-not-allowed'
                   : 'text-fg-muted hover:bg-hover-bg hover:text-fg'
               }`}
             >
               <Icon name={it.icon} className="w-[22px] h-[22px]" />
-              <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
                 {it.label}
               </span>
             </button>
@@ -84,7 +84,7 @@ export function MainMenuRail() {
           title={theme === 'light' ? '切换到暗黑模式' : '切换到亮白模式'}
         >
           <Icon name={theme === 'light' ? 'moon' : 'sun'} className="w-[22px] h-[22px]" />
-          <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+          <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
             {theme === 'light' ? '暗黑模式' : '亮白模式'}
           </span>
         </button>
@@ -94,7 +94,7 @@ export function MainMenuRail() {
           title="收起主菜单"
         >
           <Icon name="arrow-left" className="w-[22px] h-[22px]" />
-          <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+          <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
             收起主菜单
           </span>
         </button>

@@ -9,13 +9,13 @@ interface Props {
 
 export function LinkPanel({ inlinks, outlinks, broken, onOpen }: Props) {
   return (
-    <div className="px-4 py-3 border-b border-ink-200">
-      <h3 className="text-xs font-semibold text-ink-500 uppercase mb-2">双向链接</h3>
+    <div className="px-4 py-3 border-b border-border">
+      <h3 className="text-xs font-semibold text-fg-muted uppercase mb-2">双向链接</h3>
       <div className="text-sm space-y-3">
         <div>
-          <div className="text-ink-500 text-xs mb-1">入链 ({inlinks.length})</div>
+          <div className="text-fg-muted text-xs mb-1">入链 ({inlinks.length})</div>
           {inlinks.length === 0 ? (
-            <div className="text-ink-400 text-xs">无</div>
+            <div className="text-fg-faint text-xs">无</div>
           ) : (
             <ul className="space-y-0.5">
               {inlinks.map((p) => (
@@ -32,9 +32,9 @@ export function LinkPanel({ inlinks, outlinks, broken, onOpen }: Props) {
           )}
         </div>
         <div>
-          <div className="text-ink-500 text-xs mb-1">出链 ({outlinks.length})</div>
+          <div className="text-fg-muted text-xs mb-1">出链 ({outlinks.length})</div>
           {outlinks.length === 0 ? (
-            <div className="text-ink-400 text-xs">无</div>
+            <div className="text-fg-faint text-xs">无</div>
           ) : (
             <ul className="space-y-0.5">
               {outlinks.map((p) => (

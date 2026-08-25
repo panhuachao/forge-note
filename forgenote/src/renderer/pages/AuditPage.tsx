@@ -24,28 +24,28 @@ export function AuditPage() {
     }
   }
 
-  if (!activeKb) return <div className="flex-1 flex items-center justify-center text-ink-400">请先选择知识库</div>;
+  if (!activeKb) return <div className="flex-1 flex items-center justify-center text-fg-faint">请先选择知识库</div>;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-ink-50">
-      <div className="h-10 flex items-center px-4 border-b border-ink-200 bg-white text-sm">
+    <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
+      <div className="h-10 flex items-center px-4 border-b border-border bg-content text-sm">
         <span className="font-medium flex items-center gap-1.5"><Icon name="clock" className="w-4 h-4 text-brand" /> 操作历史</span>
-        <span className="ml-3 text-xs text-ink-500">{list.length} 条记录</span>
+        <span className="ml-3 text-xs text-fg-muted">{list.length} 条记录</span>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
         {list.length === 0 ? (
-          <div className="text-center text-ink-400 py-12">暂无 AI 操作记录</div>
+          <div className="text-center text-fg-faint py-12">暂无 AI 操作记录</div>
         ) : (
           <div className="space-y-2 max-w-3xl">
             {list.map((e) => (
-              <div key={e.id} className="bg-white rounded border border-ink-200 p-3 text-sm flex items-start gap-3">
+              <div key={e.id} className="bg-content rounded border border-border p-3 text-sm flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="badge badge-brand">{e.action}</span>
-                    <span className="text-xs text-ink-500">{new Date(e.ts).toLocaleString()}</span>
+                    <span className="text-xs text-fg-muted">{new Date(e.ts).toLocaleString()}</span>
                     {e.undone && <span className="badge badge-gray">已撤销</span>}
                   </div>
-                  <pre className="text-xs text-ink-600 mt-1 truncate">{JSON.stringify(e.payload, null, 0)}</pre>
+                  <pre className="text-xs text-fg-secondary mt-1 truncate">{JSON.stringify(e.payload, null, 0)}</pre>
                 </div>
                 {!e.undone && (
                   <button onClick={() => undo(e.id)} className="btn btn-ghost text-xs">撤销</button>

@@ -167,7 +167,7 @@ export default function ChatPage() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {conversations.length === 0 ? (
-            <div className="p-4 text-xs text-ink-400 text-center">
+            <div className="p-4 text-xs text-fg-faint text-center">
               暂无对话<br />点击右上 + 新建
             </div>
           ) : (
@@ -198,11 +198,11 @@ export default function ChatPage() {
                           if (e.key === 'Escape') setEditingId(null);
                         }}
                         autoFocus
-                        className="flex-1 px-1 py-0.5 text-xs border border-ink-300 rounded outline-none"
+                        className="flex-1 px-1 py-0.5 text-xs border border-border-strong rounded outline-none"
                       />
                     ) : (
                       <span
-                        className="flex-1 text-xs text-ink-800 truncate"
+                        className="flex-1 text-xs text-fg truncate"
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           setEditingId(c.id);
@@ -218,13 +218,13 @@ export default function ChatPage() {
                         e.stopPropagation();
                         if (confirm('删除该对话？')) deleteConversation(c.id);
                       }}
-                      className="w-5 h-5 flex items-center justify-center text-ink-400 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                      className="w-5 h-5 flex items-center justify-center text-fg-faint hover:text-red-500 opacity-0 group-hover:opacity-100"
                       title="删除"
                     >
                       <Icon name="trash" className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <div className="text-[10px] text-ink-400 mt-0.5">
+                  <div className="text-[10px] text-fg-faint mt-0.5">
                     {new Date(c.updatedAt).toLocaleString('zh-CN', {
                       month: '2-digit',
                       day: '2-digit',
@@ -250,7 +250,7 @@ export default function ChatPage() {
           >
             <Icon name="arrow-left" className="w-4 h-4" />
           </button>
-          <span className="text-sm font-medium text-ink-800 truncate">
+          <span className="text-sm font-medium text-fg truncate">
             {activeConv ? activeConv.title : '新对话'}
           </span>
         </div>
@@ -258,7 +258,7 @@ export default function ChatPage() {
         {/* 消息流 */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
           {!activeConv ? (
-            <div className="h-full flex flex-col items-center justify-center text-ink-400">
+            <div className="h-full flex flex-col items-center justify-center text-fg-faint">
               <Icon name="chat-bubble" className="w-12 h-12 mb-2" />
               <p className="text-sm">开始一次新对话</p>
               <p className="text-xs mt-1">在下方输入框输入问题，Enter 发送</p>
@@ -309,7 +309,7 @@ export default function ChatPage() {
                   }}
                   rows={2}
                   placeholder="继续提问…  Enter 发送，Shift+Enter 换行"
-                  className="w-full bg-transparent outline-none text-sm text-ink-800 placeholder:text-ink-400 resize-none min-h-[60px] max-h-[240px] leading-6"
+                  className="w-full bg-transparent outline-none text-sm text-fg placeholder:text-fg-faint resize-none min-h-[60px] max-h-[240px] leading-6"
                   disabled={loading}
                 />
                 <div className="flex items-center justify-between pt-1">

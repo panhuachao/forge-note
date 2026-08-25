@@ -98,7 +98,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
               className="h-full w-9 flex items-center justify-center border-r border-border-soft text-fg-secondary hover:bg-hover-bg"
               title="排序方式"
             ><Icon name="arrows-up-down" className="w-4 h-4" /></button>
-            <div className="absolute left-0 top-full mt-1 bg-white border border-border-soft rounded shadow-lg z-30 hidden group-hover:block min-w-[120px]">
+            <div className="absolute left-0 top-full mt-1 bg-content border border-border-soft rounded shadow-lg z-30 hidden group-hover:block min-w-[120px]">
               {([
                 { v: 'name', l: '按名称' },
                 { v: 'mtime', l: '按修改时间' },

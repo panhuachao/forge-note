@@ -49,11 +49,11 @@ export function Onboarding() {
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-content rounded-lg shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-semibold mb-2">{s.title}</h2>
-        <p className="text-sm text-ink-600 mb-5">{s.body}</p>
+        <p className="text-sm text-fg-secondary mb-5">{s.body}</p>
         <div className="flex items-center justify-between">
-          <div className="text-xs text-ink-400">第 {step + 1} / {steps.length} 步</div>
+          <div className="text-xs text-fg-faint">第 {step + 1} / {steps.length} 步</div>
           <div className="flex gap-2">
             <button onClick={dismiss} className="btn btn-ghost">跳过引导</button>
             {step > 0 && <button onClick={() => setStep(step - 1)} className="btn btn-secondary">上一步</button>}

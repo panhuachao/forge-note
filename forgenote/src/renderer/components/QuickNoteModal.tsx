@@ -60,18 +60,18 @@ export function QuickNoteModal({ open, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onMouseDown={onClose}>
       <div
-        className="w-[640px] max-w-[92vw] max-h-[88vh] flex flex-col rounded-lg bg-white shadow-2xl"
+        className="w-[640px] max-w-[92vw] max-h-[88vh] flex flex-col rounded-lg bg-content shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-ink-200">
-          <h2 className="text-base font-semibold text-ink-800">⚡ 快速笔记</h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-700 text-xl leading-none">×</button>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+          <h2 className="text-base font-semibold text-fg">⚡ 快速笔记</h2>
+          <button onClick={onClose} className="text-fg-faint hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
 
         {/* 正文 */}
         <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          <p className="text-xs text-ink-500">
+          <p className="text-xs text-fg-muted">
             粘贴一段话或一篇文章，确认后 AI 会自动归纳摘要、归属到最合适的目录、补充标签与双向链接。
           </p>
           <textarea
@@ -84,7 +84,7 @@ export function QuickNoteModal({ open, onClose }: Props) {
 
           {dirs.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-ink-500">指定目录（可选，留空由 AI 推荐）：</span>
+              <span className="text-xs text-fg-muted">指定目录（可选，留空由 AI 推荐）：</span>
               <select
                 value={dirId}
                 onChange={(e) => setDirId(e.target.value)}
@@ -106,7 +106,7 @@ export function QuickNoteModal({ open, onClose }: Props) {
         </div>
 
         {/* 底部 */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-ink-200">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
           <button onClick={onClose} className="btn-ghost">取消</button>
           <button
             onClick={submit}

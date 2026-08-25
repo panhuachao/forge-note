@@ -91,18 +91,18 @@ export function CreateNoteModal({ open, initialDirPath, onClose }: Props) {
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]"
+        className="bg-content rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-ink-200 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h2 className="font-semibold">新建笔记</h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-800">×</button>
+          <button onClick={onClose} className="text-fg-faint hover:text-fg">×</button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4 text-sm">
           {/* 名称 */}
           <div>
-            <label className="block text-xs text-ink-500 mb-1">笔记名称</label>
+            <label className="block text-xs text-fg-muted mb-1">笔记名称</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -115,7 +115,7 @@ export function CreateNoteModal({ open, initialDirPath, onClose }: Props) {
 
           {/* 目标目录 */}
           <div>
-            <label className="block text-xs text-ink-500 mb-1">存放目录</label>
+            <label className="block text-xs text-fg-muted mb-1">存放目录</label>
             <select value={targetDir} onChange={(e) => setTargetDir(e.target.value)} className="input">
               <option value="">（根目录）</option>
               {dirs.map((d) => (
@@ -126,27 +126,27 @@ export function CreateNoteModal({ open, initialDirPath, onClose }: Props) {
 
           {/* 模板选择 */}
           <div>
-            <label className="block text-xs text-ink-500 mb-1">笔记模板</label>
+            <label className="block text-xs text-fg-muted mb-1">笔记模板</label>
             <div className="flex gap-2">
               <label
                 className={`flex-1 px-3 py-2 rounded border cursor-pointer ${
-                  useTemplate ? 'border-brand bg-active-bg text-fg' : 'border-ink-200'
+                  useTemplate ? 'border-brand bg-active-bg text-fg' : 'border-border'
                 }`}
               >
                 <input type="radio" className="hidden" checked={useTemplate} onChange={() => setUseTemplate(true)} />
                 <div className="font-medium">套用目录模板</div>
-                <div className="text-xs text-ink-500">
+                <div className="text-xs text-fg-muted">
                   {templateInfo?.hasCustom ? '（已自定义）' : templateInfo ? '（默认）' : '（该目录无模板）'}
                 </div>
               </label>
               <label
                 className={`flex-1 px-3 py-2 rounded border cursor-pointer ${
-                  !useTemplate ? 'border-brand bg-active-bg text-fg' : 'border-ink-200'
+                  !useTemplate ? 'border-brand bg-active-bg text-fg' : 'border-border'
                 }`}
               >
                 <input type="radio" className="hidden" checked={!useTemplate} onChange={() => setUseTemplate(false)} />
                 <div className="font-medium">空白笔记</div>
-                <div className="text-xs text-ink-500">仅生成标题</div>
+                <div className="text-xs text-fg-muted">仅生成标题</div>
               </label>
             </div>
           </div>
@@ -155,24 +155,24 @@ export function CreateNoteModal({ open, initialDirPath, onClose }: Props) {
           {useTemplate && templateInfo && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-ink-500">模板预览（{templateInfo.dirName}）</label>
+                <label className="text-xs text-fg-muted">模板预览（{templateInfo.dirName}）</label>
                 {templateInfo.variables.length > 0 && (
-                  <span className="text-[10px] text-ink-400">
+                  <span className="text-[10px] text-fg-faint">
                     可用变量：{templateInfo.variables.join(' ')}
                   </span>
                 )}
               </div>
-              <pre className="text-xs bg-ink-50 rounded p-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-ink-700">
+              <pre className="text-xs bg-canvas rounded p-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-fg-secondary">
                 {preview || templateInfo.content || '（空模板）'}
               </pre>
             </div>
           )}
           {useTemplate && !templateInfo && (
-            <div className="text-xs text-ink-400">该目录未配置笔记模板，将创建空白笔记。</div>
+            <div className="text-xs text-fg-faint">该目录未配置笔记模板，将创建空白笔记。</div>
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-ink-200 flex justify-end gap-2">
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
           <button onClick={onClose} className="btn btn-secondary">取消</button>
           <button onClick={handleCreate} disabled={creating} className="btn btn-primary">
             {creating ? '创建中…' : '创建'}

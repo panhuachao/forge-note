@@ -32,10 +32,10 @@ export function AISuggestionPanel({
       {summary && (
         <div>
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-xs font-semibold text-ink-500 uppercase">AI 摘要</h3>
-            <button onClick={onCloseSummary} className="text-ink-400 hover:text-ink-800 text-xs">×</button>
+            <h3 className="text-xs font-semibold text-fg-muted uppercase">AI 摘要</h3>
+            <button onClick={onCloseSummary} className="text-fg-faint hover:text-fg text-xs">×</button>
           </div>
-          <pre className="text-xs text-ink-700 whitespace-pre-wrap bg-ink-50 rounded p-2 max-h-40 overflow-y-auto">
+          <pre className="text-xs text-fg-secondary whitespace-pre-wrap bg-canvas rounded p-2 max-h-40 overflow-y-auto">
             {summary}
           </pre>
         </div>
@@ -43,19 +43,19 @@ export function AISuggestionPanel({
 
       {dirSuggestions.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-ink-500 uppercase mb-2">AI 归纳推荐</h3>
+          <h3 className="text-xs font-semibold text-fg-muted uppercase mb-2">AI 归纳推荐</h3>
           <div className="space-y-1.5">
             {dirSuggestions.map((s) => (
               <div
                 key={s.dirId}
-                className="p-2 rounded border border-ink-200 hover:border-brand cursor-pointer"
+                className="p-2 rounded border border-border hover:border-brand cursor-pointer"
                 onClick={() => onApplyDir(s.dirPath)}
               >
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{s.dirName}</span>
                   <span className="badge badge-brand">{Math.round(s.confidence * 100)}%</span>
                 </div>
-                <div className="text-xs text-ink-500 mt-0.5">{s.reason}</div>
+                <div className="text-xs text-fg-muted mt-0.5">{s.reason}</div>
               </div>
             ))}
           </div>
@@ -65,7 +65,7 @@ export function AISuggestionPanel({
       {linkSuggestions.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-ink-500 uppercase">AI 链接推荐</h3>
+            <h3 className="text-xs font-semibold text-fg-muted uppercase">AI 链接推荐</h3>
             {selected.size > 0 && (
               <button
                 onClick={() => onApplyLinks([...selected])}
@@ -79,7 +79,7 @@ export function AISuggestionPanel({
             {linkSuggestions.map((s) => (
               <label
                 key={s.target}
-                className="flex items-start gap-2 p-2 rounded border border-ink-200 hover:border-brand cursor-pointer"
+                className="flex items-start gap-2 p-2 rounded border border-border hover:border-brand cursor-pointer"
               >
                 <input
                   type="checkbox"
@@ -92,7 +92,7 @@ export function AISuggestionPanel({
                     {s.target}
                     {s.kind === 'flow' && <span className="badge badge-brand text-[10px]">流向</span>}
                   </div>
-                  <div className="text-xs text-ink-500">{s.reason}</div>
+                  <div className="text-xs text-fg-muted">{s.reason}</div>
                 </div>
               </label>
             ))}

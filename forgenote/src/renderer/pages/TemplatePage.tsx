@@ -26,7 +26,7 @@ export function TemplatePage() {
   }, [activeKb?.id]);
 
   if (!activeKb) {
-    return <div className="flex-1 flex items-center justify-center text-ink-400">请先选择知识库</div>;
+    return <div className="flex-1 flex items-center justify-center text-fg-faint">请先选择知识库</div>;
   }
 
   async function apply() {
@@ -78,20 +78,20 @@ export function TemplatePage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-ink-50">
-      <div className="h-10 flex items-center px-4 border-b border-ink-200 bg-white text-sm">
+    <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
+      <div className="h-10 flex items-center px-4 border-b border-border bg-content text-sm">
         <span className="font-medium flex items-center gap-1.5"><Icon name="clipboard" className="w-4 h-4 text-brand" /> 知识库模板</span>
       </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {applied ? (
-          <section className="bg-white rounded border border-ink-200 p-5">
+          <section className="bg-content rounded border border-border p-5">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold">{applied.meta.name}</h2>
-                <p className="text-xs text-ink-500 mt-1">
+                <p className="text-xs text-fg-muted mt-1">
                   版本 {applied.meta.version} · {applied.meta.author}
                 </p>
-                <p className="text-sm text-ink-600 mt-2">{applied.meta.description}</p>
+                <p className="text-sm text-fg-secondary mt-2">{applied.meta.description}</p>
               </div>
               <div className="flex gap-2">
                 <button onClick={exportTemplate} className="btn btn-secondary">导出</button>
@@ -112,19 +112,19 @@ export function TemplatePage() {
             </div>
           </section>
         ) : (
-          <section className="bg-white rounded border border-ink-200 p-5">
+          <section className="bg-content rounded border border-border p-5">
             <h2 className="text-lg font-semibold mb-2">尚未应用模板</h2>
-            <p className="text-sm text-ink-500 mb-4">选择下方模板一键搭建你的知识库体系：</p>
+            <p className="text-sm text-fg-muted mb-4">选择下方模板一键搭建你的知识库体系：</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {templates.map((t) => (
-                <div key={t.templateId} className="p-4 rounded border border-ink-200 hover:border-brand cursor-pointer"
+                <div key={t.templateId} className="p-4 rounded border border-border hover:border-brand cursor-pointer"
                   onClick={() => {
                     setApplying(t);
                     setSelections(t.dirs.map((d) => d.id));
                   }}>
                   <h3 className="font-medium">{t.name}</h3>
-                  <p className="text-xs text-ink-500 mt-1">版本 {t.version} · {t.dirs.length} 个目录</p>
-                  <p className="text-sm text-ink-600 mt-2">{t.description}</p>
+                  <p className="text-xs text-fg-muted mt-1">版本 {t.version} · {t.dirs.length} 个目录</p>
+                  <p className="text-sm text-fg-secondary mt-2">{t.description}</p>
                 </div>
               ))}
             </div>
@@ -133,14 +133,14 @@ export function TemplatePage() {
 
         {applied && (
           <>
-            <section className="bg-white rounded border border-ink-200 p-5">
+            <section className="bg-content rounded border border-border p-5">
               <h2 className="font-semibold mb-3">目录（{applied.meta.dirs.length}）</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {applied.meta.dirs.map((d) => (
-                  <div key={d.id} className="p-3 rounded border border-ink-200 flex items-center gap-2">
+                  <div key={d.id} className="p-3 rounded border border-border flex items-center gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm">{d.id} {d.name}</div>
-                      <div className="text-xs text-ink-500">
+                      <div className="text-xs text-fg-muted">
                         流向：{d.flow.length ? d.flow.join(' / ') : '终点'}
                         {d.sink ? ' · 终态' : ''}
                       </div>
@@ -173,7 +173,7 @@ export function TemplatePage() {
               </div>
             </section>
 
-            <section className="bg-white rounded border border-ink-200 p-5">
+            <section className="bg-content rounded border border-border p-5">
               <h2 className="font-semibold mb-3">AI_CONFIG.md（AI 操作说明书）</h2>
               <textarea
                 value={aiConfigContent}
@@ -199,12 +199,12 @@ export function TemplatePage() {
       {/* 应用模板向导 */}
       {applying && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+          <div className="bg-content rounded-lg shadow-xl w-full max-w-md p-5">
             <h2 className="font-semibold mb-3">应用模板：{applying.name}</h2>
-            <p className="text-sm text-ink-500 mb-3">勾选需要创建的目录（已存在的同名目录会被跳过）：</p>
+            <p className="text-sm text-fg-muted mb-3">勾选需要创建的目录（已存在的同名目录会被跳过）：</p>
             <div className="space-y-1 max-h-80 overflow-y-auto">
               {applying.dirs.map((d) => (
-                <label key={d.id} className="flex items-center gap-2 p-2 hover:bg-ink-50 rounded cursor-pointer">
+                <label key={d.id} className="flex items-center gap-2 p-2 hover:bg-canvas rounded cursor-pointer">
                   <input
                     type="checkbox"
                     checked={selections.includes(d.id)}
@@ -228,10 +228,10 @@ export function TemplatePage() {
       {/* 目录说明编辑 */}
       {dirReadmeEdit && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col">
-            <div className="px-5 py-3 border-b border-ink-200 flex items-center justify-between">
+          <div className="bg-content rounded-lg shadow-xl w-full max-w-2xl flex flex-col">
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold">编辑目录说明</h2>
-              <button onClick={() => setDirReadmeEdit(null)} className="text-ink-400 hover:text-ink-800">×</button>
+              <button onClick={() => setDirReadmeEdit(null)} className="text-fg-faint hover:text-fg">×</button>
             </div>
             <textarea
               value={dirReadmeEdit.content}
@@ -239,7 +239,7 @@ export function TemplatePage() {
               className="flex-1 p-5 font-mono text-xs outline-none resize-none"
               rows={20}
             />
-            <div className="px-5 py-3 border-t border-ink-200 flex justify-end gap-2">
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
               <button onClick={() => setDirReadmeEdit(null)} className="btn btn-secondary">取消</button>
               <button
                 onClick={async () => {
@@ -261,14 +261,14 @@ export function TemplatePage() {
       {/* 笔记模板编辑 */}
       {noteTemplateEdit && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh]">
-            <div className="px-5 py-3 border-b border-ink-200 flex items-center justify-between">
+          <div className="bg-content rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold">
                 编辑笔记模板 · {noteTemplateEdit.dirId} {noteTemplateEdit.dirName}
               </h2>
-              <button onClick={() => setNoteTemplateEdit(null)} className="text-ink-400 hover:text-ink-800">×</button>
+              <button onClick={() => setNoteTemplateEdit(null)} className="text-fg-faint hover:text-fg">×</button>
             </div>
-            <div className="px-5 py-2 text-xs text-ink-400 flex items-center justify-between">
+            <div className="px-5 py-2 text-xs text-fg-faint flex items-center justify-between">
               <span>可用变量：{noteTemplateEdit.variables.join(' ')}</span>
               {noteTemplateEdit.hasCustom && (
                 <button
@@ -292,7 +292,7 @@ export function TemplatePage() {
             <textarea
               value={noteTemplateDraft}
               onChange={(e) => setNoteTemplateDraft(e.target.value)}
-              className="flex-1 m-5 mt-1 p-4 font-mono text-xs outline-none resize-none border border-ink-200 rounded"
+              className="flex-1 m-5 mt-1 p-4 font-mono text-xs outline-none resize-none border border-border rounded"
               rows={16}
               placeholder="# {{name}}
 
@@ -300,7 +300,7 @@ export function TemplatePage() {
 
 （在此输入该目录下新建笔记的默认内容，支持 {{name}} {{kbName}} {{date}} {{time}} {{timestamp}} 变量）"
             />
-            <div className="px-5 py-3 border-t border-ink-200 flex justify-end gap-2">
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
               <button onClick={() => setNoteTemplateEdit(null)} className="btn btn-secondary">取消</button>
               <button
                 className="btn btn-primary"

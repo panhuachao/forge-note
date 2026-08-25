@@ -12,7 +12,7 @@ export function ToastContainer() {
             ? 'bg-red-50 border-red-300 text-red-800'
             : t.level === 'warn'
             ? 'bg-yellow-50 border-yellow-300 text-yellow-800'
-            : 'bg-white border-ink-200 text-ink-800';
+            : 'bg-content border-border text-fg';
         return (
           <div
             key={t.id}

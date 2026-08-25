@@ -242,7 +242,7 @@ export function HomePage() {
                               }`}
                             >
                               <span className="font-medium">{m.label}</span>
-                              {m.desc && <span className="text-ink-400 text-[10px]">{m.desc}</span>}
+                              {m.desc && <span className="text-fg-faint text-[10px]">{m.desc}</span>}
                             </button>
                           );
                         })}
