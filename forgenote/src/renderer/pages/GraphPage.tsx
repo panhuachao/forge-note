@@ -75,6 +75,8 @@ export function GraphPage() {
       const allFiles: { path: string; name: string; dir: string; color: string }[] = [];
       function walk(n: any, dirName = '', inheritedColor = '') {
         if (n.kind === 'file') {
+          // 跳过隐藏笔记（以点开头，如 .AI_CONFIG.md / .README.md，仅供模板设置与 AI 内部使用）
+          if (n.name.startsWith('.')) return;
           // 颜色优先级：文件自身 > 当前目录 templateColor > colorMap > 兜底灰
           let color = inheritedColor || colorMap.get(dirName) || '#a8a29e';
           const parts = n.path.split('/');

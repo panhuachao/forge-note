@@ -51,8 +51,8 @@ class KBService {
         }
       }
     } catch {}
-    // AI_CONFIG path
-    const aiConfig = join(rootPath, 'AI_CONFIG.md');
+    // AI_CONFIG path（隐藏文件，仅供模板设置与 AI 模型内部使用）
+    const aiConfig = join(rootPath, '.AI_CONFIG.md');
     try {
       await fs.access(aiConfig);
       cache.aiConfigPath = aiConfig;

@@ -39,7 +39,7 @@ class TemplateService {
     const metaRaw = await fs.readFile(join(root, '.kb_template.json'), 'utf-8');
     const meta = JSON.parse(metaRaw) as TemplateMeta;
     // 注入 .kb_template.json 所在目录的相对路径
-    meta.aiConfig = 'AI_CONFIG.md';
+    meta.aiConfig = '.AI_CONFIG.md';
     for (const d of meta.dirs) {
       d.readme = `${d.id === '' ? '' : this.findDirNameById(meta, d.id) + '/'}README.md`;
       d.noteTemplate = `${d.id === '' ? '' : this.findDirNameById(meta, d.id) + '/'}.template.md`;
@@ -61,17 +61,19 @@ class TemplateService {
   async loadApplied(kbId: string): Promise<AppliedTemplate | null> {
     const kb = getKB(kbId);
     if (!kb) return null;
+    // 升级迁移：将旧命名（不带点）的 AI_CONFIG.md / README.md 重命名为隐藏命名
+    await this.migrateHiddenFiles(kbId);
     const metaPath = join(kb.rootPath, '.kb_template.json');
     try {
       const metaRaw = await fs.readFile(metaPath, 'utf-8');
       const meta = JSON.parse(metaRaw) as TemplateMeta;
-      const aiConfigContent = await fs.readFile(join(kb.rootPath, 'AI_CONFIG.md'), 'utf-8').catch(() => '');
+      const aiConfigContent = await fs.readFile(join(kb.rootPath, '.AI_CONFIG.md'), 'utf-8').catch(() => '');
       const dirReadmes: Record<string, string> = {};
       const dirNoteTemplates: Record<string, string> = {};
       for (const d of meta.dirs) {
         const realDir = `${d.id} ${d.name}`;
         try {
-          dirReadmes[d.id] = await fs.readFile(join(kb.rootPath, realDir, 'README.md'), 'utf-8');
+          dirReadmes[d.id] = await fs.readFile(join(kb.rootPath, realDir, '.README.md'), 'utf-8');
         } catch {}
         try {
           dirNoteTemplates[d.id] = await fs.readFile(join(kb.rootPath, realDir, '.template.md'), 'utf-8');
@@ -113,9 +115,9 @@ class TemplateService {
       if (exists) continue;
       await copyDir(srcDir, dstDir);
     }
-    // 复制 AI_CONFIG.md
-    const aiSrc = join(srcRoot, 'AI_CONFIG.md');
-    const aiDst = join(dstRoot, 'AI_CONFIG.md');
+    // 复制 .AI_CONFIG.md（隐藏文件，仅供模板设置与 AI 模型内部使用）
+    const aiSrc = join(srcRoot, '.AI_CONFIG.md');
+    const aiDst = join(dstRoot, '.AI_CONFIG.md');
     if (!(await fs.access(aiDst).then(() => true).catch(() => false))) {
       await fs.copyFile(aiSrc, aiDst);
     }
@@ -145,7 +147,7 @@ class TemplateService {
     if (!kb) return;
     const metaPath = join(kb.rootPath, '.kb_template.json');
     await fs.unlink(metaPath).catch(() => {});
-    const aiPath = join(kb.rootPath, 'AI_CONFIG.md');
+    const aiPath = join(kb.rootPath, '.AI_CONFIG.md');
     await fs.unlink(aiPath).catch(() => {});
     updateKBTemplate(kbId, null);
     kbService.invalidateMeta(kb.rootPath);
@@ -163,12 +165,12 @@ class TemplateService {
     if (!applied) throw new Error('该知识库未应用模板');
     const files: Record<string, Uint8Array> = {};
     files['.kb_template.json'] = strToU8(JSON.stringify(applied.meta, null, 2));
-    files['AI_CONFIG.md'] = strToU8(applied.aiConfigContent);
+    files['.AI_CONFIG.md'] = strToU8(applied.aiConfigContent);
     for (const d of applied.meta.dirs) {
       const dirName = `${d.id} ${d.name}`;
       const readme = applied.dirReadmes[d.id];
       const tpl = applied.dirNoteTemplates[d.id];
-      if (readme) files[`${dirName}/README.md`] = strToU8(readme);
+      if (readme) files[`${dirName}/.README.md`] = strToU8(readme);
       if (tpl) files[`${dirName}/.template.md`] = strToU8(tpl);
     }
     return zipSync(files, { level: 6 });
@@ -187,9 +189,9 @@ class TemplateService {
     await ensureDir(dstRoot);
     // 写入 meta
     await atomicWrite(join(dstRoot, '.kb_template.json'), metaRaw);
-    if (unzipped['AI_CONFIG.md']) {
-      const exists = await fs.access(join(dstRoot, 'AI_CONFIG.md')).then(() => true).catch(() => false);
-      if (!exists) await atomicWrite(join(dstRoot, 'AI_CONFIG.md'), strFromU8(unzipped['AI_CONFIG.md']));
+    if (unzipped['.AI_CONFIG.md']) {
+      const exists = await fs.access(join(dstRoot, '.AI_CONFIG.md')).then(() => true).catch(() => false);
+      if (!exists) await atomicWrite(join(dstRoot, '.AI_CONFIG.md'), strFromU8(unzipped['.AI_CONFIG.md']));
     }
     for (const d of meta.dirs) {
       const dirName = `${d.id} ${d.name}`;
@@ -197,9 +199,9 @@ class TemplateService {
       const exists = await fs.access(dstDir).then(() => true).catch(() => false);
       if (exists) continue;
       await ensureDir(dstDir);
-      const readme = unzipped[`${dirName}/README.md`];
+      const readme = unzipped[`${dirName}/.README.md`];
       const tpl = unzipped[`${dirName}/.template.md`];
-      if (readme) await atomicWrite(join(dstDir, 'README.md'), strFromU8(readme));
+      if (readme) await atomicWrite(join(dstDir, '.README.md'), strFromU8(readme));
       if (tpl) await atomicWrite(join(dstDir, '.template.md'), strFromU8(tpl));
     }
     updateKBTemplate(kbId, meta.templateId);
@@ -211,7 +213,7 @@ class TemplateService {
     const kb = getKB(kbId);
     if (!kb) return '';
     try {
-      return await fs.readFile(join(kb.rootPath, 'AI_CONFIG.md'), 'utf-8');
+      return await fs.readFile(join(kb.rootPath, '.AI_CONFIG.md'), 'utf-8');
     } catch {
       return '';
     }
@@ -220,7 +222,7 @@ class TemplateService {
   async saveAIConfig(kbId: string, content: string): Promise<void> {
     const kb = getKB(kbId);
     if (!kb) return;
-    await atomicWrite(join(kb.rootPath, 'AI_CONFIG.md'), content);
+    await atomicWrite(join(kb.rootPath, '.AI_CONFIG.md'), content);
     kbService.invalidateMeta(kb.rootPath);
   }
 
@@ -228,7 +230,7 @@ class TemplateService {
     const kb = getKB(kbId);
     if (!kb) return '';
     try {
-      return await fs.readFile(join(kb.rootPath, dirPath, 'README.md'), 'utf-8');
+      return await fs.readFile(join(kb.rootPath, dirPath, '.README.md'), 'utf-8');
     } catch {
       return '';
     }
@@ -237,7 +239,7 @@ class TemplateService {
   async saveDirReadme(kbId: string, dirPath: string, content: string): Promise<void> {
     const kb = getKB(kbId);
     if (!kb) return;
-    await atomicWrite(join(kb.rootPath, dirPath, 'README.md'), content);
+    await atomicWrite(join(kb.rootPath, dirPath, '.README.md'), content);
     kbService.invalidateMeta(kb.rootPath);
   }
 
@@ -314,6 +316,48 @@ class TemplateService {
       await atomicWrite(join(kb.rootPath, realDir, '.template.md'), '');
       kbService.invalidateMeta(kb.rootPath);
       return await this.getNoteTemplateInfo(kbId, realDir);
+    }
+  }
+
+  /**
+   * 升级迁移：将旧命名（不带点，会显示在文件树/图谱中）的 AI_CONFIG.md / README.md
+   * 重命名为隐藏命名（带点，仅模板设置与 AI 模型内部使用）。幂等：仅当旧文件存在且新文件不存在时执行。
+   */
+  private async migrateHiddenFiles(kbId: string): Promise<void> {
+    const kb = getKB(kbId);
+    if (!kb) return;
+    const renameIfNeeded = async (oldName: string, newName: string) => {
+      const oldP = join(kb.rootPath, oldName);
+      const newP = join(kb.rootPath, newName);
+      const oldExists = await fs.access(oldP).then(() => true).catch(() => false);
+      const newExists = await fs.access(newP).then(() => true).catch(() => false);
+      if (oldExists && !newExists) {
+        await fs.rename(oldP, newP).catch(() => {});
+        kbService.invalidateMeta(kb.rootPath);
+      }
+    };
+    await renameIfNeeded('AI_CONFIG.md', '.AI_CONFIG.md');
+    const applied = await this.loadAppliedMetaOnly(kbId);
+    if (!applied) return;
+    for (const d of applied.meta.dirs) {
+      const realDir = `${d.id} ${d.name}`;
+      await renameIfNeeded(join(realDir, 'README.md'), join(realDir, '.README.md'));
+    }
+  }
+
+  /**
+   * 仅读取 .kb_template.json 的 meta（用于迁移，避免与 migrateHiddenFiles 互相递归调用 loadApplied）
+   */
+  private async loadAppliedMetaOnly(kbId: string): Promise<AppliedTemplate | null> {
+    const kb = getKB(kbId);
+    if (!kb) return null;
+    const metaPath = join(kb.rootPath, '.kb_template.json');
+    try {
+      const metaRaw = await fs.readFile(metaPath, 'utf-8');
+      const meta = JSON.parse(metaRaw) as TemplateMeta;
+      return { kbId, templateId: meta.templateId ?? '', meta, aiConfigContent: '', dirReadmes: {}, dirNoteTemplates: {} };
+    } catch {
+      return null;
     }
   }
 

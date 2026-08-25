@@ -121,7 +121,7 @@ class AIService {
     const kb = getKB(kbId);
     if (!kb) return '';
     try {
-      const content = await fs.readFile(join(kb.rootPath, 'AI_CONFIG.md'), 'utf-8');
+      const content = await fs.readFile(join(kb.rootPath, '.AI_CONFIG.md'), 'utf-8');
       this.aiConfigCache.set(kbId, { content, ts: Date.now() });
       return content;
     } catch {
@@ -182,12 +182,12 @@ class AIService {
       for (const dir of dirs) {
         const dirPath = join(rootPath, dir);
         const files = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
-        const notes = files.filter((f) => f.isFile() && f.name.toLowerCase().endsWith('.md') && f.name !== 'README.md');
-        const readme = files.find((f) => f.isFile() && f.name === 'README.md');
+        const notes = files.filter((f) => f.isFile() && f.name.toLowerCase().endsWith('.md') && !f.name.startsWith('.'));
+        const readme = files.find((f) => f.isFile() && f.name === '.README.md');
         let readmeExcerpt = '';
         if (readme) {
           try {
-            const content = await fs.readFile(join(dirPath, 'README.md'), 'utf-8');
+            const content = await fs.readFile(join(dirPath, '.README.md'), 'utf-8');
             // 取 README 标题 + 简介（去除 markdown 标记）
             const plain = content
               .replace(/^#+\s*/gm, '')
@@ -274,7 +274,7 @@ class AIService {
       for (const dir of targetDirs) {
         const dirPath = join(rootPath, dir);
         const files = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
-        const notes = files.filter((f) => f.isFile() && f.name.toLowerCase().endsWith('.md') && f.name !== 'README.md');
+        const notes = files.filter((f) => f.isFile() && f.name.toLowerCase().endsWith('.md') && !f.name.startsWith('.'));
         if (notes.length === 0) continue;
         sections.push(`\n## 目录「${dir}」全部笔记（${notes.length} 篇）`);
         for (const n of notes) {
@@ -332,7 +332,7 @@ class AIService {
       meta.dirs.map(async (d) => {
         const realDir = `${d.id} ${d.name}`;
         const readme = await fs
-          .readFile(join(kb.rootPath, realDir, 'README.md'), 'utf-8')
+          .readFile(join(kb.rootPath, realDir, '.README.md'), 'utf-8')
           .catch(() => '');
         return { id: d.id, name: d.name, realDir, readme };
       })

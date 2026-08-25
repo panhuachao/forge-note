@@ -41,7 +41,7 @@ export async function startWatching(kbId: string): Promise<void> {
     })
     .on('change', async (p) => {
       const rel = p.replace(kb.rootPath + '/', '');
-      if (p.endsWith('AI_CONFIG.md')) {
+      if (p.endsWith('.AI_CONFIG.md')) {
         // 触发模板/AI 配置热更新
         kbService.invalidateMeta(kb.rootPath);
       }
