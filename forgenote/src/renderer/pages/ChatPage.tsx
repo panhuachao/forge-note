@@ -347,7 +347,7 @@ export default function ChatPage() {
                 <div className="flex items-center justify-between pt-1">
                   <button
                     title="附件"
-                    className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg"
+                    className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-xl"
                   >
                     <Icon name="plus" className="w-4 h-4" />
                   </button>
@@ -386,7 +386,7 @@ export default function ChatPage() {
                     )}
                     <button
                       title="语音"
-                      className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg"
+                      className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-xl"
                     >
                       <Icon name="microphone" className="w-4 h-4" />
                     </button>

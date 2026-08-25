@@ -118,7 +118,8 @@ const outlineMap: Record<string, any> = {
   'check-circle': HeroiconsOutline.CheckCircleIcon,
   focus: HeroiconsOutline.ArrowsPointingInIcon,
   'view-columns': HeroiconsOutline.EyeIcon,
-  'document-text': HeroiconsOutline.DocumentTextIcon
+  'document-text': HeroiconsOutline.DocumentTextIcon,
+  'copy': HeroiconsOutline.DocumentDuplicateIcon
 };
 
 const solidMap: Record<string, any> = {

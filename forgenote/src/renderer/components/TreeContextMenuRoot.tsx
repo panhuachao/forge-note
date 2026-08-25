@@ -135,7 +135,7 @@ export function TreeContextMenuRoot() {
           }}
         >
           <div
-            className="bg-content border border-border-soft rounded-lg shadow-2xl p-5 min-w-[340px] max-w-[440px]"
+            className="bg-content border border-border-soft rounded-xl shadow-2xl p-5 min-w-[340px] max-w-[440px]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-fg font-medium text-[15px] mb-2">{confirmDialog.title}</div>

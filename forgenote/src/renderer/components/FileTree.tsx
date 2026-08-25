@@ -125,17 +125,17 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
         <div className="h-10 flex items-center gap-0.5 px-1 border-b border-border-soft bg-toolbar text-xs">
           <button
             onClick={() => openCreateNote()}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="新建笔记"
           ><Icon name="document-plus" className="w-4 h-4" /></button>
           <button
             onClick={() => handleCreateDir('')}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="新建目录"
           ><Icon name="folder-plus" className="w-4 h-4" /></button>
           <div className="relative group">
             <button
-              className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
+              className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
               title="排序方式"
             ><Icon name="arrows-up-down" className="w-4 h-4" /></button>
             <div className="absolute left-0 top-full mt-1 bg-content border border-border-soft rounded shadow-lg z-30 hidden group-hover:block min-w-[120px]">
@@ -161,12 +161,12 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
           </div>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('forgenote:collapseAll'))}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="全部折叠"
           ><Icon name="chevron-up" className="w-4 h-4" /></button>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('forgenote:expandAll'))}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="全部展开"
           ><Icon name="chevron-down" className="w-4 h-4" /></button>
         </div>
@@ -183,7 +183,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
     return (
       <div>
         <div
-          className="group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-lg hover:bg-hover-bg text-sm cursor-pointer transition-colors"
+          className="group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-xl hover:bg-hover-bg text-sm cursor-pointer transition-colors"
           style={indent}
           onClick={() => {
             const ns = new Set(expanded);
@@ -296,7 +296,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
   const fileName = node.name.replace(/\.md$/i, '');
   return (
     <div
-      className={`group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-lg text-sm cursor-pointer transition-colors ${
+      className={`group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-xl text-sm cursor-pointer transition-colors ${
         node.path === activeTabId
           ? 'bg-brand-soft/50 shadow-[inset_2px_0_0_var(--brand)] text-brand font-medium'
           : 'hover:bg-hover-bg'

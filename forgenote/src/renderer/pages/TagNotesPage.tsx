@@ -109,7 +109,7 @@ export function TagNotesPage() {
                         openTab(n.path);
                         setMainView('note');
                       }}
-                      className="text-left rounded-lg border border-border-soft bg-content hover:border-brand/50 hover:bg-hover-bg/60 transition-colors p-3 flex flex-col gap-1 min-h-[88px]"
+                      className="text-left rounded-xl border border-border-soft bg-content hover:border-brand/50 hover:bg-hover-bg/60 transition-colors p-3 flex flex-col gap-1 min-h-[88px]"
                     >
                       <span className="font-medium text-fg text-sm truncate">
                         {n.name.replace(/\.md$/i, '')}

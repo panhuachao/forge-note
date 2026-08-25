@@ -62,7 +62,7 @@ export function QuickNoteModal({ open, onClose, initialContent = '' }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onMouseDown={onClose}>
       <div
-        className="w-[640px] max-w-[92vw] max-h-[88vh] flex flex-col rounded-lg bg-content shadow-2xl"
+        className="w-[640px] max-w-[92vw] max-h-[88vh] flex flex-col rounded-xl bg-content shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* 头部 */}

@@ -227,7 +227,7 @@ export function HomePage() {
               <div className="flex items-center justify-between pt-2">
                 <button
                   title="附件（暂未开放）"
-                  className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
+                  className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-xl flex-shrink-0"
                 >
                   <Icon name="plus" className="w-5 h-5" />
                 </button>
@@ -236,12 +236,12 @@ export function HomePage() {
                   {/* 模型徽章（按图片右下角"Hy3 ▼"） */}
                   {aiConfig.provider !== 'none' && currentModels.length > 0 ? (
                     <div className="relative group">
-                      <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-fg-secondary hover:bg-hover-bg">
+                      <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs text-fg-secondary hover:bg-hover-bg">
                         <Icon name="bolt" className="w-3.5 h-3.5" />
                         <span>{aiConfig.model || currentModels[0].label}</span>
                         <Icon name="chevron-down" className="w-3 h-3" />
                       </button>
-                      <div className="absolute right-0 bottom-full mb-1 bg-content border border-border-soft rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[240px] overflow-hidden">
+                      <div className="absolute right-0 bottom-full mb-1 bg-content border border-border-soft rounded-xl shadow-lg z-30 hidden group-hover:block min-w-[240px] overflow-hidden">
                         {currentModels.map((m) => {
                           const active = (aiConfig.model || currentModels[0].id) === m.id;
                           return (
@@ -262,7 +262,7 @@ export function HomePage() {
                   ) : (
                     <button
                       onClick={() => setMainView('settings')}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-fg-muted hover:bg-hover-bg"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs text-fg-muted hover:bg-hover-bg"
                     >
                       <Icon name="bolt" className="w-3.5 h-3.5" />
                       <span>未配置</span>
@@ -271,7 +271,7 @@ export function HomePage() {
 
                   <button
                     title="语音（暂未开放）"
-                    className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
+                    className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-xl flex-shrink-0"
                   >
                     <Icon name="microphone" className="w-4 h-4" />
                   </button>
@@ -295,7 +295,7 @@ export function HomePage() {
                   <span>{activeKb.name}</span>
                   <Icon name="chevron-down" className="w-3 h-3" />
                 </button>
-                <div className="absolute left-0 bottom-full mb-1 bg-content border border-border-soft rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[200px] overflow-hidden">
+                <div className="absolute left-0 bottom-full mb-1 bg-content border border-border-soft rounded-xl shadow-lg z-30 hidden group-hover:block min-w-[200px] overflow-hidden">
                   {kbs.map((kb) => (
                     <button
                       key={kb.id}

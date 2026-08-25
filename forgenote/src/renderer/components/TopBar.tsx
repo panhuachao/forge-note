@@ -39,7 +39,7 @@ export function TopBar() {
       >
         <button
           onClick={toggleFocus}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:bg-hover-bg hover:text-brand transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-fg-muted hover:bg-hover-bg hover:text-brand transition-colors"
           title="专注模式（隐藏左右侧栏）"
         >
           <Icon name="focus" className="w-4 h-4" />
@@ -90,7 +90,7 @@ export function TopBar() {
           {tabs.length > 0 && (
             <button
               onClick={closeAllTabs}
-              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-fg-faint hover:bg-hover-bg hover:text-fg-secondary transition-colors"
+              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-fg-faint hover:bg-hover-bg hover:text-fg-secondary transition-colors"
               title="关闭所有标签"
             >
               <Icon name="x-mark" className="w-3.5 h-3.5" />
@@ -101,7 +101,7 @@ export function TopBar() {
         <button
           onClick={() => openCreateNote()}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:bg-hover-bg hover:text-brand transition-colors"
+          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-fg-muted hover:bg-hover-bg hover:text-brand transition-colors"
           title="新建笔记"
         >
           <Icon name="plus" className="w-4 h-4" />
@@ -115,7 +115,7 @@ export function TopBar() {
       >
         <button
           onClick={toggleRightPanel}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:bg-hover-bg hover:text-fg-secondary transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-fg-muted hover:bg-hover-bg hover:text-fg-secondary transition-colors"
           title="收起属性面板"
         >
           <Icon name="chevron-right" className="w-4 h-4" />

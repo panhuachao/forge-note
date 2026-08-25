@@ -197,7 +197,7 @@ export function TemplatePage() {
       {/* 应用模板向导 */}
       {applying && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-content rounded-lg shadow-xl w-full max-w-md p-5">
+          <div className="bg-content rounded-xl shadow-xl w-full max-w-md p-5">
             <h2 className="font-semibold mb-3">应用模板：{applying.name}</h2>
             <p className="text-sm text-fg-muted mb-3">勾选需要创建的目录（已存在的同名目录会被跳过）：</p>
             <div className="space-y-1 max-h-80 overflow-y-auto">
@@ -226,7 +226,7 @@ export function TemplatePage() {
       {/* 目录说明编辑 */}
       {dirReadmeEdit && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8">
-          <div className="bg-content rounded-lg shadow-xl w-full max-w-2xl flex flex-col">
+          <div className="bg-content rounded-xl shadow-xl w-full max-w-2xl flex flex-col">
             <div className="px-5 py-3 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold">编辑目录说明</h2>
               <button onClick={() => setDirReadmeEdit(null)} className="text-fg-faint hover:text-fg">×</button>
@@ -259,7 +259,7 @@ export function TemplatePage() {
       {/* 笔记模板编辑 */}
       {noteTemplateEdit && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8">
-          <div className="bg-content rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+          <div className="bg-content rounded-xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh]">
             <div className="px-5 py-3 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold">
                 编辑笔记模板 · {noteTemplateEdit.dirId} {noteTemplateEdit.dirName}

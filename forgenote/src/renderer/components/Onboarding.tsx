@@ -49,7 +49,7 @@ export function Onboarding() {
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-content rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-content rounded-xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-semibold mb-2">{s.title}</h2>
         <p className="text-sm text-fg-secondary mb-5">{s.body}</p>
         <div className="flex items-center justify-between">

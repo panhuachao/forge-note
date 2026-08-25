@@ -79,7 +79,7 @@ export default function SearchResultsPage() {
       >
         <button
           onClick={() => setMainView('home')}
-          className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
+          className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-xl flex-shrink-0"
           title="返回首页"
           style={TITLEBAR_NO_DRAG_STYLE}
         >
@@ -88,7 +88,7 @@ export default function SearchResultsPage() {
 
         {/* 搜索输入框（占据主要宽度） */}
         <div
-          className="flex-1 max-w-2xl flex items-center gap-2 px-3 h-9 rounded-lg border border-border bg-canvas focus-within:border-brand focus-within:bg-content transition-colors"
+          className="flex-1 max-w-2xl flex items-center gap-2 px-3 h-9 rounded-xl border border-border bg-canvas focus-within:border-brand focus-within:bg-content transition-colors"
           style={TITLEBAR_NO_DRAG_STYLE}
         >
           <Icon name="search" className="w-4 h-4 text-fg-faint flex-shrink-0" />
@@ -120,7 +120,7 @@ export default function SearchResultsPage() {
             <span>{activeKb?.name || '未选择'}</span>
             <Icon name="chevron-down" className="w-3 h-3" />
           </button>
-          <div className="absolute right-0 top-full mt-1 bg-content border border-border rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[200px]">
+          <div className="absolute right-0 top-full mt-1 bg-content border border-border rounded-xl shadow-lg z-30 hidden group-hover:block min-w-[200px]">
             {kbs.map((kb) => (
               <button
                 key={kb.id}
@@ -177,7 +177,7 @@ export default function SearchResultsPage() {
                 <li
                   key={r.notePath}
                   onClick={() => onOpenResult(r)}
-                  className="group p-3 bg-content border border-border rounded-lg cursor-pointer hover:border-brand hover:shadow-sm transition-all"
+                  className="group p-3 bg-content border border-border rounded-xl cursor-pointer hover:border-brand hover:shadow-sm transition-all"
                 >
                   <div className="flex items-start gap-3">
                     <Icon

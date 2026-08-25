@@ -5,12 +5,14 @@ interface Props {
   outlinks: string[];
   broken: string[];
   onOpen: (path: string) => void;
+  /** 嵌入到折叠卡片时，去掉自身外壳与标题 */
+  embedded?: boolean;
 }
 
-export function LinkPanel({ inlinks, outlinks, broken, onOpen }: Props) {
+export function LinkPanel({ inlinks, outlinks, broken, onOpen, embedded }: Props) {
   return (
-    <div className="px-4 py-3 border-b border-border">
-      <h3 className="text-xs font-semibold text-fg-muted uppercase mb-2">双向链接</h3>
+    <div className={embedded ? '' : 'px-4 py-3 border-b border-border'}>
+      {!embedded && <h3 className="text-xs font-semibold text-fg-muted uppercase mb-2">双向链接</h3>}
       <div className="text-sm space-y-3">
         <div>
           <div className="text-fg-muted text-xs mb-1">入链 ({inlinks.length})</div>

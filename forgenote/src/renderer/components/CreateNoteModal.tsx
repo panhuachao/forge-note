@@ -91,7 +91,7 @@ export function CreateNoteModal({ open, initialDirPath, onClose }: Props) {
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8" onClick={onClose}>
       <div
-        className="bg-content rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]"
+        className="bg-content rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">

@@ -277,8 +277,8 @@ export function NotePane(props: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-content">
-      {/* 标题栏 - 文件名 + 视图切换（居中胶囊）。去路径噪点、去硬边框 */}
-      <div className="h-12 flex items-center px-4 border-b border-border-soft gap-3 text-xs bg-toolbar">
+      {/* 标题栏 - 文件名 + 视图切换（居中胶囊）。磨砂半透明、去硬边框、轻投影 */}
+      <div className="h-12 flex items-center px-4 gap-3 text-xs bg-toolbar/70 backdrop-blur-sm shadow-[0_1px_0_var(--border-soft)] relative z-10">
         <Icon name="document" className="w-4 h-4 text-fg-faint shrink-0" />
         <span className="font-medium truncate text-fg max-w-[40%]">{fileName}</span>
         <div className="flex-1" />

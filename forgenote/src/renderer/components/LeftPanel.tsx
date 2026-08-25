@@ -79,7 +79,7 @@ export function LeftPanel() {
               <button
                 key={t.id}
                 onClick={() => setTreeView(t.id)}
-                className={`h-7 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                className={`h-7 w-8 flex items-center justify-center rounded-xl transition-colors ${
                   active ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:bg-hover-bg'
                 }`}
                 title={t.label}

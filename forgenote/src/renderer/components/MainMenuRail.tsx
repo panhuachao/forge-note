@@ -78,7 +78,7 @@ export function MainMenuRail() {
               }`}
             >
               <Icon name={it.icon} className="w-[23px] h-[23px]" />
-              <span className="pointer-events-none absolute left-full ml-2 px-2.5 py-1 rounded-lg bg-canvas text-fg border border-border-soft text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-sm">
+              <span className="pointer-events-none absolute left-full ml-2 px-2.5 py-1 rounded-xl bg-canvas text-fg border border-border-soft text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-sm">
                 {it.label}
               </span>
             </button>

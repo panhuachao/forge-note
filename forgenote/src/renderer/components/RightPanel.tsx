@@ -159,7 +159,7 @@ export function RightPanel() {
             onClick={() => setPanelTab('info')}
             title="基本信息"
             aria-label="基本信息"
-            className={`h-8 w-8 inline-flex items-center justify-center rounded-lg transition-colors ${panelTab === 'info' ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:text-fg-secondary hover:bg-hover-bg'}`}
+            className={`h-8 w-8 inline-flex items-center justify-center rounded-xl transition-colors ${panelTab === 'info' ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:text-fg-secondary hover:bg-hover-bg'}`}
           >
             <Icon name="bars-3-center-left" className="w-4 h-4" />
           </button>
@@ -167,7 +167,7 @@ export function RightPanel() {
             onClick={() => setPanelTab('outline')}
             title="大纲"
             aria-label="大纲"
-            className={`h-8 w-8 inline-flex items-center justify-center rounded-lg transition-colors ${panelTab === 'outline' ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:text-fg-secondary hover:bg-hover-bg'}`}
+            className={`h-8 w-8 inline-flex items-center justify-center rounded-xl transition-colors ${panelTab === 'outline' ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:text-fg-secondary hover:bg-hover-bg'}`}
           >
             <Icon name="list-bullet" className="w-4 h-4" />
           </button>
@@ -194,7 +194,7 @@ export function RightPanel() {
           <Icon name="sparkles" className="w-4 h-4 text-brand" />
         </button>
         {moreOpen && (
-          <div className="absolute right-3 top-11 z-20 mt-1 w-44 bg-content border border-border rounded-lg shadow-lg py-1">
+          <div className="absolute right-3 top-11 z-20 mt-1 w-44 bg-content border border-border rounded-xl shadow-lg py-1">
             <MenuItem icon="sparkles" label="AI 摘要" onClick={() => runAction('summary')} loading={summaryLoading} />
             <MenuItem icon="link" label="AI 链接推荐" onClick={() => runAction('links')} />
             <MenuItem icon="folder-tree" label="AI 归纳推荐" onClick={() => runAction('dir')} />
@@ -207,9 +207,9 @@ export function RightPanel() {
         {panelTab === 'chat' ? (
           notePath && activeKb ? (
             <>
-              <div className="h-8 shrink-0 flex items-center gap-1.5 px-3 border-b border-border-soft text-xs text-fg-muted">
+              <div className="h-9 shrink-0 flex items-center gap-1.5 px-3 bg-panel/60 text-xs text-fg-muted">
                 <Icon name="chat-bubble" className="w-3.5 h-3.5 text-brand" />
-                <span>AI 笔记对话（上下文：{notePath.split('/').pop()}）</span>
+                <span className="truncate">对话上下文：{notePath.split('/').pop()}</span>
               </div>
               <NoteAIChat
                 kbId={activeKb.id}
@@ -227,20 +227,23 @@ export function RightPanel() {
             </div>
           )
         ) : panelTab === 'outline' ? (
-          <div className="flex-1 overflow-y-auto">
-            {info ? (
-              <NoteOutline content={info.content} activeLine={activeLine} />
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-fg-faint text-xs">暂无大纲</div>
-            )}
-          </div>
+          info ? (
+            <div className="flex-1 overflow-y-auto py-2">
+              <PanelCard title="大纲" defaultOpen>
+                <NoteOutline content={info.content} activeLine={activeLine} />
+              </PanelCard>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-fg-faint text-xs">
+              暂无大纲
+            </div>
+          )
         ) : (
           <div className="flex-1 overflow-y-auto">
             {/* 基本信息（默认 tab） */}
         {basics && (
-          <div className="px-4 py-3 border-b border-border-soft">
-            <h3 className="text-xs font-semibold text-fg-muted uppercase tracking-wider mb-2">基本信息</h3>
-            <dl className="space-y-2 text-xs">
+          <PanelCard title="基本信息">
+            <dl className="space-y-2.5 text-xs">
               <Row label="摘要">
                 {summary ? (
                   <span className="text-fg-secondary leading-relaxed line-clamp-3">{summary}</span>
@@ -254,7 +257,7 @@ export function RightPanel() {
                 {basics.tags.length > 0 ? (
                   <span className="flex flex-wrap gap-1">
                     {basics.tags.map((tg) => (
-                      <span key={tg} className="px-1.5 py-0.5 rounded bg-brand-soft text-brand text-[11px]">#{tg}</span>
+                      <span key={tg} className="px-1.5 py-0.5 rounded-full bg-brand-soft text-brand text-[11px]">#{tg}</span>
                     ))}
                   </span>
                 ) : (
@@ -268,13 +271,12 @@ export function RightPanel() {
                 </span>
               </Row>
             </dl>
-          </div>
+          </PanelCard>
         )}
 
         {/* AI 链接推荐 */}
         {linkSuggestions.length > 0 && (
-          <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-xs font-semibold text-fg-muted uppercase mb-2">AI 链接推荐</h3>
+          <PanelCard title="AI 链接推荐">
             <ul className="space-y-1.5 text-xs">
               {linkSuggestions.map((s, i) => (
                 <li key={i} className="flex flex-col">
@@ -283,13 +285,12 @@ export function RightPanel() {
                 </li>
               ))}
             </ul>
-          </div>
+          </PanelCard>
         )}
 
         {/* AI 归纳推荐 */}
         {dirSuggestions.length > 0 && (
-          <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-xs font-semibold text-fg-muted uppercase mb-2">AI 归纳推荐</h3>
+          <PanelCard title="AI 归纳推荐">
             <ul className="space-y-1.5 text-xs">
               {dirSuggestions.map((s, i) => (
                 <li key={i} className="flex flex-col">
@@ -298,19 +299,22 @@ export function RightPanel() {
                 </li>
               ))}
             </ul>
-          </div>
+          </PanelCard>
         )}
 
         {/* 双向链接 */}
         {info && (
-          <LinkPanel
-            kbId=""
-            notePath={notePath || ''}
-            inlinks={info.inlinks}
-            outlinks={info.outlinks}
-            broken={info.brokenLinks}
-            onOpen={(p) => useLayoutStore.getState().openTab(p)}
-          />
+          <PanelCard title="双向链接">
+            <LinkPanel
+              kbId=""
+              notePath={notePath || ''}
+              inlinks={info.inlinks}
+              outlinks={info.outlinks}
+              broken={info.brokenLinks}
+              embedded
+              onOpen={(p) => useLayoutStore.getState().openTab(p)}
+            />
+          </PanelCard>
         )}
       </div>
         )}
@@ -324,6 +328,34 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex gap-2">
       <dt className="w-14 shrink-0 text-fg-muted">{label}</dt>
       <dd className="flex-1 min-w-0">{children}</dd>
+    </div>
+  );
+}
+
+/** 可折叠卡片：圆角白底 + 阴影 + 点击标题展开/收起 */
+function PanelCard({
+  title,
+  defaultOpen = true,
+  children
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mx-3 my-2.5 rounded-xl bg-content border border-border-soft shadow-[0_1px_2px_rgba(17,24,39,0.04),0_4px_12px_rgba(17,24,39,0.05)] overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold text-fg-secondary hover:text-fg transition-colors"
+      >
+        <Icon
+          name={open ? 'chevron-down' : 'chevron-right'}
+          className="w-3.5 h-3.5 text-fg-faint"
+        />
+        <span className="uppercase tracking-wider">{title}</span>
+      </button>
+      {open && <div className="px-3.5 pb-3.5 pt-0.5">{children}</div>}
     </div>
   );
 }

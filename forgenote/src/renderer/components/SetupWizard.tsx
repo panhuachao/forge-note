@@ -112,7 +112,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
               选择一个本地文件夹作为知识库根目录。所有笔记将以 Markdown 文件形式存放在这里，完全由你本地掌控。
             </p>
 
-            <div className="rounded-lg border border-border-soft bg-hover-bg/40 p-4 mb-6">
+            <div className="rounded-xl border border-border-soft bg-hover-bg/40 p-4 mb-6">
               <div className="flex items-center gap-2 text-fg-secondary text-sm mb-1">
                 <Icon name="folder-open" className="w-4 h-4" />
                 <span>知识库根目录</span>
@@ -141,7 +141,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
             {tpl ? (
               <button
                 onClick={() => setSelectedTemplate(selectedTemplate === tpl.templateId ? null : tpl.templateId)}
-                className={`w-full text-left rounded-lg border p-4 mb-5 transition-colors ${
+                className={`w-full text-left rounded-xl border p-4 mb-5 transition-colors ${
                   selectedTemplate === tpl.templateId
                     ? 'border-brand bg-active-bg'
                     : 'border-border-soft hover:bg-hover-bg/60'

@@ -65,7 +65,12 @@ export function NoteOutline({ content, activeLine, onJump }: Props) {
     return out;
   }, [headings, collapsed]);
 
-  if (headings.length === 0) return null;
+  if (headings.length === 0)
+    return (
+      <div className="px-3 py-6 text-center text-fg-faint text-xs">
+        本篇还没有标题，添加 <code className="px-1 rounded bg-hover-bg"># 标题</code> 后自动生成大纲
+      </div>
+    );
 
   const toggle = (line: number) => {
     setCollapsed((s) => {
@@ -77,28 +82,28 @@ export function NoteOutline({ content, activeLine, onJump }: Props) {
   };
 
   return (
-    <div className="px-3 py-3 border-b border-border-soft">
-      <h3 className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-2 px-2">
-        大纲
-      </h3>
-      <ul className="relative text-[12.5px] leading-[1.55] text-fg-secondary">
+    <div className="px-1.5 py-1">
+      <ul className="relative text-[12.5px] leading-[1.6] text-fg-secondary">
         {visible.map((h) => {
-          const indent = (h.level - 1) * 14;
+          const indent = (h.level - 1) * 12;
           const isCollapsible = hasChildren.has(h.line);
           const isCollapsed = collapsed.has(h.line);
+          const active = activeLine === h.line;
           return (
             <li key={`${h.line}-${h.text}`} className="group relative">
               {/* 同级辅助线：在该 heading 左侧的细竖线 */}
               {h.level > 1 && (
                 <span
                   className="absolute top-0 bottom-0 border-l border-border-soft pointer-events-none"
-                  style={{ left: indent - 6 }}
+                  style={{ left: indent - 5 }}
                   aria-hidden
                 />
               )}
               <div
-                className={`flex items-center gap-1 cursor-pointer rounded pr-2 py-0.5 transition-colors ${
-                  activeLine === h.line ? 'bg-brand-soft text-brand font-medium' : 'hover:bg-hover-bg'
+                className={`flex items-center gap-1 cursor-pointer rounded-md pr-2 py-1 transition-colors relative ${
+                  active
+                    ? 'bg-brand-soft/60 text-brand font-medium shadow-[inset_2px_0_0_var(--brand)]'
+                    : 'hover:bg-hover-bg'
                 }`}
                 style={{ paddingLeft: indent }}
                 onClick={() => {
@@ -114,7 +119,7 @@ export function NoteOutline({ content, activeLine, onJump }: Props) {
                       e.stopPropagation();
                       toggle(h.line);
                     }}
-                    className="w-3 h-3 flex items-center justify-center text-fg-faint hover:text-fg-secondary shrink-0"
+                    className="w-3.5 h-3.5 flex items-center justify-center text-fg-faint hover:text-fg-secondary shrink-0 -ml-1"
                     title={isCollapsed ? '展开' : '折叠'}
                     aria-label={isCollapsed ? '展开' : '折叠'}
                   >
@@ -126,7 +131,7 @@ export function NoteOutline({ content, activeLine, onJump }: Props) {
                     </svg>
                   </button>
                 ) : (
-                  <span className="w-3 h-3 shrink-0" />
+                  <span className="w-2.5 h-3.5 shrink-0" />
                 )}
                 <span
                   className={`truncate group-hover:text-fg ${
@@ -135,6 +140,9 @@ export function NoteOutline({ content, activeLine, onJump }: Props) {
                 >
                   {h.text}
                 </span>
+                {active && (
+                  <span className="ml-auto text-[10px] text-brand opacity-0 group-hover:opacity-100">跳转</span>
+                )}
               </div>
             </li>
           );
