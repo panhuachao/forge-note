@@ -65,11 +65,12 @@ export default function SearchResultsPage() {
 
   return (
     <div className="flex-1 flex flex-col bg-content overflow-hidden">
-      {/* 顶部：返回 + 搜索栏 + 知识库 */}
-      <div className="h-14 pl-0 pr-4 flex items-center gap-3 border-b border-border bg-content">
+      {/* 顶部：返回 + 搜索栏 + 知识库
+          与统一标题栏一致：fixed 定位覆盖整个窗口顶部，border-b 贯通 MainMenuRail 至右栏 */}
+      <div className="fixed top-0 left-0 right-0 z-20 h-14 pl-[72px] pr-4 flex items-center gap-3 border-b border-border bg-toolbar">
         <button
           onClick={() => setMainView('home')}
-          className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0 ml-20"
+          className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
           title="返回首页"
         >
           <Icon name="arrow-left" className="w-4 h-4" />
@@ -129,6 +130,9 @@ export default function SearchResultsPage() {
           </div>
         </div>
       </div>
+
+      {/* 占位，避免下方内容被 fixed 标题栏遮挡 */}
+      <div className="h-14 flex-shrink-0" />
 
       {/* 搜索状态/结果列表 */}
       <div className="flex-1 overflow-y-auto px-6 py-4">

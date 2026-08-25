@@ -154,7 +154,9 @@ export function HomePage() {
 
   return (
     <div className="flex-1 flex flex-col bg-canvas overflow-hidden">
-      <div className="flex-1 flex flex-col items-center px-8 py-6 overflow-y-auto">
+      {/* 顶部统一标题栏条带（不显示图标和标题，仅作为标题栏带，与其他页面一致） */}
+      <div className="fixed top-0 left-0 right-0 z-20 h-14 border-b border-border bg-toolbar" />
+      <div className="flex-1 flex flex-col items-center px-8 py-6 pt-20 overflow-y-auto">
         {/* 标题 */}
         <h1 className="text-2xl font-bold text-fg mt-6 mb-6 text-center">
           锦囊笔记，<span className="text-brand">我帮你</span>

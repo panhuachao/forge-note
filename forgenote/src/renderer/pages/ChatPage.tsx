@@ -155,15 +155,15 @@ export default function ChatPage() {
     <div className="flex-1 flex bg-content overflow-hidden">
       {/* 左侧：对话历史 */}
       <div className="w-64 border-r border-border bg-panel flex flex-col">
-        <div className="h-9 px-3 flex items-center justify-between border-b border-border-soft">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-fg-secondary">
+        <div className="h-14 pl-[72px] pr-3 flex items-center justify-between border-b border-border bg-toolbar">
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-fg">
             <Icon name="chat-bubble" className="w-4 h-4 text-brand" />
             对话历史
           </span>
           <button
             onClick={startNewConversation}
             title="新建对话"
-            className="w-6 h-6 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
+            className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
           >
             <Icon name="plus" className="w-4 h-4" />
           </button>
@@ -244,11 +244,11 @@ export default function ChatPage() {
 
       {/* 右侧：聊天区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 顶部栏：返回 + 标题 */}
-        <div className="h-9 px-3 flex items-center gap-2 border-b border-border-soft bg-toolbar">
+        {/* 顶部栏：返回 + 标题（与统一标题栏样式一致：h-14 pl-[72px] bg-toolbar border-b） */}
+        <div className="h-14 pl-[72px] pr-3 flex items-center gap-2 border-b border-border bg-toolbar">
           <button
             onClick={() => setMainView('home')}
-            className="w-6 h-6 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
+            className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
             title="返回首页"
           >
             <Icon name="arrow-left" className="w-4 h-4" />
