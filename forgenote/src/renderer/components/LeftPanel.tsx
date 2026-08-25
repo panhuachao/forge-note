@@ -57,10 +57,15 @@ export function LeftPanel() {
   }
 
   // 视图切换按钮组（左侧顶部操作栏）
-  // pl-[72px] 让出 macOS 红黄绿按钮的横向区域，避免与视图切换按钮重叠
+  // fixed 定位覆盖整个窗口顶部，宽度 = MainMenuRail(56) + LeftPanel 宽度，
+  // 从最左贯穿到左栏右边缘，让 macOS 红黄绿按钮浮在其上（bg-toolbar 同色）。
+  // pl-[72px] 让出 macOS 红黄绿按钮的横向间距（与统一标题栏一致）。
   function ViewTabs() {
     return (
-      <div className="h-10 flex items-center border-b border-border-soft bg-toolbar pl-[72px] pr-2 gap-1 text-xs">
+      <div
+        className="fixed top-0 left-0 z-20 h-14 flex items-center border-b border-border bg-toolbar pr-2 gap-1 text-xs"
+        style={{ width: 56 + leftPanelWidth, paddingLeft: 72 }}
+      >
         <div className="flex-1 flex items-center gap-1 min-w-0">
           {viewTabs.map((t) => {
             const active = treeView === t.id;
@@ -106,7 +111,7 @@ export function LeftPanel() {
   return (
     <aside
       style={{ width: leftPanelWidth }}
-      className="border-r border-border bg-panel flex flex-col relative"
+      className="border-r border-border bg-panel flex flex-col relative pt-14"
     >
       <ViewTabs />
       <div className="flex-1 overflow-y-auto">

@@ -139,7 +139,7 @@ export function RightPanel() {
   return (
     <aside className="w-72 shrink-0 border-l border-border bg-panel flex flex-col overflow-hidden">
       {/* 顶部操作区：中间 基本信息/大纲 切换，右侧 更多 */}
-      <div className="h-11 flex items-center gap-2 px-3 border-b border-border-soft shrink-0 relative" ref={moreRef}>
+      <div className="h-14 flex items-center gap-2 px-3 border-b border-border-soft shrink-0 relative" ref={moreRef}>
         {/* 中间：分段切换 */}
         <div className="flex-1 flex items-center justify-center h-8 bg-panel rounded-md p-0.5 border border-border-soft">
           <button

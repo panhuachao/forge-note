@@ -30,9 +30,15 @@ export function MainMenuRail() {
 
   return (
     <nav
-      className="w-14 border-r border-border bg-canvas flex flex-col items-center pt-[72px] pb-2 gap-1.5"
+      className="w-14 border-r border-border bg-canvas flex flex-col items-center pb-2 gap-1.5"
       data-testid="main-menu-rail"
     >
+      {/* 顶部标题栏区域：与三栏操作栏同高同色（bg-toolbar），
+          macOS 红黄绿按钮（hiddenInset）浮在其上 */}
+      <div className="h-14 w-full bg-toolbar shrink-0" />
+      {/* 菜单按钮区顶部间距 */}
+      <div className="mt-2" />
+
       {/* 快速笔记（最前面） */}
       <button
         onClick={openQuickNote}

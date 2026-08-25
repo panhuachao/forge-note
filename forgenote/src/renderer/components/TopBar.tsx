@@ -22,16 +22,10 @@ export function TopBar() {
 
   return (
     <div
-      className="h-10 flex items-center gap-2 pr-2 border-b border-border-soft bg-toolbar text-xs select-none"
+      className="h-14 flex items-center gap-2 pr-2 border-b border-border bg-toolbar text-xs select-none"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       onDoubleClick={handleDoubleClick}
     >
-      {/* 左段：macOS 控件占位（让出红黄绿按钮） */}
-      <div
-        className="w-[72px] h-full shrink-0"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      />
-
       {/* 中段：多标签栏 + 新建按钮（白底）。
           容器保留 drag，仅标签/按钮自身 no-drag，
           以便标签之间的空白区域可用于拖动窗口 */}
@@ -52,7 +46,7 @@ export function TopBar() {
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
                   style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  className={`group flex items-center gap-1.5 h-7 px-3 rounded-md cursor-pointer min-w-[110px] max-w-[240px] transition-all ${
+                  className={`group flex items-center gap-1.5 h-8 px-3 rounded-md cursor-pointer min-w-[110px] max-w-[240px] transition-all ${
                     active
                       ? 'bg-content text-fg shadow-sm'
                       : 'text-fg-muted hover:bg-hover-bg'
@@ -78,7 +72,7 @@ export function TopBar() {
           {tabs.length > 0 && (
             <button
               onClick={closeAllTabs}
-              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-fg-faint hover:bg-hover-bg hover:text-fg-secondary"
+              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md text-fg-faint hover:bg-hover-bg hover:text-fg-secondary"
               title="关闭所有标签"
             >
               <Icon name="x-mark" className="w-3.5 h-3.5" />
@@ -89,7 +83,7 @@ export function TopBar() {
         <button
           onClick={() => openCreateNote()}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="shrink-0 w-8 h-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-brand"
+          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-brand"
           title="新建笔记"
         >
           <Icon name="plus" className="w-4 h-4" />
@@ -103,7 +97,7 @@ export function TopBar() {
       >
         <button
           onClick={toggleRightPanel}
-          className="w-7 h-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-fg-secondary"
+          className="w-7 h-8 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-fg-secondary"
           title="收起属性面板"
         >
           <Icon name="chevron-right" className="w-4 h-4" />
