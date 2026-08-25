@@ -34,9 +34,13 @@ export function NotePane(props: Props) {
 
   useEffect(() => {
     if (!activeKb) return;
+    let cancelled = false;
+    // 切换标签时先把内容清空，避免显示上一个文件的内容
+    setNote(null);
     (async () => {
       try {
         const c = await window.forge.fs.readNote(activeKb.id, props.notePath);
+        if (cancelled) return;
         const info = {
           content: c.content,
           outlinks: c.outlinks,
@@ -46,9 +50,13 @@ export function NotePane(props: Props) {
         setNote(info);
         props.onContentChange?.(info);
       } catch (e) {
+        if (cancelled) return;
         pushToast({ level: 'error', text: '打开笔记失败：' + String(e) });
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [activeKb?.id, props.notePath]);
 
   useEffect(() => {
@@ -97,7 +105,7 @@ export function NotePane(props: Props) {
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note?.content !== undefined ? props.notePath : null]);
+  }, [note?.content, props.notePath]);
 
   useEffect(() => {
     if (!note) return;
