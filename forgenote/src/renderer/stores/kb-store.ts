@@ -48,7 +48,11 @@ export const useKBStore = create<KBState>((set) => ({
   setKBs: (kbs) => set({ kbs }),
   setActiveKb: (activeKb) => set({ activeKb }),
   setApplied: (applied) => set({ applied }),
-  setTree: (tree) => set({ tree }),
+  setTree: (tree) => {
+    set({ tree });
+    // 删除 / 移动笔记后刷新树，关闭指向已不存在笔记的多标签
+    useLayoutStore.getState().pruneStaleTabs(tree);
+  },
   setCurrentNote: (currentNote) => set({ currentNote }),
   markDirty: () => set((s) => (s.currentNote ? { currentNote: { ...s.currentNote, dirty: true } } : s)),
   markClean: (content) =>

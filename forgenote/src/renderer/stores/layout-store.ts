@@ -1,5 +1,6 @@
 // 布局状态：主菜单视图、打开的标签、面板宽度、折叠状态、排序
 import { create } from 'zustand';
+import type { TreeNode } from '@shared/types';
 
 export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results';
 export type TreeView = 'tree' | 'search' | 'tags';
@@ -41,6 +42,8 @@ interface LayoutState {
   setRightPanelWidth: (w: number) => void;
   openTab: (notePath: string, title?: string) => void;
   closeTab: (id: string) => void;
+  closeTabByPath: (notePath: string) => void;
+  pruneStaleTabs: (tree: TreeNode | null) => void;
   setActiveTab: (id: string) => void;
   markTabDirty: (id: string, dirty: boolean) => void;
   closeAllTabs: () => void;
@@ -205,6 +208,36 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
         activeTabId = tabs.length ? tabs[tabs.length - 1].id : null;
       }
       set({ tabs, activeTabId });
+    },
+    closeTabByPath: (notePath) => {
+      const tabs = get().tabs;
+      const target = tabs.find((t) => t.notePath === notePath);
+      if (!target) return;
+      const remaining = tabs.filter((t) => t.id !== target.id);
+      let activeTabId = get().activeTabId;
+      if (activeTabId === target.id) {
+        activeTabId = remaining.length ? remaining[remaining.length - 1].id : null;
+      }
+      set({ tabs: remaining, activeTabId });
+    },
+    pruneStaleTabs: (tree) => {
+      if (!tree) return;
+      const live = new Set<string>();
+      const walk = (n: TreeNode) => {
+        if (n.kind === 'file') live.add(n.path);
+        n.children?.forEach(walk);
+      };
+      walk(tree);
+      const tabs = get().tabs;
+      const stale = tabs.filter((t) => !live.has(t.notePath));
+      if (stale.length === 0) return; // 无失效标签，无需处理
+      const staleIds = new Set(stale.map((t) => t.id));
+      const remaining = tabs.filter((t) => !staleIds.has(t.id));
+      let activeTabId = get().activeTabId;
+      if (activeTabId && staleIds.has(activeTabId)) {
+        activeTabId = remaining.length ? remaining[remaining.length - 1].id : null;
+      }
+      set({ tabs: remaining, activeTabId });
     },
     setActiveTab: (id) => {
       set({
