@@ -28,6 +28,7 @@ export function QuickNoteModal({ open, onClose, initialContent = '' }: Props) {
   const [submitting, setSubmitting] = useState(false);
 
   const dirs = tree ? flattenDirs(tree).filter((d) => d.path) : [];
+  const detectedUrls = content.match(/https?:\/\/[^\s，。、）)】\]]+/gi) || [];
 
   useEffect(() => {
     if (open) {
@@ -73,7 +74,7 @@ export function QuickNoteModal({ open, onClose, initialContent = '' }: Props) {
         {/* 正文 */}
         <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
           <p className="text-xs text-fg-muted">
-            粘贴一段话或一篇文章，确认后 AI 会自动归纳摘要、归属到最合适的目录、补充标签与双向链接。
+            粘贴一段话、一篇文章，或一段带链接的内容（如分享对话、产品介绍网页）。确认后 AI 会自动归纳摘要、补充标签与双向链接；若含外部链接，将抓取正文并归入「外部资源」，同时记录原始链接。
           </p>
           <textarea
             autoFocus
@@ -82,6 +83,19 @@ export function QuickNoteModal({ open, onClose, initialContent = '' }: Props) {
             placeholder="在此粘贴你的内容…"
             className="input h-56 resize-none font-mono text-sm leading-relaxed"
           />
+
+          {detectedUrls.length > 0 && (
+            <div className="rounded border border-brand-border bg-brand-soft/40 px-3 py-2 text-xs text-fg-secondary">
+              <div className="font-medium text-brand">检测到 {detectedUrls.length} 个外部链接</div>
+              <ul className="mt-1 space-y-0.5 break-all">
+                {detectedUrls.slice(0, 3).map((u, i) => (
+                  <li key={i} className="truncate">🔗 {u}</li>
+                ))}
+                {detectedUrls.length > 3 && <li className="text-fg-muted">…等 {detectedUrls.length} 个</li>}
+              </ul>
+              <div className="mt-1 text-fg-muted">将抓取整篇正文、由 AI 判断归入合适目录，并保存原始链接与正文提取。</div>
+            </div>
+          )}
 
           {dirs.length > 0 && (
             <div className="flex items-center gap-2">

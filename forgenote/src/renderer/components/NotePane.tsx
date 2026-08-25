@@ -64,6 +64,9 @@ export function NotePane(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // 分屏滚动同步：防止两侧滚动事件互相触发形成回环
+  const syncingRef = useRef(false);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 监听「AI 聊天面板追加回复到笔记」事件：调用 AI 结合回复与现有笔记全文，
   // 重写完善整篇笔记后整体替换文档，触发 docChanged → 自动保存。
@@ -175,7 +178,25 @@ export function NotePane(props: Props) {
     });
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
+    // 编辑器滚动 → 按百分比同步到预览（原文与渲染高度不成比例，用比例最稳健）
+    const edScroller = view.scrollDOM;
+    const onEditorScroll = () => {
+      if (syncingRef.current) return;
+      const pv = previewRef.current;
+      if (!pv) return;
+      const edDenom = edScroller.scrollHeight - edScroller.clientHeight;
+      const ratio = edDenom > 0 ? edScroller.scrollTop / edDenom : 0;
+      const pvDenom = pv.scrollHeight - pv.clientHeight;
+      syncingRef.current = true;
+      pv.scrollTop = ratio * pvDenom;
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+      syncTimer.current = setTimeout(() => {
+        syncingRef.current = false;
+      }, 80);
+    };
+    edScroller.addEventListener('scroll', onEditorScroll);
     return () => {
+      edScroller.removeEventListener('scroll', onEditorScroll);
       view.destroy();
       viewRef.current = null;
     };
@@ -211,9 +232,24 @@ export function NotePane(props: Props) {
     return () => window.removeEventListener(EVT_JUMP_HEADING, onJump);
   }, []);
 
-  // 滚动时计算当前可见标题，派发 active-heading 事件（大纲高亮双向同步）
+  // 滚动时：预览 → 按百分比同步到编辑器，并计算当前可见标题派发 active-heading
   const activeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleScroll = () => {
+    // 程序触发的同步滚动：不回写，避免回环
+    if (syncingRef.current) return;
+    const pv = previewRef.current;
+    const ed = viewRef.current?.scrollDOM;
+    if (pv && ed) {
+      const pvDenom = pv.scrollHeight - pv.clientHeight;
+      const ratio = pvDenom > 0 ? pv.scrollTop / pvDenom : 0;
+      const edDenom = ed.scrollHeight - ed.clientHeight;
+      syncingRef.current = true;
+      ed.scrollTop = ratio * edDenom;
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+      syncTimer.current = setTimeout(() => {
+        syncingRef.current = false;
+      }, 80);
+    }
     if (activeTimer.current) clearTimeout(activeTimer.current);
     activeTimer.current = setTimeout(() => {
       const scrollEl = previewRef.current;

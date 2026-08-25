@@ -83,4 +83,6 @@ export interface QuickNoteResult {
   dirName: string; // 推荐归属目录真实名（NN 名称）
   tags: string[]; // 自动标签
   links: string[]; // 推荐双向链接（笔记名，不含 .md）
+  sourceUrls: string[]; // 原始外部链接（内容含链接时提取，用于记录出处并归入外部资源）
+  sourceTexts: { url: string; text: string }[]; // 抓取到的外部链接完整正文（用于落盘，保留整篇）
 }

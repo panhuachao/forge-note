@@ -103,12 +103,25 @@ export const useKBStore = create<KBState>((set) => ({
         useTemplate: false
       });
 
-      // 3) 组装笔记内容：摘要 + 原文 + 双向链接 + 标签
-      const linksBlock = plan.links.length
-        ? `\n## 相关链接\n${plan.links.map((l) => `- [[${l}]]`).join('\n')}\n`
+      // 3) 组装笔记内容：摘要 + 原文 + 整篇正文提取 + 双向链接 + 标签 + 原始外部链接
+      const links = plan.links ?? [];
+      const sourceUrls = plan.sourceUrls ?? [];
+      const sourceTexts = plan.sourceTexts ?? [];
+      const tags = plan.tags ?? [];
+      const linksBlock = links.length
+        ? `\n## 相关链接\n${links.map((l) => `- [[${l}]]`).join('\n')}\n`
         : '';
-      const tagsBlock = plan.tags.length ? `\n#标签: ${plan.tags.map((t) => `#${t}`).join(' ')}\n` : '';
-      const body = `# ${plan.title}\n\n> ${plan.summary || ''}\n\n${content.trim()}${linksBlock}${tagsBlock}`;
+      const sourceBlock = sourceUrls.length
+        ? `\n## 原始链接\n${sourceUrls.map((u) => `- ${u}`).join('\n')}\n`
+        : '';
+      const textsBlock = sourceTexts.length
+        ? `\n## 正文提取\n` +
+          sourceTexts
+            .map((s) => `### ${s.url}\n\n${s.text}`)
+            .join('\n\n')
+        : '';
+      const tagsBlock = tags.length ? `\n#标签: ${tags.map((t) => `#${t}`).join(' ')}\n` : '';
+      const body = `# ${plan.title}\n\n> ${plan.summary || ''}\n\n${content.trim()}${textsBlock}${linksBlock}${sourceBlock}${tagsBlock}`;
       await window.forge.fs.writeNote(kb.id, note.path, body);
 
       // 4) 刷新树 + 打开笔记
