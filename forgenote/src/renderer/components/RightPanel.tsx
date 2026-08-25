@@ -150,30 +150,34 @@ export function RightPanel() {
         ref={moreRef}
         onDoubleClick={handleTitleBarDoubleClick}
       >
-        {/* 中间：分段切换 */}
-        <div className="flex-1 flex items-center justify-center h-8 bg-panel rounded-md p-0.5 border border-border-soft" style={TITLEBAR_NO_DRAG_STYLE}>
+        {/* 左侧：基本信息 / 大纲 图标（无切换边框，靠左排序） */}
+        <div className="flex-1 flex items-center gap-1" style={TITLEBAR_NO_DRAG_STYLE}>
           <button
             onClick={() => setPanelTab('info')}
-            className={`h-7 px-3 rounded text-[12px] transition-colors ${panelTab === 'info' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'}`}
+            title="基本信息"
+            aria-label="基本信息"
+            className={`h-8 w-8 inline-flex items-center justify-center rounded transition-colors ${panelTab === 'info' ? 'text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}
           >
-            基本信息
+            <Icon name="bars-3-center-left" className="w-4 h-4" />
           </button>
           <button
             onClick={() => setPanelTab('outline')}
-            className={`h-7 px-3 rounded text-[12px] transition-colors ${panelTab === 'outline' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'}`}
+            title="大纲"
+            aria-label="大纲"
+            className={`h-8 w-8 inline-flex items-center justify-center rounded transition-colors ${panelTab === 'outline' ? 'text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}
           >
-            大纲
+            <Icon name="list-bullet" className="w-4 h-4" />
           </button>
         </div>
-        {/* 右侧：更多（合并 AI 操作） */}
+        {/* 右侧：更多（合并 AI 操作，仅 sparkles 图标） */}
         <button
           onClick={() => setMoreOpen((v) => !v)}
-          className={`btn btn-ghost h-8 px-3 text-xs gap-1.5 shrink-0 ${moreOpen ? 'bg-hover-bg' : ''}`}
+          title="更多"
+          aria-label="更多"
+          className={`h-8 w-8 inline-flex items-center justify-center rounded text-brand transition-colors ${moreOpen ? 'bg-hover-bg' : 'hover:bg-hover-bg'}`}
           style={TITLEBAR_NO_DRAG_STYLE}
         >
           <Icon name="sparkles" className="w-4 h-4 text-brand" />
-          更多
-          <Icon name="chevron-down" className="w-3.5 h-3.5 text-fg-faint" />
         </button>
         {moreOpen && (
           <div className="absolute right-3 top-11 z-20 mt-1 w-44 bg-content border border-border rounded-lg shadow-lg py-1">

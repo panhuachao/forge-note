@@ -45,6 +45,7 @@ export type IconName =
   | 'inbox'
   | 'shield-check'
   | 'list-bullet'
+  | 'bars-3-center-left'
   | 'calendar'
   | 'bell'
   | 'bookmark'
@@ -103,7 +104,8 @@ const outlineMap: Record<string, any> = {
   adjustments: HeroiconsOutline.AdjustmentsHorizontalIcon,
   inbox: HeroiconsOutline.InboxIcon,
   'shield-check': HeroiconsOutline.ShieldCheckIcon,
-  'list-bullet': HeroiconsOutline.Bars3BottomLeftIcon,
+  'list-bullet': HeroiconsOutline.ListBulletIcon,
+  'bars-3-center-left': HeroiconsOutline.Bars3CenterLeftIcon,
   calendar: HeroiconsOutline.CalendarDaysIcon,
   bell: HeroiconsOutline.BellIcon,
   bookmark: HeroiconsOutline.BookmarkIcon,
