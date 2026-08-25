@@ -12,7 +12,7 @@ import { Icon, IconName } from './Icon';
 type RightTab = 'outline' | 'search';
 
 export function RightPanel() {
-  const { rightPanelWidth, setRightPanelWidth, tabs, activeTabId } = useLayoutStore();
+  const { rightPanelWidth, setRightPanelWidth, tabs, activeTabId, toggleRightPanel } = useLayoutStore();
   const { activeKb } = useKBStore();
   const [resizing, setResizing] = useState(false);
   const [tab, setTab] = useState<RightTab>('outline');
@@ -70,8 +70,8 @@ export function RightPanel() {
       style={{ width: rightPanelWidth }}
       className="border-l border-ink-200 bg-white flex flex-col relative"
     >
-      {/* 顶部：AI 操作 + 大纲 / 搜索 双标签 */}
-      <div className="flex items-center h-8 bg-ink-50 border-b border-ink-200 text-xs">
+      {/* 顶部：AI 操作 + 大纲 / 搜索 双标签 + 收起（最右） */}
+      <div className="flex items-center h-9 bg-ink-50 border-b border-ink-200 text-xs">
         {/* AI 操作（左侧） */}
         {aiActions.map((a) => (
           <button
@@ -104,6 +104,15 @@ export function RightPanel() {
           title="搜索"
         >
           <Icon name="search" className="w-4 h-4" /> 搜索
+        </button>
+        {/* 收起右栏（最右） */}
+        <div className="flex-1" />
+        <button
+          onClick={toggleRightPanel}
+          className="h-full w-9 flex items-center justify-center text-ink-500 hover:bg-ink-200"
+          title="收起属性面板"
+        >
+          <Icon name="chevron-right" className="w-4 h-4" />
         </button>
       </div>
 

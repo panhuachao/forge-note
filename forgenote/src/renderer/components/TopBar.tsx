@@ -1,10 +1,9 @@
-// 顶部统一工具栏（与窗口控件同一行）
-// 布局：
-//   左段：macOS 红黄绿控件占位 + 收起左栏（⮜）
-//   中段：多标签栏 + 新建按钮（白底）
-//   右段：收起右栏（⮞）
-// 视图切换（📁🔍📄）、快捷操作、大纲/搜索标签
-// 分别移到 LeftPanel / RightPanel 各自的顶部操作栏
+// 顶部多标签栏（与窗口控件同一行）
+//   左段：macOS 控件占位（pl-[72px]）
+//   中段：多标签 + ＋ 新建
+//   右段：⮞ 收起右栏
+// 视图切换（📁🔍🏷）已下移至主菜单栏顶部
+// 快捷操作已下移至视图内部顶部
 import { useLayoutStore } from '../stores/layout-store';
 import { useKBStore } from '../stores/kb-store';
 import { Icon } from './Icon';
@@ -12,7 +11,7 @@ import { Icon } from './Icon';
 export function TopBar() {
   const {
     tabs, activeTabId, setActiveTab, closeTab, closeAllTabs,
-    toggleLeftPanel, toggleRightPanel
+    toggleRightPanel
   } = useLayoutStore();
   const { openCreateNote } = useKBStore();
 
@@ -21,21 +20,11 @@ export function TopBar() {
       className="h-9 flex items-stretch border-b border-ink-200 bg-white text-xs select-none"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* 左段：macOS 红黄绿控件占位 + 收起左栏
-          - pl-[72px] 让出 macOS 红黄绿按钮（约 70px 宽）
-          - 背景浅灰 */}
+      {/* 左段：macOS 控件占位（让出红黄绿按钮） */}
       <div
-        className="flex items-stretch border-r border-ink-200 bg-ink-50 pl-[72px]"
+        className="w-[72px] border-r border-ink-200 bg-ink-50"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
-        <button
-          onClick={toggleLeftPanel}
-          className="h-full w-9 flex items-center justify-center text-ink-500 hover:bg-ink-200"
-          title="收起侧栏"
-        >
-          <Icon name="chevron-left" className="w-4 h-4" />
-        </button>
-      </div>
+      />
 
       {/* 中段：多标签栏 + 新建按钮（白底） */}
       <div
@@ -94,7 +83,7 @@ export function TopBar() {
         </button>
       </div>
 
-      {/* 右段：收起右栏（⮞） */}
+      {/* 右段：⮞ 收起右栏 */}
       <div
         className="flex items-stretch border-l border-ink-200 bg-ink-50"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

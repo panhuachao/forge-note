@@ -1,4 +1,6 @@
 // 左侧主菜单图标列 - Obsidian 风格
+// 整体下移 pt-9 让出 macOS 顶部窗口控件区域
+// 视图切换（📁🔍🏷）已放到 LeftPanel 顶部（左侧顶部操作栏）
 // 默认仅显示图标，鼠标悬停时弹出 tooltip 显示名称
 import { useLayoutStore, MainView } from '../stores/layout-store';
 import { useKBStore } from '../stores/kb-store';
@@ -26,9 +28,10 @@ export function MainMenuRail() {
 
   return (
     <nav
-      className="w-12 border-r border-ink-200 bg-ink-50 flex flex-col items-center py-2 gap-1"
+      className="w-12 border-r border-ink-200 bg-ink-50 flex flex-col items-center pt-9 gap-1"
       data-testid="main-menu-rail"
     >
+      {/* 主菜单图标（首页/笔记/图谱/模板/历史/设置） */}
       <div className="flex-1 flex flex-col items-center gap-1">
         {items.map((it) => {
           const disabled = !!it.requireKb && !activeKb;

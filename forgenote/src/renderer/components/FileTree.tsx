@@ -68,6 +68,68 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
   if (node.kind === 'kb_root') {
     return (
       <div data-tree>
+        {/* 视图内顶部快捷操作栏：新建笔记 / 新建目录 / 排序 / 折叠 / 展开
+            （属于知识库视图内的快捷操作，不占用 LeftPanel 顶部） */}
+        <div className="h-9 flex items-center border-b border-ink-200 bg-white text-xs">
+          <button
+            onClick={() => openCreateNote()}
+            className="h-full w-9 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
+            title="新建笔记"
+          ><Icon name="document-plus" className="w-4 h-4" /></button>
+          <button
+            onClick={async () => {
+              if (!activeKb) return;
+              const name = prompt('新建目录名称', '新文件夹');
+              if (!name) return;
+              try {
+                await window.forge.fs.createDir(activeKb.id, '', name);
+                const t = await window.forge.fs.listTree(activeKb.id);
+                setTree(t);
+                pushToast({ level: 'success', text: `已创建目录：${name}` });
+              } catch (e) {
+                pushToast({ level: 'error', text: String(e) });
+              }
+            }}
+            className="h-full w-9 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
+            title="新建目录"
+          ><Icon name="folder-plus" className="w-4 h-4" /></button>
+          <div className="relative group">
+            <button
+              className="h-full w-9 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
+              title="排序方式"
+            ><Icon name="arrows-up-down" className="w-4 h-4" /></button>
+            <div className="absolute left-0 top-full mt-1 bg-white border border-ink-200 rounded shadow-lg z-30 hidden group-hover:block min-w-[120px]">
+              {([
+                { v: 'name', l: '按名称' },
+                { v: 'mtime', l: '按修改时间' },
+                { v: 'created', l: '按创建时间' }
+              ] as { v: SortMode; l: string }[]).map((s) => (
+                <button
+                  key={s.v}
+                  onClick={() => {
+                    useLayoutStore.getState().setSortMode(s.v);
+                    window.dispatchEvent(new CustomEvent('forgenote:sort', { detail: s.v }));
+                  }}
+                  className={`block w-full text-left px-3 py-1 hover:bg-ink-100 ${
+                    sortMode === s.v ? 'text-brand-600 font-medium' : 'text-ink-700'
+                  }`}
+                >
+                  {s.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('forgenote:collapseAll'))}
+            className="h-full w-9 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
+            title="全部折叠"
+          ><Icon name="chevron-up" className="w-4 h-4" /></button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('forgenote:expandAll'))}
+            className="h-full w-9 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
+            title="全部展开"
+          ><Icon name="chevron-down" className="w-4 h-4" /></button>
+        </div>
         {sortedChildren.map((c) => (
           <FileTree key={c.id} node={c} depth={depth} onOpenNote={onOpenNote} />
         ))}
