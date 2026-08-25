@@ -20,12 +20,11 @@ const items: MenuItem[] = [
   { id: 'search-results', icon: 'search', label: '检索', requireKb: true },
   { id: 'graph', icon: 'globe', label: '图谱', requireKb: true },
   { id: 'template', icon: 'clipboard', label: '模板', requireKb: true },
-  { id: 'audit', icon: 'clock', label: '历史', requireKb: true },
-  { id: 'settings', icon: 'cog', label: '设置' }
+  { id: 'audit', icon: 'clock', label: '历史', requireKb: true }
 ];
 
 export function MainMenuRail() {
-  const { mainView, setMainView, toggleLeftRail } = useLayoutStore();
+  const { mainView, setMainView } = useLayoutStore();
   const { activeKb, theme, setTheme, openQuickNote } = useKBStore();
 
   return (
@@ -87,7 +86,7 @@ export function MainMenuRail() {
         })}
       </div>
 
-      {/* 底部：主题切换 + 收起主菜单 */}
+      {/* 底部：主题切换 + 设置 */}
       <div className="flex flex-col items-center gap-1.5">
         <button
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
@@ -100,13 +99,17 @@ export function MainMenuRail() {
           </span>
         </button>
         <button
-          onClick={toggleLeftRail}
-          className="group relative w-10 h-10 flex items-center justify-center rounded-xl text-fg-muted hover:bg-hover-bg hover:text-fg transition-colors"
-          title="收起主菜单"
+          onClick={() => setMainView('settings')}
+          title="设置"
+          className={`group relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
+            mainView === 'settings'
+              ? 'bg-content text-brand shadow-sm'
+              : 'text-fg-muted hover:bg-hover-bg hover:text-fg'
+          }`}
         >
-          <Icon name="arrow-left" className="w-[22px] h-[22px]" />
+          <Icon name="cog" className="w-[22px] h-[22px]" />
           <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
-            收起主菜单
+            设置
           </span>
         </button>
       </div>
