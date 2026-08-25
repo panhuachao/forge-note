@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import type { AIModelConfig } from '@shared/types';
+import { Icon } from '../components/Icon';
 
 export function SettingsPage() {
   const { aiConfig, setAIConfig, pushToast, activeKb } = useKBStore();
@@ -23,7 +24,7 @@ export function SettingsPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-ink-50">
       <div className="h-10 flex items-center px-4 border-b border-ink-200 bg-white text-sm">
-        <span className="font-medium">⚙ 设置</span>
+        <span className="font-medium flex items-center gap-1.5"><Icon name="cog" className="w-4 h-4 text-brand-600" /> 设置</span>
       </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-3xl">
         <section className="bg-white rounded border border-ink-200 p-5">

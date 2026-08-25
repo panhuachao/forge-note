@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { TreeNode } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore, SortMode } from '../stores/layout-store';
+import { Icon } from './Icon';
 
 interface Props {
   node: TreeNode;
@@ -89,8 +90,11 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
             setExpanded(ns);
           }}
         >
-          <span className="w-3 text-ink-400 text-[10px]">{isOpen ? '▼' : '▶'}</span>
-          <span className="text-ink-400">📁</span>
+          <Icon
+            name={isOpen ? 'chevron-down' : 'chevron-right'}
+            className="w-3 h-3 text-ink-400 shrink-0"
+          />
+          <Icon name="folder" className="w-4 h-4 text-ink-400 shrink-0" solid={node.templateDirId === '00'} />
           <span className="truncate flex-1">{node.name}</span>
           {node.templateDirId === '00' && (node.noteCount || 0) > 0 && (
             <span className="badge badge-brand">{node.noteCount}</span>
@@ -106,7 +110,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
             }}
             title="在此目录新建笔记"
           >
-            ✎
+            <Icon name="document-plus" className="w-3.5 h-3.5" />
           </button>
           <button
             className="icon-btn opacity-0 group-hover:opacity-100 text-xs"
@@ -125,7 +129,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
             }}
             title="新建子目录"
           >
-            ＋
+            <Icon name="folder-plus" className="w-3.5 h-3.5" />
           </button>
         </div>
         {isOpen && (
@@ -149,7 +153,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
       onClick={() => onOpenNote(node.path)}
       title={node.path}
     >
-      <span className="text-ink-400 text-xs">📄</span>
+      <Icon name="document" className="w-4 h-4 text-ink-400 shrink-0" />
       <span className="truncate flex-1">{fileName}</span>
       <button
         className="icon-btn opacity-0 group-hover:opacity-100 text-xs"
@@ -167,7 +171,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
         }}
         title="删除"
       >
-        🗑
+        <Icon name="trash" className="w-3.5 h-3.5" />
       </button>
     </div>
   );

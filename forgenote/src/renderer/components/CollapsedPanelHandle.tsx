@@ -1,5 +1,6 @@
 // 面板折叠时显示的展开按钮
 import { useLayoutStore } from '../stores/layout-store';
+import { Icon } from './Icon';
 
 export function CollapsedLeftHandle() {
   const { toggleLeftPanel } = useLayoutStore();
@@ -13,7 +14,7 @@ export function CollapsedLeftHandle() {
         title="展开侧栏"
         className="w-6 h-9 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded"
       >
-        ⮞
+        <Icon name="chevron-right" className="w-4 h-4" />
       </button>
     </div>
   );
@@ -31,7 +32,7 @@ export function CollapsedRightHandle() {
         title="展开属性面板"
         className="w-6 h-9 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded"
       >
-        ⮜
+        <Icon name="chevron-left" className="w-4 h-4" />
       </button>
     </div>
   );

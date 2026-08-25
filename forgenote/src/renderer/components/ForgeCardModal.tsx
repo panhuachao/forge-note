@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { CardDraft } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
+import { Icon } from './Icon';
 
 interface Props {
   draft: CardDraft;
@@ -23,7 +24,7 @@ export function ForgeCardModal({ draft, onClose, onConfirm }: Props) {
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-8">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="px-5 py-3 border-b border-ink-200 flex items-center justify-between">
-          <h2 className="font-semibold">⚒ 锻造知识卡片</h2>
+          <h2 className="font-semibold flex items-center gap-1.5"><Icon name="sparkles" className="w-4 h-4 text-brand-600" /> 锻造知识卡片</h2>
           <button onClick={onClose} className="text-ink-400 hover:text-ink-800">×</button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 space-y-3 text-sm">

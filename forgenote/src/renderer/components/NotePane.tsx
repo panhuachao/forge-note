@@ -7,6 +7,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown } from '@codemirror/lang-markdown';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
+import { Icon } from './Icon';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -114,7 +115,7 @@ export function NotePane(props: Props) {
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
       {/* 标题栏 - 仅显示文件信息 + 视图切换 */}
       <div className="h-8 flex items-center px-3 border-b border-ink-200 gap-2 text-xs bg-ink-50">
-        <span className="text-ink-400">📄</span>
+        <Icon name="document" className="w-4 h-4 text-ink-400" />
         <span className="font-medium truncate">{fileName}</span>
         <span className="text-ink-400 truncate flex-1">{props.notePath}</span>
         <button onClick={() => setTab('edit')} className={`px-2 h-6 rounded ${tab === 'edit' ? 'bg-white text-ink-900' : 'text-ink-600 hover:bg-white/50'}`}>编辑</button>

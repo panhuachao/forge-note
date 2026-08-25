@@ -17,6 +17,7 @@
     "postinstall": "node scripts/fix-electron-quarantine.js"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "better-sqlite3": "^11.3.0",
     "chokidar": "^3.6.0",
     "electron-store": "^8.2.0",

@@ -6,6 +6,7 @@ import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore, SortMode } from '../stores/layout-store';
 import { FileTree } from './FileTree';
 import { SearchPanel } from './SearchPanel';
+import { Icon } from './Icon';
 
 export function LeftPanel() {
   const { tree, activeKb, kbs, setActiveKb, setTree, setApplied, pushToast, openCreateNote, setKBs } = useKBStore();
@@ -158,38 +159,38 @@ function LeftToolbar({
             treeView === 'tree' ? 'bg-ink-100 text-brand-700' : 'text-ink-600 hover:bg-ink-100'
           }`}
           title="知识库目录"
-        >📁</button>
+        ><Icon name="folder" className="w-4 h-4" /></button>
         <button
           onClick={() => setTreeView('search')}
           className={`h-full w-8 flex items-center justify-center border-r border-ink-200 ${
             treeView === 'search' ? 'bg-ink-100 text-brand-700' : 'text-ink-600 hover:bg-ink-100'
           }`}
           title="搜索"
-        >🔍</button>
+        ><Icon name="search" className="w-4 h-4" /></button>
         <button
           onClick={() => setTreeView('tags')}
           className={`h-full w-8 flex items-center justify-center border-r border-ink-200 ${
             treeView === 'tags' ? 'bg-ink-100 text-brand-700' : 'text-ink-600 hover:bg-ink-100'
           }`}
           title="标签"
-        >🏷</button>
+        ><Icon name="tag" className="w-4 h-4" /></button>
       </div>
       {/* 快捷操作 */}
       <button
         onClick={onAddNote}
         className="h-full w-8 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
         title="新建笔记"
-      >✎</button>
+      ><Icon name="document-plus" className="w-4 h-4" /></button>
       <button
         onClick={onAddDir}
         className="h-full w-8 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
         title="新建目录"
-      >📁＋</button>
+      ><Icon name="folder-plus" className="w-4 h-4" /></button>
       <div className="relative group">
         <button
           className="h-full w-8 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
           title="排序方式"
-        >↕</button>
+        ><Icon name="arrows-up-down" className="w-4 h-4" /></button>
         <div className="absolute left-0 top-full mt-1 bg-white border border-ink-200 rounded shadow-lg z-30 hidden group-hover:block min-w-[120px]">
           {([
             { v: 'name', l: '按名称' },
@@ -212,18 +213,18 @@ function LeftToolbar({
         onClick={onCollapseAll}
         className="h-full w-8 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
         title="全部折叠"
-      >⊟</button>
+      ><Icon name="chevron-up" className="w-4 h-4" /></button>
       <button
         onClick={onExpandAll}
         className="h-full w-8 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
         title="全部展开"
-      >⊞</button>
+      ><Icon name="chevron-down" className="w-4 h-4" /></button>
       <div className="flex-1" />
       <button
         onClick={onClose}
         className="h-full w-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 text-sm"
         title="收起侧栏"
-      >⮞</button>
+      ><Icon name="chevron-right" className="w-4 h-4" /></button>
     </div>
   );
 }

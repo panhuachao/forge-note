@@ -4,6 +4,7 @@
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import { useMemo } from 'react';
+import { Icon } from './Icon';
 
 export function StatusBar() {
   const { activeKb, tree, kbs, setKBs, setActiveKb, setTree, setApplied, pushToast } = useKBStore();
@@ -67,7 +68,7 @@ export function StatusBar() {
               onClick={handleAddKb}
               className="icon-btn text-xs"
               title="新建知识库"
-            >＋</button>
+            ><Icon name="plus" className="w-3.5 h-3.5" /></button>
             <span className="text-ink-300">|</span>
             <span>{noteText} 条笔记</span>
             <span className="text-ink-300">|</span>

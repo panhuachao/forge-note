@@ -2,21 +2,22 @@
 // 默认仅显示图标，鼠标悬停时弹出 tooltip 显示名称
 import { useLayoutStore, MainView } from '../stores/layout-store';
 import { useKBStore } from '../stores/kb-store';
+import { Icon, IconName } from './Icon';
 
 interface MenuItem {
   id: MainView;
-  icon: string;
+  icon: IconName;
   label: string;
   requireKb?: boolean;
 }
 
 const items: MenuItem[] = [
-  { id: 'home', icon: '🏠', label: '首页' },
-  { id: 'note', icon: '📝', label: '笔记', requireKb: true },
-  { id: 'graph', icon: '🌐', label: '图谱', requireKb: true },
-  { id: 'template', icon: '📋', label: '模板', requireKb: true },
-  { id: 'audit', icon: '🕓', label: '历史', requireKb: true },
-  { id: 'settings', icon: '⚙', label: '设置' }
+  { id: 'home', icon: 'home', label: '首页' },
+  { id: 'note', icon: 'pencil', label: '笔记', requireKb: true },
+  { id: 'graph', icon: 'globe', label: '图谱', requireKb: true },
+  { id: 'template', icon: 'clipboard', label: '模板', requireKb: true },
+  { id: 'audit', icon: 'clock', label: '历史', requireKb: true },
+  { id: 'settings', icon: 'cog', label: '设置' }
 ];
 
 export function MainMenuRail() {
@@ -38,7 +39,7 @@ export function MainMenuRail() {
               onClick={() => !disabled && setMainView(it.id)}
               disabled={disabled}
               title={it.label}
-              className={`group relative w-9 h-9 flex items-center justify-center rounded text-base transition-colors ${
+              className={`group relative w-9 h-9 flex items-center justify-center rounded transition-colors ${
                 active
                   ? 'bg-brand-100 text-brand-700'
                   : disabled
@@ -46,7 +47,7 @@ export function MainMenuRail() {
                   : 'text-ink-600 hover:bg-ink-200'
               }`}
             >
-              <span>{it.icon}</span>
+              <Icon name={it.icon} className="w-5 h-5" />
               <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
                 {it.label}
               </span>
@@ -59,20 +60,20 @@ export function MainMenuRail() {
       <div className="flex flex-col items-center gap-1">
         <button
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          className="group relative w-9 h-9 flex items-center justify-center rounded text-base text-ink-600 hover:bg-ink-200 transition-colors"
+          className="group relative w-9 h-9 flex items-center justify-center rounded text-ink-600 hover:bg-ink-200 transition-colors"
           title={theme === 'light' ? '切换到暗黑模式' : '切换到亮白模式'}
         >
-          <span>{theme === 'light' ? '🌙' : '☀️'}</span>
+          <Icon name={theme === 'light' ? 'moon' : 'sun'} className="w-5 h-5" />
           <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
             {theme === 'light' ? '暗黑模式' : '亮白模式'}
           </span>
         </button>
         <button
           onClick={toggleLeftRail}
-          className="group relative w-9 h-9 flex items-center justify-center rounded text-base text-ink-600 hover:bg-ink-200 transition-colors"
+          className="group relative w-9 h-9 flex items-center justify-center rounded text-ink-600 hover:bg-ink-200 transition-colors"
           title="收起主菜单"
         >
-          <span>⮜</span>
+          <Icon name="arrow-left" className="w-5 h-5" />
           <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
             收起主菜单
           </span>

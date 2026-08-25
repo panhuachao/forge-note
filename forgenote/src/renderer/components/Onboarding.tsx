@@ -25,12 +25,12 @@ export function Onboarding() {
 
   const steps = [
     {
-      title: '👋 欢迎来到锦囊笔记',
+      title: '欢迎来到锦囊笔记',
       body: '已为你应用「' + (applied?.meta.name || '') + '」模板。点击查看各目录说明开始使用。',
       action: () => setMainView('template')
     },
     {
-      title: '📝 创建第一条灵感',
+      title: '创建第一条灵感',
       body: '在「00 灵感库」中新建笔记，记录你一闪而过的想法。',
       action: () => {
         // 滚动到目录树
@@ -39,8 +39,8 @@ export function Onboarding() {
       }
     },
     {
-      title: '⚒ 体验 AI 归纳推荐',
-      body: '保存笔记后点击「📂 归档」按钮，AI 会根据模板规则推荐最合适的归档目录。',
+      title: '体验 AI 归纳推荐',
+      body: '保存笔记后点击「归档」按钮，AI 会根据模板规则推荐最合适的归档目录。',
       action: () => {}
     }
   ];

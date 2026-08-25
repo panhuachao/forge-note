@@ -8,6 +8,7 @@ import { LinkPanel } from './LinkPanel';
 import { NoteOutline } from './NoteOutline';
 import { AISuggestionPanel } from './AISuggestionPanel';
 import { SearchPanel } from './SearchPanel';
+import { Icon, IconName } from './Icon';
 
 type RightTab = 'outline' | 'search';
 
@@ -58,11 +59,11 @@ export function RightPanel() {
     }
   }, [notePath]);
 
-  const aiActions = [
-    { id: 'summarize' as const, icon: '📝', title: 'AI 摘要' },
-    { id: 'links' as const, icon: '🔗', title: 'AI 链接推荐' },
-    { id: 'dir' as const, icon: '📂', title: 'AI 归纳推荐' },
-    { id: 'forge' as const, icon: '⚒', title: '锻造知识卡片' }
+  const aiActions: { id: 'summarize' | 'links' | 'dir' | 'forge'; icon: IconName; title: string }[] = [
+    { id: 'summarize', icon: 'pencil', title: 'AI 摘要' },
+    { id: 'links', icon: 'link', title: 'AI 链接推荐' },
+    { id: 'dir', icon: 'folder', title: 'AI 归纳推荐' },
+    { id: 'forge', icon: 'sparkles', title: '锻造知识卡片' }
   ];
 
   return (
@@ -82,35 +83,35 @@ export function RightPanel() {
             }`}
             title={a.title}
           >
-            {a.icon}
+            <Icon name={a.icon} className="w-4 h-4" />
           </button>
         ))}
         <div className="flex-1" />
         <button
           className="h-full w-8 flex items-center justify-center text-ink-400 hover:bg-ink-100 text-base"
           title="更多"
-        >⋯</button>
+        ><Icon name="ellipsis" className="w-4 h-4" /></button>
       </div>
 
       {/* 行 2：搜索 / 大纲 双标签 + 关闭 */}
       <div className="flex items-center h-8 bg-ink-50 border-b border-ink-200 text-xs">
         <button
           onClick={() => setTab('outline')}
-          className={`h-full px-3 flex items-center border-r border-ink-200 ${
+          className={`h-full px-3 flex items-center gap-1 border-r border-ink-200 ${
             tab === 'outline' ? 'bg-white text-ink-900 font-medium' : 'text-ink-600 hover:bg-white/50'
           }`}
           title="大纲 / 属性"
         >
-          📄 大纲
+          <Icon name="queue-list" className="w-4 h-4" /> 大纲
         </button>
         <button
           onClick={() => setTab('search')}
-          className={`h-full px-3 flex items-center border-r border-ink-200 ${
+          className={`h-full px-3 flex items-center gap-1 border-r border-ink-200 ${
             tab === 'search' ? 'bg-white text-ink-900 font-medium' : 'text-ink-600 hover:bg-white/50'
           }`}
           title="搜索"
         >
-          🔍 搜索
+          <Icon name="search" className="w-4 h-4" /> 搜索
         </button>
         <div className="flex-1" />
         <button
@@ -118,7 +119,7 @@ export function RightPanel() {
           className="h-full w-8 flex items-center justify-center text-ink-500 hover:bg-ink-100"
           title="收起"
         >
-          ⮜
+          <Icon name="chevron-right" className="w-4 h-4" />
         </button>
       </div>
 

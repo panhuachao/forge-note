@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import type { SearchResult } from '@shared/types';
+import { Icon } from './Icon';
 
 interface Props {
   onResultClick?: () => void;
@@ -51,7 +52,7 @@ export function SearchPanel({ onResultClick }: Props = {}) {
           className="icon-btn"
           title="搜索"
         >
-          {searching ? '…' : '🔍'}
+          {searching ? <Icon name="x-circle" className="w-4 h-4" /> : <Icon name="search" className="w-4 h-4" />}
         </button>
       </div>
       {applied && applied.meta.dirs.length > 0 && q.trim() && (

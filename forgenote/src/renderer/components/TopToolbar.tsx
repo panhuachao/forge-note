@@ -2,6 +2,7 @@
 // 视图切换、快捷操作、AI 操作分别移至 LeftPanel / RightPanel 顶部
 import { useLayoutStore } from '../stores/layout-store';
 import { useKBStore } from '../stores/kb-store';
+import { Icon } from './Icon';
 
 export function TopToolbar() {
   const {
@@ -58,11 +59,11 @@ export function TopToolbar() {
       {/* + 新建笔记按钮（Obsidian 风格） */}
       <button
         onClick={() => openCreateNote()}
-        className="h-full w-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 border-l border-ink-200 text-base"
+        className="h-full w-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 border-l border-ink-200"
         title="新建笔记"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        ＋
+        <Icon name="plus" className="w-4 h-4" />
       </button>
     </div>
   );
