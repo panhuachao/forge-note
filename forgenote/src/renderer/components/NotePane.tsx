@@ -17,6 +17,8 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 // 大纲与正文双向同步用的事件名
 export const EVT_JUMP_HEADING = 'forgenote:jump-heading'; // detail: 行号
 export const EVT_ACTIVE_HEADING = 'forgenote:active-heading'; // detail: 行号
+// AI 聊天面板「追加到该笔记」：用 AI 回复完善整篇笔记
+export const EVT_APPEND_NOTE = 'forgenote:append-note'; // detail: { text: string }
 
 // Markdown 语法高亮：使用中性色，避免默认把 `>`(引用) 等染成红色。
 // 颜色走 CSS 变量，亮色/暗黑自动适配。
@@ -62,6 +64,36 @@ export function NotePane(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+
+  // 监听「AI 聊天面板追加回复到笔记」事件：调用 AI 结合回复与现有笔记全文，
+  // 重写完善整篇笔记后整体替换文档，触发 docChanged → 自动保存。
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent<{ text: string }>).detail;
+      const view = viewRef.current;
+      if (!view || !detail?.text || !activeKb) return;
+      const reply = detail.text.trim();
+      if (!reply) return;
+      pushToast({ level: 'info', text: 'AI 正在完善笔记…' });
+      try {
+        const current = view.state.doc.toString();
+        const refined = await window.forge.ai.refineNote(activeKb.id, props.notePath, reply, current);
+        if (!refined) {
+          pushToast({ level: 'error', text: '完善失败：返回为空' });
+          return;
+        }
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: refined },
+          selection: { anchor: refined.length }
+        });
+        pushToast({ level: 'success', text: '已完善并写入笔记' });
+      } catch (err) {
+        pushToast({ level: 'error', text: '完善失败：' + String(err) });
+      }
+    };
+    window.addEventListener(EVT_APPEND_NOTE, handler);
+    return () => window.removeEventListener(EVT_APPEND_NOTE, handler);
+  }, [pushToast, activeKb, props.notePath]);
 
   useEffect(() => {
     if (!activeKb) return;

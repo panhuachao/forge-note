@@ -541,6 +541,37 @@ class AIService {
     const newOutlinks = extractWikiLinks(updated);
     linkIndex.updateOutlinks(kbId, notePath, newOutlinks);
   }
+
+  /**
+   * 围绕单篇笔记提问：将该篇笔记内容作为上下文喂给大模型
+   */
+  async askAboutNote(kbId: string, notePath: string, question: string): Promise<string> {
+    const kb = getKB(kbId);
+    if (!kb) return '';
+    const content = await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => '');
+    const aiConfig = await this.getAIConfigContent(kbId);
+    const sys = `${BASE_SYSTEM}\n\n# 当前笔记（作为对话上下文，请勿修改原文）\n${content.slice(0, 6000)}\n\n# AI_CONFIG\n${aiConfig}\n\n回答要求：\n- 始终基于上述笔记内容回答，不编造信息\n- 引用时用 [[笔记名]] 语法\n- 若本地资料不足，明确告知用户「本地未找到相关内容」`;
+    return this.chat(question, sys);
+  }
+
+  /**
+   * 依据 AI 对话回复，结合当前笔记全文及其格式，完善并重写整篇笔记。
+   * currentContent 可选：传入编辑器最新内容（避免未保存丢失）；缺省时读盘。
+   */
+  async refineNote(kbId: string, notePath: string, aiReply: string, currentContent?: string): Promise<string> {
+    const kb = getKB(kbId);
+    if (!kb) return currentContent || '';
+    const base = currentContent ?? (await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => ''));
+    const aiConfig = await this.getAIConfigContent(kbId);
+    const sys = `${BASE_SYSTEM}\n\n# 任务\n你是笔记完善助手。下面是一篇现有笔记及其已有格式（标题层级、列表、引用、表格、粗体/斜体等 Markdown 语法）。\n请结合「AI 对话回复」中的要点，对整篇笔记进行完善、补充与整合，并输出完善后的【完整笔记全文】。\n要求：\n- 严格保留原文的结构与 Markdown 格式风格\n- 将 AI 回复中有价值的内容自然融入对应章节，不要简单堆砌到末尾\n- 仅输出完善后的笔记全文，不要任何解释、不要使用代码块围栏\n- 若相关内容本地资料不足，在文中相应位置标注「（待补充）」\n\n# 现有笔记全文\n${base.slice(0, 8000)}\n\n# AI_CONFIG\n${aiConfig}`;
+    const refined = await this.chat(aiReply, sys);
+    // 去除模型可能误加的代码块围栏与首尾空白
+    const cleaned = refined
+      .replace(/^```(?:markdown)?\s*\n?/i, '')
+      .replace(/\n?```\s*$/, '')
+      .trim();
+    return cleaned;
+  }
 }
 
 function safeRead(root: string, rel: string) {

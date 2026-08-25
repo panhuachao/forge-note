@@ -9,6 +9,8 @@ import { NoteOutline } from './NoteOutline';
 import { LinkPanel } from './LinkPanel';
 import { EVT_ACTIVE_HEADING } from './NotePane';
 import { useLayoutStore } from '../stores/layout-store';
+import { useKBStore } from '../stores/kb-store';
+import { NoteAIChat } from './NoteAIChat';
 
 interface LinkInfo {
   target: string;
@@ -33,6 +35,7 @@ interface CurrentInfo {
 }
 
 export function RightPanel() {
+  const { activeKb } = useKBStore();
   const [info, setInfo] = useState<CurrentInfo | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [linkSuggestions, setLinkSuggestions] = useState<LinkInfo[]>([]);
@@ -41,7 +44,7 @@ export function RightPanel() {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const [activeLine, setActiveLine] = useState<number | null>(null);
-  const [panelTab, setPanelTab] = useState<'info' | 'outline'>('info');
+  const [panelTab, setPanelTab] = useState<'info' | 'outline' | 'chat'>('info');
 
   // 监听正文滚动，更新大纲高亮（双向同步）
   useEffect(() => {
@@ -168,6 +171,17 @@ export function RightPanel() {
           >
             <Icon name="list-bullet" className="w-4 h-4" />
           </button>
+          {/* 第三位置：围绕本篇笔记的 AI 聊天 */}
+          <button
+            onClick={() => setPanelTab('chat')}
+            title="AI 笔记对话"
+            aria-label="AI 笔记对话"
+            className={`h-8 w-8 inline-flex items-center justify-center rounded transition-colors ${
+              panelTab === 'chat' ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:text-fg-secondary hover:bg-hover-bg'
+            }`}
+          >
+            <Icon name="chat-bubble" className="w-4 h-4" />
+          </button>
         </div>
         {/* 右侧：更多（合并 AI 操作，仅 sparkles 图标） */}
         <button
@@ -189,9 +203,41 @@ export function RightPanel() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* 基本信息（基本信息 tab） */}
-        {panelTab === 'info' && basics && (
+      <div className="flex-1 min-h-0 flex flex-col">
+        {panelTab === 'chat' ? (
+          notePath && activeKb ? (
+            <>
+              <div className="h-8 shrink-0 flex items-center gap-1.5 px-3 border-b border-border-soft text-xs text-fg-muted">
+                <Icon name="chat-bubble" className="w-3.5 h-3.5 text-brand" />
+                <span>AI 笔记对话（上下文：{notePath.split('/').pop()}）</span>
+              </div>
+              <NoteAIChat
+                kbId={activeKb.id}
+                notePath={notePath}
+                onAppend={(text) => {
+                  window.dispatchEvent(
+                    new CustomEvent('forgenote:append-note', { detail: { text } })
+                  );
+                }}
+              />
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-fg-faint text-xs">
+              请先打开一篇笔记
+            </div>
+          )
+        ) : panelTab === 'outline' ? (
+          <div className="flex-1 overflow-y-auto">
+            {info ? (
+              <NoteOutline content={info.content} activeLine={activeLine} />
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-fg-faint text-xs">暂无大纲</div>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            {/* 基本信息（默认 tab） */}
+        {basics && (
           <div className="px-4 py-3 border-b border-border-soft">
             <h3 className="text-xs font-semibold text-fg-muted uppercase tracking-wider mb-2">基本信息</h3>
             <dl className="space-y-2 text-xs">
@@ -255,9 +301,6 @@ export function RightPanel() {
           </div>
         )}
 
-        {/* 大纲（大纲 tab） */}
-        {panelTab === 'outline' && info && <NoteOutline content={info.content} activeLine={activeLine} />}
-
         {/* 双向链接 */}
         {info && (
           <LinkPanel
@@ -268,6 +311,8 @@ export function RightPanel() {
             broken={info.brokenLinks}
             onOpen={(p) => useLayoutStore.getState().openTab(p)}
           />
+        )}
+      </div>
         )}
       </div>
     </aside>

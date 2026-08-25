@@ -64,7 +64,10 @@ const api = {
     forgeCard: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_FORGE_CARD, kbId, p) as Promise<CardDraft>,
     quickNote: (kbId: string, content: string, opts?: { dirId?: string }) =>
       ipcRenderer.invoke(IPC.AI_QUICK_NOTE, kbId, content, opts) as Promise<QuickNoteResult>,
-    insertLinks: (kbId: string, p: string, targets: string[]) => ipcRenderer.invoke(IPC.AI_INSERT_LINKS, kbId, p, targets) as Promise<void>
+    insertLinks: (kbId: string, p: string, targets: string[]) => ipcRenderer.invoke(IPC.AI_INSERT_LINKS, kbId, p, targets) as Promise<void>,
+    askAboutNote: (kbId: string, p: string, q: string) => ipcRenderer.invoke(IPC.AI_ASK_NOTE, kbId, p, q) as Promise<string>,
+    refineNote: (kbId: string, p: string, reply: string, content?: string) =>
+      ipcRenderer.invoke(IPC.AI_REFINE_NOTE, kbId, p, reply, content) as Promise<string>
   },
   template: {
     list: () => ipcRenderer.invoke(IPC.TPL_LIST) as Promise<TemplateMeta[]>,

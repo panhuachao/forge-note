@@ -33,11 +33,14 @@ interface LayoutState {
   rightPanelCollapsed: boolean;
   // 当前选中的标签（用于标签笔记检索视图）
   selectedTag: string | null;
+  // 右侧属性面板是否展开「围绕本篇笔记的 AI 聊天」
+  chatWithNote: boolean;
   // actions
   setMainView: (v: MainView) => void;
   setTreeView: (v: TreeView) => void;
   setSortMode: (s: SortMode) => void;
   setSelectedTag: (tag: string | null) => void;
+  setChatWithNote: (v: boolean) => void;
   toggleLeftRail: () => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
@@ -104,8 +107,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     leftPanelCollapsed: persisted.leftPanelCollapsed,
     rightPanelCollapsed: persisted.rightPanelCollapsed,
     selectedTag: null,
+    chatWithNote: false,
     setMainView: (v) => set({ mainView: v }),
     setSelectedTag: (tag) => set({ selectedTag: tag }),
+    setChatWithNote: (v) => set({ chatWithNote: v }),
     setTreeView: (v) => set({ treeView: v }),
     setSortMode: (s) => {
       set({ sortMode: s });

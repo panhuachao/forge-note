@@ -38,6 +38,8 @@ export const IPC = {
   AI_SUGGEST_LINKS: 'ai:suggestLinks',
   AI_FORGE_CARD: 'ai:forgeCard',
   AI_INSERT_LINKS: 'ai:insertLinks',
+  AI_ASK_NOTE: 'ai:askNote',
+  AI_REFINE_NOTE: 'ai:refineNote',
   AI_QUICK_NOTE: 'ai:quickNote',
 
   // Template

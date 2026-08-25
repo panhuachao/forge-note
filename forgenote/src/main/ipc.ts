@@ -115,6 +115,9 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     await aiService.insertLinks(kbId, p, targets);
     auditService.record(kbId, 'insertLink', { notePath: p, targets });
   });
+  ipcMain.handle(IPC.AI_ASK_NOTE, async (_e, kbId: string, p: string, q: string) => aiService.askAboutNote(kbId, p, q));
+  ipcMain.handle(IPC.AI_REFINE_NOTE, async (_e, kbId: string, p: string, reply: string, content?: string) =>
+    aiService.refineNote(kbId, p, reply, content));
 
   // Template
   ipcMain.handle(IPC.TPL_LIST, async () => templateService.list());
