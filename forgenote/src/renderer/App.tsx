@@ -29,7 +29,7 @@ export function App() {
     openCreateNote, createNoteOpen, createNoteDir, closeCreateNote,
     quickNoteOpen, closeQuickNote
   } = useKBStore();
-  const { mainView, leftPanelCollapsed, rightPanelCollapsed } = useLayoutStore();
+  const { mainView, leftPanelCollapsed, rightPanelCollapsed, fontSize, lineHeight } = useLayoutStore();
   const [quickNoteInitial, setQuickNoteInitial] = useState('');
   const [showSetup, setShowSetup] = useState(false);
 
@@ -99,6 +99,13 @@ export function App() {
   const isTagNotesView = mainView === 'tag-notes';
   const showLeft = (isNoteView || isTagNotesView) && !leftPanelCollapsed;
   const showRight = isNoteView && !rightPanelCollapsed;
+
+  // 外观样式：根据设置切换 <html> 上的 data 属性，驱动 CSS 变量（字体大小/行间距）
+  useEffect(() => {
+    const el = document.documentElement;
+    el.setAttribute('data-fontsize', fontSize);
+    el.setAttribute('data-lineheight', lineHeight);
+  }, [fontSize, lineHeight]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-canvas">

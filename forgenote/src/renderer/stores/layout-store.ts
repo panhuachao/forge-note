@@ -5,6 +5,8 @@ import type { TreeNode } from '@shared/types';
 export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results' | 'tag-notes';
 export type TreeView = 'tree' | 'tags';
 export type SortMode = 'name' | 'mtime' | 'created';
+export type FontSizeKey = 'sm' | 'md' | 'lg';
+export type LineHeightKey = 'sm' | 'md' | 'lg';
 
 export interface OpenTab {
   id: string; // 唯一 id
@@ -35,12 +37,17 @@ interface LayoutState {
   selectedTag: string | null;
   // 右侧属性面板是否展开「围绕本篇笔记的 AI 聊天」
   chatWithNote: boolean;
+  // 外观样式：字体大小 / 行间距（小/中/大，持久化）
+  fontSize: FontSizeKey;
+  lineHeight: LineHeightKey;
   // actions
   setMainView: (v: MainView) => void;
   setTreeView: (v: TreeView) => void;
   setSortMode: (s: SortMode) => void;
   setSelectedTag: (tag: string | null) => void;
   setChatWithNote: (v: boolean) => void;
+  setFontSize: (v: FontSizeKey) => void;
+  setLineHeight: (v: LineHeightKey) => void;
   toggleLeftRail: () => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
@@ -64,14 +71,19 @@ interface PersistedLayout {
   rightPanelCollapsed: boolean;
   leftRailCollapsed: boolean;
   sortMode: SortMode;
+  fontSize: FontSizeKey;
+  lineHeight: LineHeightKey;
 }
 
 function loadPersisted(): PersistedLayout {
-  if (typeof localStorage === 'undefined')
-    return { leftPanelWidth: 260, rightPanelWidth: 280, leftPanelCollapsed: false, rightPanelCollapsed: false, leftRailCollapsed: false, sortMode: 'name' };
+  const def: PersistedLayout = {
+    leftPanelWidth: 260, rightPanelWidth: 280, leftPanelCollapsed: false, rightPanelCollapsed: false,
+    leftRailCollapsed: false, sortMode: 'name', fontSize: 'sm', lineHeight: 'sm'
+  };
+  if (typeof localStorage === 'undefined') return def;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { leftPanelWidth: 260, rightPanelWidth: 280, leftPanelCollapsed: false, rightPanelCollapsed: false, leftRailCollapsed: false, sortMode: 'name' };
+    if (!raw) return def;
     const v = JSON.parse(raw);
     return {
       leftPanelWidth: v.leftPanelWidth ?? 260,
@@ -79,10 +91,12 @@ function loadPersisted(): PersistedLayout {
       leftPanelCollapsed: !!v.leftPanelCollapsed,
       rightPanelCollapsed: !!v.rightPanelCollapsed,
       leftRailCollapsed: !!v.leftRailCollapsed,
-      sortMode: v.sortMode ?? 'name'
+      sortMode: v.sortMode ?? 'name',
+      fontSize: (v.fontSize === 'md' || v.fontSize === 'lg' ? v.fontSize : 'sm') as FontSizeKey,
+      lineHeight: (v.lineHeight === 'md' || v.lineHeight === 'lg' ? v.lineHeight : 'sm') as LineHeightKey
     };
   } catch {
-    return { leftPanelWidth: 260, rightPanelWidth: 280, leftPanelCollapsed: false, rightPanelCollapsed: false, leftRailCollapsed: false, sortMode: 'name' };
+    return def;
   }
 }
 
@@ -108,9 +122,31 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     rightPanelCollapsed: persisted.rightPanelCollapsed,
     selectedTag: null,
     chatWithNote: false,
+    fontSize: persisted.fontSize,
+    lineHeight: persisted.lineHeight,
     setMainView: (v) => set({ mainView: v }),
     setSelectedTag: (tag) => set({ selectedTag: tag }),
     setChatWithNote: (v) => set({ chatWithNote: v }),
+    setFontSize: (v) => {
+      set({ fontSize: v });
+      const cur = get();
+      savePersisted({
+        leftPanelWidth: cur.leftPanelWidth, rightPanelWidth: cur.rightPanelWidth,
+        leftPanelCollapsed: cur.leftPanelCollapsed, rightPanelCollapsed: cur.rightPanelCollapsed,
+        leftRailCollapsed: cur.leftRailCollapsed, sortMode: cur.sortMode,
+        fontSize: v, lineHeight: cur.lineHeight
+      });
+    },
+    setLineHeight: (v) => {
+      set({ lineHeight: v });
+      const cur = get();
+      savePersisted({
+        leftPanelWidth: cur.leftPanelWidth, rightPanelWidth: cur.rightPanelWidth,
+        leftPanelCollapsed: cur.leftPanelCollapsed, rightPanelCollapsed: cur.rightPanelCollapsed,
+        leftRailCollapsed: cur.leftRailCollapsed, sortMode: cur.sortMode,
+        fontSize: cur.fontSize, lineHeight: v
+      });
+    },
     setTreeView: (v) => set({ treeView: v }),
     setSortMode: (s) => {
       set({ sortMode: s });

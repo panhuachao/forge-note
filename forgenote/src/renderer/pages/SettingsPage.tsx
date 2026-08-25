@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
+import { useLayoutStore } from '../stores/layout-store';
 import type { AIModelConfig } from '@shared/types';
 import { PageHeader } from '../components/PageHeader';
 
 export function SettingsPage() {
   const { aiConfig, setAIConfig, pushToast, activeKb } = useKBStore();
+  const { fontSize, lineHeight, setFontSize, setLineHeight } = useLayoutStore();
   const [cfg, setCfg] = useState<AIModelConfig>(aiConfig);
   const [saving, setSaving] = useState(false);
 
@@ -25,6 +27,41 @@ export function SettingsPage() {
     <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
       <PageHeader icon="cog" title="设置" />
       <div className="flex-1 overflow-y-auto p-6 pt-20 space-y-6">
+        <section className="bg-content rounded border border-border p-5">
+          <h2 className="font-semibold mb-1">外观样式</h2>
+          <p className="text-xs text-fg-muted mb-4">调整正文字体大小与行间距，实时生效并自动保存。</p>
+          <div className="space-y-4 text-sm">
+            <div>
+              <label className="text-xs text-fg-muted">字体大小</label>
+              <div className="mt-1.5 inline-flex rounded border border-border-soft overflow-hidden">
+                {(['sm', 'md', 'lg'] as const).map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => setFontSize(k)}
+                    className={`px-4 py-1 text-sm ${fontSize === k ? 'bg-brand text-brand-fg' : 'text-fg-secondary hover:bg-hover-bg'}`}
+                  >
+                    {k === 'sm' ? '小' : k === 'md' ? '中' : '大'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-fg-muted">行间距</label>
+              <div className="mt-1.5 inline-flex rounded border border-border-soft overflow-hidden">
+                {(['sm', 'md', 'lg'] as const).map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => setLineHeight(k)}
+                    className={`px-4 py-1 text-sm ${lineHeight === k ? 'bg-brand text-brand-fg' : 'text-fg-secondary hover:bg-hover-bg'}`}
+                  >
+                    {k === 'sm' ? '小' : k === 'md' ? '中' : '大'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="bg-content rounded border border-border p-5">
           <h2 className="font-semibold mb-1">AI 模型配置</h2>
           <p className="text-xs text-fg-muted mb-4">

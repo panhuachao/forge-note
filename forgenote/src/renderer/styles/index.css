@@ -72,6 +72,25 @@
   --color-brand: var(--brand);
   --color-brand-light: var(--brand-soft);
   --color-accent: var(--brand-hover);
+
+  /* 外观样式（字体大小 / 行间距），由 layout-store 切换 <html> 的 data 属性覆盖 */
+  --app-font-size: 14px; /* 小 */
+  --app-line-height: 1.7; /* 小 */
+}
+
+/* 字体大小档位（data-fontsize 挂在 <html> 上） */
+[data-fontsize="md"] {
+  --app-font-size: 15px;
+}
+[data-fontsize="lg"] {
+  --app-font-size: 17px;
+}
+/* 行间距档位（data-lineheight 挂在 <html> 上） */
+[data-lineheight="md"] {
+  --app-line-height: 1.9;
+}
+[data-lineheight="lg"] {
+  --app-line-height: 2.1;
 }
 
 .dark {
@@ -133,7 +152,8 @@ html, body, #root {
   background: var(--bg-canvas);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  font-size: 14px;
+  font-size: var(--app-font-size);
+  line-height: var(--app-line-height);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -164,7 +184,7 @@ html, body, #root {
 /* CodeMirror 主题调整 */
 .cm-editor {
   height: 100%;
-  font-size: 15px;
+  font-size: calc(var(--app-font-size) + 1px);
   font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   background: transparent;
 }
@@ -219,7 +239,7 @@ html, body, #root {
 }
 .markdown-preview p {
   margin: 0.6em 0;
-  line-height: 1.7;
+  line-height: var(--app-line-height);
 }
 .markdown-preview a {
   color: var(--color-brand);
@@ -272,7 +292,7 @@ html, body, #root {
 }
 .markdown-preview ul, .markdown-preview ol {
   padding-left: 1.6em;
-  line-height: 1.7;
+  line-height: var(--app-line-height);
 }
 .markdown-preview table {
   border-collapse: collapse;
