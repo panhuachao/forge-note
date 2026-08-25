@@ -29,7 +29,7 @@ export function AuditPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-ink-50">
       <div className="h-10 flex items-center px-4 border-b border-ink-200 bg-white text-sm">
-        <span className="font-medium flex items-center gap-1.5"><Icon name="clock" className="w-4 h-4 text-brand-600" /> 操作历史</span>
+        <span className="font-medium flex items-center gap-1.5"><Icon name="clock" className="w-4 h-4 text-brand" /> 操作历史</span>
         <span className="ml-3 text-xs text-ink-500">{list.length} 条记录</span>
       </div>
       <div className="flex-1 overflow-y-auto p-6">

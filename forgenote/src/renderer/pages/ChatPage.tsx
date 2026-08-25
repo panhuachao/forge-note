@@ -152,15 +152,15 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex-1 flex bg-ink-50 overflow-hidden">
+    <div className="flex-1 flex bg-content overflow-hidden">
       {/* 左侧：对话历史 */}
-      <div className="w-64 border-r border-ink-200 bg-white flex flex-col">
-        <div className="h-9 px-3 flex items-center justify-between border-b border-ink-200">
-          <span className="text-xs font-semibold text-ink-600">对话历史</span>
+      <div className="w-64 border-r border-border bg-panel flex flex-col">
+        <div className="h-9 px-3 flex items-center justify-between border-b border-border-soft">
+          <span className="text-xs font-semibold text-fg-secondary">对话历史</span>
           <button
             onClick={startNewConversation}
             title="新建对话"
-            className="w-6 h-6 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded"
+            className="w-6 h-6 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
           >
             <Icon name="plus" className="w-4 h-4" />
           </button>
@@ -177,8 +177,8 @@ export default function ChatPage() {
                   key={c.id}
                   className={`group px-3 py-2 cursor-pointer border-l-2 ${
                     activeId === c.id
-                      ? 'bg-brand-50 border-brand-500'
-                      : 'border-transparent hover:bg-ink-50'
+                      ? 'bg-active-bg border-brand'
+                      : 'border-transparent hover:bg-hover-bg'
                   }`}
                   onClick={() => setActive(c.id)}
                 >
@@ -242,10 +242,10 @@ export default function ChatPage() {
       {/* 右侧：聊天区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部栏：返回 + 标题 */}
-        <div className="h-9 px-3 flex items-center gap-2 border-b border-ink-200 bg-white">
+        <div className="h-9 px-3 flex items-center gap-2 border-b border-border-soft bg-toolbar">
           <button
             onClick={() => setMainView('home')}
-            className="w-6 h-6 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded"
+            className="w-6 h-6 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded"
             title="返回首页"
           >
             <Icon name="arrow-left" className="w-4 h-4" />
@@ -273,8 +273,8 @@ export default function ChatPage() {
                   <div
                     className={`max-w-[80%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
                       m.role === 'user'
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-white border border-ink-200 text-ink-800'
+                        ? 'bg-brand text-brand-fg'
+                        : 'bg-content border border-border-soft text-fg'
                     }`}
                   >
                     {m.text}
@@ -283,7 +283,7 @@ export default function ChatPage() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-white border border-ink-200 rounded-xl px-3 py-2 text-sm text-ink-400">
+                  <div className="bg-content border border-border-soft rounded-xl px-3 py-2 text-sm text-fg-muted">
                     思考中…
                   </div>
                 </div>
@@ -293,9 +293,9 @@ export default function ChatPage() {
         </div>
 
         {/* 底部输入区（与 HomePage 类似） */}
-        <div className="border-t border-ink-200 bg-white px-6 py-3">
+        <div className="border-t border-border-soft bg-toolbar px-6 py-3">
           <div className="max-w-2xl mx-auto">
-            <div className="rounded-2xl border border-ink-200 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-2xl border border-border-soft bg-content shadow-sm overflow-hidden">
               <div className="px-4 pt-3 pb-2">
                 <textarea
                   ref={textareaRef}
@@ -315,27 +315,27 @@ export default function ChatPage() {
                 <div className="flex items-center justify-between pt-1">
                   <button
                     title="附件"
-                    className="w-7 h-7 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded-lg"
+                    className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg"
                   >
                     <Icon name="plus" className="w-4 h-4" />
                   </button>
                   <div className="flex items-center gap-2">
                     {currentModels.length > 0 ? (
                       <div className="relative group">
-                        <button className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-ink-600 hover:bg-ink-100">
+                        <button className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-fg-secondary hover:bg-hover-bg">
                           <Icon name="bolt" className="w-3 h-3" />
                           <span>{aiConfig.model || currentModels[0].label}</span>
                           <Icon name="chevron-down" className="w-3 h-3" />
                         </button>
-                        <div className="absolute right-0 bottom-full mb-1 bg-white border border-ink-200 rounded shadow-lg z-30 hidden group-hover:block min-w-[180px]">
+                        <div className="absolute right-0 bottom-full mb-1 bg-content border border-border-soft rounded shadow-lg z-30 hidden group-hover:block min-w-[180px]">
                           {currentModels.map((m) => {
                             const active = (aiConfig.model || currentModels[0].id) === m.id;
                             return (
                               <button
                                 key={m.id}
                                 onClick={() => switchModel(m.id)}
-                                className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-ink-100 ${
-                                  active ? 'text-brand-600 bg-brand-50' : 'text-ink-700'
+                                className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-hover-bg ${
+                                  active ? 'text-fg bg-active-bg' : 'text-fg-secondary'
                                 }`}
                               >
                                 {m.label}
@@ -347,14 +347,14 @@ export default function ChatPage() {
                     ) : (
                       <button
                         onClick={() => setMainView('settings')}
-                        className="text-[11px] text-brand-600 hover:underline"
+                        className="text-[11px] text-brand hover:underline"
                       >
                         配置模型
                       </button>
                     )}
                     <button
                       title="语音"
-                      className="w-7 h-7 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded-lg"
+                      className="w-7 h-7 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg"
                     >
                       <Icon name="microphone" className="w-4 h-4" />
                     </button>
@@ -362,21 +362,21 @@ export default function ChatPage() {
                       onClick={send}
                       disabled={loading || !input.trim()}
                       title="发送"
-                      className="w-8 h-8 flex items-center justify-center bg-ink-900 hover:bg-ink-700 disabled:bg-ink-300 text-white rounded-full"
+                      className="w-8 h-8 flex items-center justify-center bg-brand hover:bg-brand-hover disabled:bg-fg-faint text-brand-fg rounded-full"
                     >
                       <Icon name="arrow-up" className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               </div>
-              <div className="border-t border-ink-100 px-4 py-2 flex items-center gap-2 text-[11px]">
+              <div className="border-t border-border-soft px-4 py-2 flex items-center gap-2 text-[11px]">
                 <div className="relative group">
-                  <button className="flex items-center gap-1 px-2 py-0.5 rounded bg-ink-100 text-ink-600 hover:bg-ink-200">
+                  <button className="flex items-center gap-1 px-2 py-0.5 rounded bg-hover-bg text-fg-secondary hover:bg-active-bg">
                     <Icon name="folder" className="w-3 h-3" />
                     <span>{activeKb?.name || '未选择'}</span>
                     <Icon name="chevron-down" className="w-3 h-3" />
                   </button>
-                  <div className="absolute left-0 bottom-full mb-1 bg-white border border-ink-200 rounded shadow-lg z-30 hidden group-hover:block min-w-[180px]">
+                  <div className="absolute left-0 bottom-full mb-1 bg-content border border-border-soft rounded shadow-lg z-30 hidden group-hover:block min-w-[180px]">
                     {kbs.map((kb) => (
                       <button
                         key={kb.id}
@@ -385,8 +385,8 @@ export default function ChatPage() {
                           const active = await window.forge.kb.getActive();
                           if (active) setActiveKb(active);
                         }}
-                        className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-ink-100 ${
-                          activeKb?.id === kb.id ? 'text-brand-600 bg-brand-50' : 'text-ink-700'
+                        className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-hover-bg ${
+                          activeKb?.id === kb.id ? 'text-fg bg-active-bg' : 'text-fg-secondary'
                         }`}
                       >
                         {kb.name}

@@ -81,7 +81,7 @@ export function App() {
   const showRight = isNoteView && !rightPanelCollapsed;
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-ink-50">
+    <div className="h-screen w-screen flex flex-col bg-canvas">
       {/* 主体三栏：MainMenuRail / LeftPanel / Middle / RightPanel
           TopBar 嵌在中列顶部，与主体共用同一水平行
           → 左/中/右的分割线可贯穿到顶（窗口控件行）
@@ -92,7 +92,7 @@ export function App() {
       <div className="flex-1 flex overflow-hidden">
         <MainMenuRail />
         {isNoteView && (showLeft ? <LeftPanel /> : <CollapsedLeftHandle />)}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
+        <div className="flex-1 flex flex-col overflow-hidden bg-content">
           {isNoteView && <TopBar />}
           <div className="flex-1 flex overflow-hidden">{renderMain()}</div>
         </div>

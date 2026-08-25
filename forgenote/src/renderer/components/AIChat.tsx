@@ -60,7 +60,7 @@ export function AIChat({ mode }: Props) {
           <div
             key={i}
             className={`max-w-[80%] rounded px-3 py-2 whitespace-pre-wrap ${
-              m.role === 'user' ? 'ml-auto bg-brand-600 text-white' : 'bg-ink-100 text-ink-800'
+              m.role === 'user' ? 'ml-auto bg-brand text-brand-fg' : 'bg-ink-100 text-ink-800'
             }`}
           >
             {m.text}

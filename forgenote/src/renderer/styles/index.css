@@ -2,38 +2,140 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================================
+ * 主题：语义化 CSS 变量
+ * -------------------------------------------------------------------------
+ * 设计层次（仿 Obsidian）：
+ *   canvas  → 应用最外层（MainMenuRail 背景）
+ *   panel   → 左右侧栏（LeftPanel/RightPanel 背景），略深
+ *   content → 中间正文区（MultiNoteEditor），最亮（白）
+ *   toolbar → 顶部操作栏（TopBar/ViewTabs），最浅
+ *   hover/active → 悬浮 / 选中底色
+ *   border  → 分割线（强 / 弱）
+ *   text    → 文本层级
+ *   brand   → 品牌色（主 / 浅 / 深 / fg）
+ *
+ * 当前：仅亮白主题。后续 .dark 下覆盖变量即可，无需改组件。
+ * ========================================================================= */
 :root {
-  --color-bg: #fafaf9;
-  --color-bg-elevated: #ffffff;
-  --color-border: #e7e5e4;
-  --color-text: #1c1917;
-  --color-text-muted: #78716c;
-  --color-brand: #e53935;
-  --color-brand-light: #fef2f2;
-  --color-accent: #b91c1c;
+  /* 表面层次（亮白） */
+  --bg-canvas: #f1efed;          /* 主菜单 / 最外层 */
+  --bg-panel: #f7f5f3;           /* 左右侧栏 */
+  --bg-content: #ffffff;         /* 中间正文（突出） */
+  --bg-toolbar: #f1efed;         /* 顶部操作栏 */
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.06);
+
+  /* 边框 */
+  --border: #e3e1df;             /* 强分割线 */
+  --border-soft: #ecebe9;        /* 弱分割线 */
+  --border-strong: #c8c6c3;
+
+  /* 文本 */
+  --text-primary: #1f1e1c;
+  --text-secondary: #57534e;
+  --text-muted: #8a857f;
+  --text-faint: #b6b3ae;
+
+  /* 品牌色（brand 是强调色；brand-soft 作为"中性高亮"用浅灰——不泛粉） */
+  --brand: #e53935;
+  --brand-soft: #f0eeec;
+  --brand-hover: #b91c1c;
+  --brand-fg: #ffffff;
+
+  /* Tailwind 语义色绑定（rgb 数字，让 <alpha-value> 生效）
+     所有灰都是 R=G=B 纯中性，不偏任何色相，避免在 macOS 上泛粉 */
+  --c-canvas: 240 240 240;
+  --c-panel: 248 248 248;
+  --c-content: 255 255 255;
+  --c-toolbar: 240 240 240;
+  --c-hover: 0 0 0;              /* alpha 控制 */
+  --c-active: 0 0 0;
+  --c-border: 224 224 224;
+  --c-border-soft: 232 232 232;
+  --c-border-strong: 200 200 200;
+  --c-text: 32 32 32;
+  --c-text-secondary: 92 92 92;
+  --c-text-muted: 140 140 140;
+  --c-text-faint: 180 180 180;
+  --c-brand: 229 57 53;
+  --c-brand-soft: 240 238 236;
+  --c-brand-hover: 185 28 28;
+  --c-brand-fg: 255 255 255;
+
+  /* 兼容旧变量（不破坏现有引用） */
+  --color-bg: var(--bg-canvas);
+  --color-bg-elevated: var(--bg-content);
+  --color-border: var(--border);
+  --color-text: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-brand: var(--brand);
+  --color-brand-light: var(--brand-soft);
+  --color-accent: var(--brand-hover);
+}
+
+.dark {
+  /* 表面层次（暗色预览，后续扩展用） */
+  --bg-canvas: #161514;
+  --bg-panel: #1d1c1a;
+  --bg-content: #232220;
+  --bg-toolbar: #1a1917;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(255, 255, 255, 0.08);
+
+  --border: #2c2b29;
+  --border-soft: #25241f;
+  --border-strong: #3a3936;
+
+  --text-primary: #f0efed;
+  --text-secondary: #a8a29e;
+  --text-muted: #78716c;
+  --text-faint: #57534e;
+
+  --brand: #f87171;
+  --brand-soft: #450a0a;
+  --brand-hover: #fca5a5;
+  --brand-fg: #1c1917;
+
+  /* Tailwind 语义色绑定（暗色，R=G=B 纯中性） */
+  --c-canvas: 24 24 24;
+  --c-panel: 32 32 32;
+  --c-content: 40 40 40;
+  --c-toolbar: 28 28 28;
+  --c-hover: 255 255 255;
+  --c-active: 255 255 255;
+  --c-border: 48 48 48;
+  --c-border-soft: 40 40 40;
+  --c-border-strong: 64 64 64;
+  --c-text: 240 239 237;
+  --c-text-secondary: 168 162 158;
+  --c-text-muted: 120 113 108;
+  --c-text-faint: 87 83 78;
+  --c-brand: 248 113 113;
+  --c-brand-soft: 60 56 54;
+  --c-brand-hover: 252 165 165;
+  --c-brand-fg: 28 25 23;
+
+  --color-bg: var(--bg-canvas);
+  --color-bg-elevated: var(--bg-content);
+  --color-border: var(--border);
+  --color-text: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-brand: var(--brand);
+  --color-brand-light: var(--brand-soft);
+  --color-accent: var(--brand-hover);
 }
 
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-}
-
-.dark {
-  --color-bg: #1c1917;
-  --color-bg-elevated: #292524;
-  --color-border: #44403c;
-  --color-text: #fafaf9;
-  --color-text-muted: #a8a29e;
-  --color-brand: #f87171;
-  --color-brand-light: #450a0a;
-  --color-accent: #fca5a5;
 }
 
 * {
@@ -49,10 +151,14 @@ html, body, #root {
 }
 ::-webkit-scrollbar-thumb {
   background: #d6d3d1;
-  border-radius: 4px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a29e;
+  background-clip: padding-box;
+  border: 2px solid transparent;
 }
 
 /* CodeMirror 主题调整 */
@@ -174,32 +280,32 @@ html, body, #root {
 }
 
 .btn {
-  @apply px-3 py-1.5 rounded text-sm transition-colors;
+  @apply px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all;
 }
 .btn-primary {
-  @apply bg-brand-600 text-white hover:bg-brand-700;
+  @apply bg-brand text-brand-fg hover:bg-brand-hover shadow-sm hover:shadow;
 }
 .btn-secondary {
-  @apply bg-ink-100 text-ink-800 hover:bg-ink-200;
+  @apply bg-content text-fg-secondary border border-border-soft hover:bg-hover-bg;
 }
 .btn-ghost {
-  @apply text-ink-600 hover:bg-ink-100;
+  @apply text-fg-secondary hover:bg-hover-bg;
 }
 
 .icon-btn {
-  @apply p-1.5 rounded hover:bg-ink-100 text-ink-500 hover:text-ink-800 transition-colors;
+  @apply p-1.5 rounded-lg hover:bg-ink-100 text-ink-500 hover:text-ink-800 transition-colors;
 }
 
 .input {
-  @apply w-full px-3 py-1.5 rounded border border-ink-200 bg-white text-sm focus:outline-none focus:border-brand-600;
+  @apply w-full px-3 py-1.5 rounded-lg border border-ink-200 bg-white text-sm focus:outline-none focus:border-brand focus:ring-2 focus:ring-active-bg transition-all;
 }
 
 .badge {
   @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs;
 }
 .badge-brand {
-  @apply bg-brand-100 text-brand-700;
+  @apply bg-hover-bg text-fg-secondary;
 }
 .badge-gray {
-  @apply bg-ink-100 text-ink-600;
+  @apply bg-hover-bg text-fg-secondary;
 }

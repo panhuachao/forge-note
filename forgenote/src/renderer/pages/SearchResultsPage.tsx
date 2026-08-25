@@ -64,9 +64,9 @@ export default function SearchResultsPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-ink-50 overflow-hidden">
+    <div className="flex-1 flex flex-col bg-content overflow-hidden">
       {/* 顶部：返回 + 搜索栏 + 知识库 */}
-      <div className="h-14 px-4 flex items-center gap-3 border-b border-ink-200 bg-white">
+      <div className="h-14 px-4 flex items-center gap-3 border-b border-border bg-content">
         <button
           onClick={() => setMainView('home')}
           className="w-8 h-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded-lg flex-shrink-0"
@@ -76,7 +76,7 @@ export default function SearchResultsPage() {
         </button>
 
         {/* 搜索输入框（占据主要宽度） */}
-        <div className="flex-1 max-w-2xl flex items-center gap-2 px-3 h-9 rounded-lg border border-ink-200 bg-ink-50 focus-within:border-brand-400 focus-within:bg-white transition-colors">
+        <div className="flex-1 max-w-2xl flex items-center gap-2 px-3 h-9 rounded-lg border border-ink-200 bg-ink-50 focus-within:border-brand focus-within:bg-white transition-colors">
           <Icon name="search" className="w-4 h-4 text-ink-400 flex-shrink-0" />
           <input
             value={query}
@@ -120,7 +120,7 @@ export default function SearchResultsPage() {
                   }
                 }}
                 className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-ink-100 ${
-                  activeKb?.id === kb.id ? 'text-brand-600 bg-brand-50' : 'text-ink-700'
+                  activeKb?.id === kb.id ? 'text-fg bg-active-bg' : 'text-ink-700'
                 }`}
               >
                 {kb.name}
@@ -160,23 +160,23 @@ export default function SearchResultsPage() {
                 <li
                   key={r.notePath}
                   onClick={() => onOpenResult(r)}
-                  className="group p-3 bg-white border border-ink-200 rounded-lg cursor-pointer hover:border-brand-400 hover:shadow-sm transition-all"
+                  className="group p-3 bg-white border border-ink-200 rounded-lg cursor-pointer hover:border-brand hover:shadow-sm transition-all"
                 >
                   <div className="flex items-start gap-3">
                     <Icon
                       name="document"
-                      className="w-5 h-5 text-ink-400 group-hover:text-brand-500 flex-shrink-0 mt-0.5"
+                      className="w-5 h-5 text-ink-400 group-hover:text-brand flex-shrink-0 mt-0.5"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-ink-800 group-hover:text-brand-600 truncate">
+                        <span className="text-sm font-medium text-ink-800 group-hover:text-brand truncate">
                           {r.noteName.replace(/\.md$/i, '')}
                         </span>
                         {/* 匹配类型徽章 */}
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded ${
                             r.matchType === 'title'
-                              ? 'bg-brand-50 text-brand-600'
+                              ? 'bg-active-bg text-fg-secondary'
                               : r.matchType === 'tag'
                               ? 'bg-yellow-50 text-yellow-700'
                               : 'bg-ink-100 text-ink-500'
@@ -203,7 +203,7 @@ export default function SearchResultsPage() {
                     </div>
                     <Icon
                       name="chevron-right"
-                      className="w-4 h-4 text-ink-300 group-hover:text-brand-500 flex-shrink-0"
+                      className="w-4 h-4 text-ink-300 group-hover:text-brand flex-shrink-0"
                     />
                   </div>
                 </li>

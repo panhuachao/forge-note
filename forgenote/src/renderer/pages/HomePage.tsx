@@ -134,9 +134,9 @@ export function HomePage() {
   // 无知识库：空状态
   if (kbs.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-ink-50">
-        <h1 className="text-3xl font-bold text-brand-600 mb-4">锦囊笔记</h1>
-        <p className="text-ink-500 mb-8 text-center max-w-md">
+      <div className="flex-1 flex flex-col items-center justify-center bg-canvas">
+        <h1 className="text-3xl font-bold text-brand mb-4">锦囊笔记</h1>
+        <p className="text-fg-muted mb-8 text-center max-w-md">
           一款文件优先、本地主权、开源免费的个人知识管理工具。
           <br />
           点击下方按钮，选择本地文件夹即可开始。
@@ -149,15 +149,15 @@ export function HomePage() {
   }
 
   if (!activeKb) {
-    return <div className="flex-1 flex items-center justify-center text-ink-400">加载中…</div>;
+    return <div className="flex-1 flex items-center justify-center text-fg-muted">加载中…</div>;
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-ink-50 overflow-hidden">
+    <div className="flex-1 flex flex-col bg-canvas overflow-hidden">
       <div className="flex-1 flex flex-col items-center px-8 py-6 overflow-y-auto">
         {/* 标题 */}
-        <h1 className="text-2xl font-bold text-ink-900 mt-6 mb-6 text-center">
-          锦囊笔记，<span className="text-brand-600">我帮你</span>
+        <h1 className="text-2xl font-bold text-fg mt-6 mb-6 text-center">
+          锦囊笔记，<span className="text-brand">我帮你</span>
         </h1>
 
         {/* 模式切换按钮组（胶囊型） */}
@@ -170,8 +170,8 @@ export function HomePage() {
                 onClick={() => setMode(m.id)}
                 className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm transition-colors ${
                   active
-                    ? 'bg-ink-900 text-white shadow-sm'
-                    : 'bg-white text-ink-700 hover:bg-ink-100 shadow-sm border border-ink-200'
+                    ? 'bg-active-bg text-fg shadow-sm'
+                    : 'bg-content text-fg-secondary hover:bg-hover-bg shadow-sm border border-border-soft'
                 }`}
                 title={m.desc}
               >
@@ -184,12 +184,12 @@ export function HomePage() {
 
         {/* 主输入卡片：大圆角，柔和边框（参考图片） */}
         <div className="w-full max-w-2xl">
-          <div className="rounded-2xl bg-white border border-ink-200 shadow-sm overflow-hidden">
+          <div className="rounded-2xl bg-content border border-border-soft shadow-sm overflow-hidden">
             {/* 多行输入区（核心强调）：占位提示在上 + textarea 居中 */}
             <div className="px-5 pt-4 pb-2">
               {/* 占位提示（灰底胶囊样式，参考图片） */}
               {!input && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 mb-2 rounded-full bg-ink-100 text-xs text-ink-500">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 mb-2 rounded-full bg-hover-bg text-xs text-fg-muted">
                   <span className="whitespace-pre-wrap leading-relaxed">
                     {placeholder.split('\n')[0]}
                   </span>
@@ -209,14 +209,14 @@ export function HomePage() {
                 }}
                 rows={2}
                 placeholder={input ? '' : placeholder}
-                className="w-full bg-transparent outline-none text-base text-ink-800 placeholder:text-ink-400 resize-none min-h-[80px] max-h-[240px] leading-6"
+                className="w-full bg-transparent outline-none text-base text-fg placeholder:text-fg-faint resize-none min-h-[80px] max-h-[240px] leading-6"
               />
 
               {/* 操作行：左下 + / 右下 模型徽章 + 语音 + 发送 */}
               <div className="flex items-center justify-between pt-2">
                 <button
                   title="附件（暂未开放）"
-                  className="w-8 h-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded-lg flex-shrink-0"
+                  className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
                 >
                   <Icon name="plus" className="w-5 h-5" />
                 </button>
@@ -225,20 +225,20 @@ export function HomePage() {
                   {/* 模型徽章（按图片右下角"Hy3 ▼"） */}
                   {aiConfig.provider !== 'none' && currentModels.length > 0 ? (
                     <div className="relative group">
-                      <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-ink-600 hover:bg-ink-100">
+                      <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-fg-secondary hover:bg-hover-bg">
                         <Icon name="bolt" className="w-3.5 h-3.5" />
                         <span>{aiConfig.model || currentModels[0].label}</span>
                         <Icon name="chevron-down" className="w-3 h-3" />
                       </button>
-                      <div className="absolute right-0 bottom-full mb-1 bg-white border border-ink-200 rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[240px] overflow-hidden">
+                      <div className="absolute right-0 bottom-full mb-1 bg-content border border-border-soft rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[240px] overflow-hidden">
                         {currentModels.map((m) => {
                           const active = (aiConfig.model || currentModels[0].id) === m.id;
                           return (
                             <button
                               key={m.id}
                               onClick={() => switchModel(m.id)}
-                              className={`flex flex-col items-start w-full text-left px-3 py-2 text-xs hover:bg-ink-100 ${
-                                active ? 'text-brand-600 bg-brand-50' : 'text-ink-700'
+                              className={`flex flex-col items-start w-full text-left px-3 py-2 text-xs hover:bg-hover-bg ${
+                                active ? 'text-fg bg-active-bg' : 'text-fg-secondary'
                               }`}
                             >
                               <span className="font-medium">{m.label}</span>
@@ -251,7 +251,7 @@ export function HomePage() {
                   ) : (
                     <button
                       onClick={() => setMainView('settings')}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-ink-500 hover:bg-ink-100"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-fg-muted hover:bg-hover-bg"
                     >
                       <Icon name="bolt" className="w-3.5 h-3.5" />
                       <span>未配置</span>
@@ -260,7 +260,7 @@ export function HomePage() {
 
                   <button
                     title="语音（暂未开放）"
-                    className="w-8 h-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 rounded-lg flex-shrink-0"
+                    className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
                   >
                     <Icon name="microphone" className="w-4 h-4" />
                   </button>
@@ -268,7 +268,7 @@ export function HomePage() {
                     onClick={send}
                     disabled={!input.trim()}
                     title={mode === 'ask' ? '发送' : '检索'}
-                    className="w-9 h-9 flex items-center justify-center bg-ink-900 hover:bg-ink-700 disabled:bg-ink-300 text-white rounded-full flex-shrink-0 shadow-sm transition-colors"
+                    className="w-9 h-9 flex items-center justify-center bg-brand hover:bg-brand-hover disabled:bg-fg-faint text-brand-fg rounded-full flex-shrink-0 shadow-sm transition-colors"
                   >
                     <Icon name="arrow-up" className="w-4 h-4" />
                   </button>
@@ -277,22 +277,22 @@ export function HomePage() {
             </div>
 
             {/* 底部：选择知识库（淡灰色背景胶囊行） */}
-            <div className="border-t border-ink-100 px-5 py-3 flex items-center gap-2 text-xs">
+            <div className="border-t border-border-soft px-5 py-3 flex items-center gap-2 text-xs">
               <div className="relative group">
-                <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ink-100 text-ink-600 hover:bg-ink-200">
+                <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-hover-bg text-fg-secondary hover:bg-active-bg">
                   <Icon name="folder" className="w-3.5 h-3.5" />
                   <span>{activeKb.name}</span>
                   <Icon name="chevron-down" className="w-3 h-3" />
                 </button>
-                <div className="absolute left-0 bottom-full mb-1 bg-white border border-ink-200 rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[200px] overflow-hidden">
+                <div className="absolute left-0 bottom-full mb-1 bg-content border border-border-soft rounded-lg shadow-lg z-30 hidden group-hover:block min-w-[200px] overflow-hidden">
                   {kbs.map((kb) => (
                     <button
                       key={kb.id}
                       onClick={async () => {
                         await switchKb(kb.id);
                       }}
-                      className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-ink-100 ${
-                        activeKb.id === kb.id ? 'text-brand-600 bg-brand-50' : 'text-ink-700'
+                      className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-hover-bg ${
+                        activeKb.id === kb.id ? 'text-fg bg-active-bg' : 'text-fg-secondary'
                       }`}
                     >
                       {kb.name}

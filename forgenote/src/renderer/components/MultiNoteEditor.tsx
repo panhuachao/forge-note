@@ -131,7 +131,7 @@ export function MultiNoteEditor() {
   if (!activeTab) {
     return (
       <main className="flex-1 flex flex-col items-center justify-center text-ink-400 bg-ink-50">
-        <div className="mb-4 text-brand-600"><Icon name="pencil" className="w-12 h-12" /></div>
+        <div className="mb-4 text-brand"><Icon name="pencil" className="w-12 h-12" /></div>
         <p className="text-sm">从左侧目录选择一篇笔记开始阅读</p>
         <p className="text-xs text-ink-400 mt-2">或点击「新建笔记」按钮开始记录</p>
       </main>

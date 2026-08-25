@@ -28,7 +28,7 @@ export function LeftPanel() {
   useEffect(() => {
     if (!resizing) return;
     const onMove = (e: MouseEvent) => {
-      setLeftPanelWidth(e.clientX - 48);
+      setLeftPanelWidth(e.clientX - 56);
     };
     const onUp = () => setResizing(false);
     window.addEventListener('mousemove', onMove);
@@ -60,26 +60,27 @@ export function LeftPanel() {
   // pl-[72px] 让出 macOS 红黄绿按钮的横向区域，避免与视图切换按钮重叠
   function ViewTabs() {
     return (
-      <div className="h-9 flex items-center border-b border-ink-200 bg-ink-50 pl-[72px] text-xs">
-        {viewTabs.map((t) => {
-          const active = treeView === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTreeView(t.id)}
-              className={`h-full w-10 flex items-center justify-center border-r border-ink-200 ${
-                active ? 'bg-ink-200 text-brand-700' : 'text-ink-600 hover:bg-ink-200'
-              }`}
-              title={t.label}
-            >
-              <Icon name={t.icon} className="w-4 h-4" />
-            </button>
-          );
-        })}
-        <div className="flex-1" />
+      <div className="h-10 flex items-center border-b border-border-soft bg-toolbar pl-[72px] pr-2 gap-1 text-xs">
+        <div className="flex-1 flex items-center gap-1 min-w-0">
+          {viewTabs.map((t) => {
+            const active = treeView === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTreeView(t.id)}
+                className={`h-7 w-8 flex items-center justify-center rounded-md transition-colors ${
+                  active ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:bg-hover-bg'
+                }`}
+                title={t.label}
+              >
+                <Icon name={t.icon} className="w-4 h-4" />
+              </button>
+            );
+          })}
+        </div>
         <button
           onClick={toggleLeftPanel}
-          className="h-full w-9 flex items-center justify-center text-ink-500 hover:bg-ink-200"
+          className="h-7 w-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-fg-secondary"
           title="收起侧栏"
         >
           <Icon name="chevron-left" className="w-4 h-4" />
@@ -90,11 +91,11 @@ export function LeftPanel() {
 
   if (!activeKb) {
     return (
-      <aside style={{ width: leftPanelWidth }} className="border-r border-ink-200 bg-white flex flex-col">
-        <div className="flex-1 flex items-center justify-center text-ink-400 text-sm p-4 text-center">
+      <aside style={{ width: leftPanelWidth }} className="border-r border-border bg-panel flex flex-col">
+        <div className="flex-1 flex items-center justify-center text-fg-muted text-sm p-4 text-center">
           请先在「首页」选择文件夹，开启我的知识库
         </div>
-        <div className="h-9 border-t border-ink-200 flex items-center px-2">
+        <div className="h-9 border-t border-border-soft flex items-center px-2">
           <button onClick={handleAddKb} className="btn btn-primary text-xs w-full">＋ 新建知识库</button>
         </div>
         <ResizeHandle onStart={() => setResizing(true)} />
@@ -105,7 +106,7 @@ export function LeftPanel() {
   return (
     <aside
       style={{ width: leftPanelWidth }}
-      className="border-r border-ink-200 bg-white flex flex-col relative"
+      className="border-r border-border bg-panel flex flex-col relative"
     >
       <ViewTabs />
       <div className="flex-1 overflow-y-auto">
@@ -128,7 +129,7 @@ function ResizeHandle({ onStart }: { onStart: () => void }) {
   return (
     <div
       onMouseDown={onStart}
-      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-brand-400/30"
+      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-brand/30"
       title="拖动调整宽度"
     />
   );
@@ -175,10 +176,10 @@ function TagsView() {
   }, [activeKb]);
 
   if (loading) {
-    return <div className="p-3 text-ink-400 text-sm">加载标签中…</div>;
+    return <div className="p-3 text-fg-muted text-sm">加载标签中…</div>;
   }
   if (tags.length === 0) {
-    return <div className="p-3 text-ink-400 text-sm">暂无标签（笔记中使用 #标签 自动收集）</div>;
+    return <div className="p-3 text-fg-muted text-sm">暂无标签（笔记中使用 #标签 自动收集）</div>;
   }
   return (
     <div className="py-1">
@@ -190,11 +191,11 @@ function TagsView() {
             useLayoutStore.getState().setTreeView('search');
             window.dispatchEvent(new CustomEvent('forgenote:search', { detail: `#${t.tag}` }));
           }}
-          className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-ink-100 text-sm"
+          className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-hover-bg text-sm"
         >
-          <Icon name="tag" className="w-4 h-4 text-ink-500" />
+          <Icon name="tag" className="w-4 h-4 text-fg-muted" />
           <span className="flex-1 truncate">#{t.tag}</span>
-          <span className="text-ink-400 text-xs">{t.count}</span>
+          <span className="text-fg-faint text-xs">{t.count}</span>
         </div>
       ))}
     </div>

@@ -114,21 +114,24 @@ export function NotePane(props: Props) {
   }, [note?.content, activeKb?.id, props.notePath]);
 
   if (!note) {
-    return <div className="flex-1 flex items-center justify-center text-ink-400">加载中…</div>;
+    return <div className="flex-1 flex items-center justify-center text-fg-muted">加载中…</div>;
   }
 
   const fileName = props.notePath.split('/').pop()?.replace(/\.md$/i, '') || '';
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+    <div className="flex-1 flex flex-col overflow-hidden bg-content">
       {/* 标题栏 - 仅显示文件信息 + 视图切换 */}
-      <div className="h-8 flex items-center px-3 border-b border-ink-200 gap-2 text-xs bg-ink-50">
-        <Icon name="document" className="w-4 h-4 text-ink-400" />
-        <span className="font-medium truncate">{fileName}</span>
-        <span className="text-ink-400 truncate flex-1">{props.notePath}</span>
-        <button onClick={() => setTab('edit')} className={`px-2 h-6 rounded ${tab === 'edit' ? 'bg-white text-ink-900' : 'text-ink-600 hover:bg-white/50'}`}>编辑</button>
-        <button onClick={() => setTab('split')} className={`px-2 h-6 rounded ${tab === 'split' ? 'bg-white text-ink-900' : 'text-ink-600 hover:bg-white/50'}`}>分屏</button>
-        <button onClick={() => setTab('preview')} className={`px-2 h-6 rounded ${tab === 'preview' ? 'bg-white text-ink-900' : 'text-ink-600 hover:bg-white/50'}`}>预览</button>
+      <div className="h-10 flex items-center px-3 border-b border-border-soft gap-2 text-xs bg-content">
+        <Icon name="document" className="w-4 h-4 text-fg-faint" />
+        <span className="font-medium truncate text-fg">{fileName}</span>
+        <span className="text-fg-muted truncate flex-1 text-[11px]">{props.notePath}</span>
+        {/* 编辑/分屏/预览 分段控件（浅灰底容器 + 浅灰高亮选中） */}
+        <div className="flex items-center h-7 bg-panel rounded-md p-0.5 shrink-0 border border-border-soft">
+          <button onClick={() => setTab('edit')} className={`h-6 px-3 rounded text-[12px] transition-colors ${tab === 'edit' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'}`}>编辑</button>
+          <button onClick={() => setTab('split')} className={`h-6 px-3 rounded text-[12px] transition-colors ${tab === 'split' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'}`}>分屏</button>
+          <button onClick={() => setTab('preview')} className={`h-6 px-3 rounded text-[12px] transition-colors ${tab === 'preview' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'}`}>预览</button>
+        </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
@@ -140,7 +143,7 @@ export function NotePane(props: Props) {
         )}
         {(tab === 'preview' || tab === 'split') && (
           <div
-            className={`h-full overflow-auto bg-white p-6 ${tab === 'split' ? 'w-1/2' : 'w-full'}`}
+            className={`h-full overflow-auto bg-content p-6 ${tab === 'split' ? 'w-1/2' : 'w-full'}`}
           >
             <article
               className="markdown-preview max-w-3xl mx-auto"

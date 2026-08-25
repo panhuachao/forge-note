@@ -48,7 +48,7 @@ export function AISuggestionPanel({
             {dirSuggestions.map((s) => (
               <div
                 key={s.dirId}
-                className="p-2 rounded border border-ink-200 hover:border-brand-600 cursor-pointer"
+                className="p-2 rounded border border-ink-200 hover:border-brand cursor-pointer"
                 onClick={() => onApplyDir(s.dirPath)}
               >
                 <div className="flex items-center justify-between text-sm">
@@ -79,7 +79,7 @@ export function AISuggestionPanel({
             {linkSuggestions.map((s) => (
               <label
                 key={s.target}
-                className="flex items-start gap-2 p-2 rounded border border-ink-200 hover:border-brand-600 cursor-pointer"
+                className="flex items-start gap-2 p-2 rounded border border-ink-200 hover:border-brand cursor-pointer"
               >
                 <input
                   type="checkbox"

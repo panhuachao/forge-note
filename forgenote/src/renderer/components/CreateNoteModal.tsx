@@ -130,7 +130,7 @@ export function CreateNoteModal({ open, initialDirPath, onClose }: Props) {
             <div className="flex gap-2">
               <label
                 className={`flex-1 px-3 py-2 rounded border cursor-pointer ${
-                  useTemplate ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-ink-200'
+                  useTemplate ? 'border-brand bg-active-bg text-fg' : 'border-ink-200'
                 }`}
               >
                 <input type="radio" className="hidden" checked={useTemplate} onChange={() => setUseTemplate(true)} />
@@ -141,7 +141,7 @@ export function CreateNoteModal({ open, initialDirPath, onClose }: Props) {
               </label>
               <label
                 className={`flex-1 px-3 py-2 rounded border cursor-pointer ${
-                  !useTemplate ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-ink-200'
+                  !useTemplate ? 'border-brand bg-active-bg text-fg' : 'border-ink-200'
                 }`}
               >
                 <input type="radio" className="hidden" checked={!useTemplate} onChange={() => setUseTemplate(false)} />

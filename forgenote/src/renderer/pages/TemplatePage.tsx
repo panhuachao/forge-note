@@ -80,7 +80,7 @@ export function TemplatePage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-ink-50">
       <div className="h-10 flex items-center px-4 border-b border-ink-200 bg-white text-sm">
-        <span className="font-medium flex items-center gap-1.5"><Icon name="clipboard" className="w-4 h-4 text-brand-600" /> 知识库模板</span>
+        <span className="font-medium flex items-center gap-1.5"><Icon name="clipboard" className="w-4 h-4 text-brand" /> 知识库模板</span>
       </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {applied ? (
@@ -117,7 +117,7 @@ export function TemplatePage() {
             <p className="text-sm text-ink-500 mb-4">选择下方模板一键搭建你的知识库体系：</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {templates.map((t) => (
-                <div key={t.templateId} className="p-4 rounded border border-ink-200 hover:border-brand-600 cursor-pointer"
+                <div key={t.templateId} className="p-4 rounded border border-ink-200 hover:border-brand cursor-pointer"
                   onClick={() => {
                     setApplying(t);
                     setSelections(t.dirs.map((d) => d.id));
@@ -272,7 +272,7 @@ export function TemplatePage() {
               <span>可用变量：{noteTemplateEdit.variables.join(' ')}</span>
               {noteTemplateEdit.hasCustom && (
                 <button
-                  className="text-brand-600 hover:underline"
+                  className="text-brand hover:underline"
                   onClick={async () => {
                     const info = await window.forge.template.resetNoteTemplate(
                       activeKb.id,

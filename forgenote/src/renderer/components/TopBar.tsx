@@ -17,23 +17,23 @@ export function TopBar() {
 
   return (
     <div
-      className="h-9 flex items-stretch border-b border-ink-200 bg-white text-xs select-none"
+      className="h-10 flex items-center gap-2 pr-2 border-b border-border-soft bg-toolbar text-xs select-none"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* 左段：macOS 控件占位（让出红黄绿按钮） */}
       <div
-        className="w-[72px] border-r border-ink-200 bg-ink-50"
+        className="w-[72px] h-full shrink-0"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       />
 
       {/* 中段：多标签栏 + 新建按钮（白底） */}
       <div
-        className="flex-1 flex items-stretch min-w-0 bg-white"
+        className="flex-1 flex items-center min-w-0 gap-1.5"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <div className="flex-1 flex items-stretch overflow-x-auto min-w-0">
+        <div className="flex-1 flex items-center overflow-x-auto min-w-0 gap-1">
           {tabs.length === 0 ? (
-            <div className="flex-1 flex items-center px-3 text-ink-400 text-xs">
+            <div className="flex items-center px-2 text-fg-muted text-xs">
               未打开笔记
             </div>
           ) : (
@@ -43,18 +43,21 @@ export function TopBar() {
                 <div
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`group flex items-center gap-1.5 h-full px-3 border-r border-ink-200 cursor-pointer min-w-[120px] max-w-[280px] ${
-                    active ? 'bg-ink-50 text-ink-900' : 'text-ink-600 hover:bg-ink-50'
+                  className={`group flex items-center gap-1.5 h-7 px-3 rounded-md cursor-pointer min-w-[110px] max-w-[240px] transition-all ${
+                    active
+                      ? 'bg-content text-fg shadow-sm'
+                      : 'text-fg-muted hover:bg-hover-bg'
                   }`}
+                  title={t.notePath}
                 >
-                  {t.dirty && <span className="text-brand-600 text-base leading-none">●</span>}
-                  <span className="truncate flex-1" title={t.notePath}>{t.title}</span>
+                  {t.dirty && <span className="text-brand text-[10px] leading-none shrink-0">●</span>}
+                  <span className="truncate flex-1">{t.title}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       closeTab(t.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 text-ink-400 hover:text-ink-800"
+                    className="opacity-0 group-hover:opacity-100 text-fg-muted hover:text-fg rounded p-0.5"
                     title="关闭"
                   >
                     <Icon name="x-mark" className="w-3.5 h-3.5" />
@@ -66,7 +69,7 @@ export function TopBar() {
           {tabs.length > 0 && (
             <button
               onClick={closeAllTabs}
-              className="px-2 text-ink-400 hover:text-ink-700 h-full flex items-center"
+              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-fg-faint hover:bg-hover-bg hover:text-fg-secondary"
               title="关闭所有标签"
             >
               <Icon name="x-mark" className="w-3.5 h-3.5" />
@@ -76,7 +79,7 @@ export function TopBar() {
         {/* + 新建笔记 */}
         <button
           onClick={() => openCreateNote()}
-          className="h-full w-9 flex items-center justify-center text-ink-500 hover:bg-ink-100 border-l border-ink-200"
+          className="shrink-0 w-8 h-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-brand"
           title="新建笔记"
         >
           <Icon name="plus" className="w-4 h-4" />
@@ -85,12 +88,12 @@ export function TopBar() {
 
       {/* 右段：⮞ 收起右栏 */}
       <div
-        className="flex items-stretch border-l border-ink-200 bg-ink-50"
+        className="flex items-center shrink-0"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <button
           onClick={toggleRightPanel}
-          className="h-full w-9 flex items-center justify-center text-ink-500 hover:bg-ink-200"
+          className="w-7 h-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-fg-secondary"
           title="收起属性面板"
         >
           <Icon name="chevron-right" className="w-4 h-4" />

@@ -68,48 +68,53 @@ export function RightPanel() {
   return (
     <aside
       style={{ width: rightPanelWidth }}
-      className="border-l border-ink-200 bg-white flex flex-col relative"
+      className="border-l border-border bg-panel flex flex-col relative"
     >
       {/* 顶部：AI 操作 + 大纲 / 搜索 双标签 + 收起（最右） */}
-      <div className="flex items-center h-9 bg-ink-50 border-b border-ink-200 text-xs">
+      <div className="flex items-center h-10 gap-0.5 px-2 bg-toolbar border-b border-border-soft text-xs">
         {/* AI 操作（左侧） */}
-        {aiActions.map((a) => (
-          <button
-            key={a.id}
-            onClick={() => handleAIAction(a.id)}
-            disabled={!notePath}
-            className={`h-full w-8 flex items-center justify-center border-r border-ink-200 ${
-              notePath ? 'text-ink-600 hover:bg-ink-100' : 'text-ink-300 cursor-not-allowed'
-            }`}
-            title={a.title}
-          >
-            <Icon name={a.icon} className="w-4 h-4" />
-          </button>
-        ))}
-        {/* 大纲 / 搜索 双标签 */}
-        <button
-          onClick={() => setTab('outline')}
-          className={`h-full px-3 flex items-center gap-1 border-r border-ink-200 ${
-            tab === 'outline' ? 'bg-white text-ink-900 font-medium' : 'text-ink-600 hover:bg-white/50'
-          }`}
-          title="大纲 / 属性"
-        >
-          <Icon name="queue-list" className="w-4 h-4" /> 大纲
-        </button>
-        <button
-          onClick={() => setTab('search')}
-          className={`h-full px-3 flex items-center gap-1 border-r border-ink-200 ${
-            tab === 'search' ? 'bg-white text-ink-900 font-medium' : 'text-ink-600 hover:bg-white/50'
-          }`}
-          title="搜索"
-        >
-          <Icon name="search" className="w-4 h-4" /> 搜索
-        </button>
+        <div className="flex items-center gap-0.5">
+          {aiActions.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => handleAIAction(a.id)}
+              disabled={!notePath}
+              className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${
+                notePath ? 'text-fg-muted hover:bg-hover-bg hover:text-fg-secondary' : 'text-fg-faint cursor-not-allowed'
+              }`}
+              title={a.title}
+            >
+              <Icon name={a.icon} className="w-4 h-4" />
+            </button>
+          ))}
+        </div>
+        {/* 大纲 / 搜索 双标签（分段控件，浅灰底容器 + 白底凸出选中） */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex items-center h-7 bg-panel rounded-md p-0.5 border border-border-soft">
+            <button
+              onClick={() => setTab('outline')}
+              className={`h-6 px-3 flex items-center gap-1 rounded text-[12px] transition-colors ${
+                tab === 'outline' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'
+              }`}
+              title="大纲 / 属性"
+            >
+              <Icon name="queue-list" className="w-3.5 h-3.5" /> 大纲
+            </button>
+            <button
+              onClick={() => setTab('search')}
+              className={`h-6 px-3 flex items-center gap-1 rounded text-[12px] transition-colors ${
+                tab === 'search' ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:text-fg-secondary'
+              }`}
+              title="搜索"
+            >
+              <Icon name="search" className="w-3.5 h-3.5" /> 搜索
+            </button>
+          </div>
+        </div>
         {/* 收起右栏（最右） */}
-        <div className="flex-1" />
         <button
           onClick={toggleRightPanel}
-          className="h-full w-9 flex items-center justify-center text-ink-500 hover:bg-ink-200"
+          className="h-7 w-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover-bg hover:text-fg-secondary"
           title="收起属性面板"
         >
           <Icon name="chevron-right" className="w-4 h-4" />
@@ -148,7 +153,7 @@ export function RightPanel() {
               )}
             </>
           ) : (
-            <div className="text-center text-ink-400 text-sm py-8 px-3">
+            <div className="text-center text-fg-muted text-sm py-8 px-3">
               选择一篇笔记查看属性
             </div>
           )
@@ -160,7 +165,7 @@ export function RightPanel() {
       </div>
       <div
         onMouseDown={() => setResizing(true)}
-        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-brand-400/30"
+        className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-brand/30"
         title="拖动调整宽度"
       />
     </aside>

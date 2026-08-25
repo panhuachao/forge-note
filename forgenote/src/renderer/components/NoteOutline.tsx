@@ -1,33 +1,137 @@
+import { useState, useMemo } from 'react';
+
 interface Props {
   content: string;
   onJump: (line: number) => void;
 }
 
+interface Heading {
+  level: number;
+  text: string;
+  line: number;
+}
+
+/**
+ * 大纲面板
+ * - 紧凑字体 / 1.55 行距
+ * - 同级辅助线（每个层级的左侧细竖线）
+ * - 可折叠：点击父标题前的 chevron 折叠其所有子级
+ * - 整行 hover 出现浅色底，点击跳转到对应行
+ */
 export function NoteOutline({ content, onJump }: Props) {
-  const lines = content.split('\n');
-  const headings: { level: number; text: string; line: number }[] = [];
-  lines.forEach((l, i) => {
-    const m = /^(#{1,6})\s+(.+)$/.exec(l);
-    if (m) headings.push({ level: m[1].length, text: m[2], line: i + 1 });
-  });
+  const headings: Heading[] = useMemo(() => {
+    const list: Heading[] = [];
+    content.split('\n').forEach((l, i) => {
+      const m = /^(#{1,6})\s+(.+)$/.exec(l);
+      if (m) list.push({ level: m[1].length, text: m[2], line: i + 1 });
+    });
+    return list;
+  }, [content]);
+
+  // 判断每个 heading 是否"有后代"（用于显示折叠按钮）
+  const hasChildren = useMemo(() => {
+    const set = new Set<number>();
+    for (let i = 0; i < headings.length; i++) {
+      for (let j = i + 1; j < headings.length; j++) {
+        if (headings[j].level > headings[i].level) {
+          set.add(headings[i].line);
+          break;
+        } else {
+          break;
+        }
+      }
+    }
+    return set;
+  }, [headings]);
+
+  // 折叠状态：line -> collapsed
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+
+  // 可见列表：过滤掉在某个折叠祖先后代中的项
+  const visible: Heading[] = useMemo(() => {
+    if (collapsed.size === 0) return headings;
+    const out: Heading[] = [];
+    const stack: { level: number; line: number }[] = [];
+    for (const h of headings) {
+      // 弹出比当前更深的祖先
+      while (stack.length && stack[stack.length - 1].level >= h.level) stack.pop();
+      // 栈中是否有折叠的祖先
+      const blocked = stack.some((a) => collapsed.has(a.line));
+      if (!blocked) out.push(h);
+      stack.push({ level: h.level, line: h.line });
+    }
+    return out;
+  }, [headings, collapsed]);
 
   if (headings.length === 0) return null;
 
+  const toggle = (line: number) => {
+    setCollapsed((s) => {
+      const next = new Set(s);
+      if (next.has(line)) next.delete(line);
+      else next.add(line);
+      return next;
+    });
+  };
+
   return (
-    <div className="px-4 py-3 border-b border-ink-200">
-      <h3 className="text-xs font-semibold text-ink-500 uppercase mb-2">大纲</h3>
-      <ul className="space-y-1 text-sm">
-        {headings.map((h, i) => (
-          <li
-            key={i}
-            className="cursor-pointer text-ink-600 hover:text-brand-600 truncate"
-            style={{ paddingLeft: (h.level - 1) * 12 }}
-            onClick={() => onJump(h.line)}
-            title={h.text}
-          >
-            {h.text}
-          </li>
-        ))}
+    <div className="px-3 py-3 border-b border-border-soft">
+      <h3 className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-2 px-2">
+        大纲
+      </h3>
+      <ul className="relative text-[12.5px] leading-[1.55] text-fg-secondary">
+        {visible.map((h) => {
+          const indent = (h.level - 1) * 14;
+          const isCollapsible = hasChildren.has(h.line);
+          const isCollapsed = collapsed.has(h.line);
+          return (
+            <li key={`${h.line}-${h.text}`} className="group relative">
+              {/* 同级辅助线：在该 heading 左侧的细竖线 */}
+              {h.level > 1 && (
+                <span
+                  className="absolute top-0 bottom-0 border-l border-border-soft pointer-events-none"
+                  style={{ left: indent - 6 }}
+                  aria-hidden
+                />
+              )}
+              <div
+                className="flex items-center gap-1 cursor-pointer rounded hover:bg-hover-bg pr-2 py-0.5 transition-colors"
+                style={{ paddingLeft: indent }}
+                onClick={() => onJump(h.line)}
+                title={h.text}
+              >
+                {/* 折叠按钮 / 占位符（保持对齐） */}
+                {isCollapsible ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggle(h.line);
+                    }}
+                    className="w-3 h-3 flex items-center justify-center text-fg-faint hover:text-fg-secondary shrink-0"
+                    title={isCollapsed ? '展开' : '折叠'}
+                    aria-label={isCollapsed ? '展开' : '折叠'}
+                  >
+                    <svg
+                      viewBox="0 0 12 12"
+                      className={`w-3 h-3 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                    >
+                      <path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                ) : (
+                  <span className="w-3 h-3 shrink-0" />
+                )}
+                <span
+                  className={`truncate group-hover:text-fg ${
+                    h.level === 1 ? 'font-semibold text-fg' : ''
+                  }`}
+                >
+                  {h.text}
+                </span>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

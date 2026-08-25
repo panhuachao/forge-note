@@ -5,18 +5,45 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: '#fef2f2',
-          100: '#fee2e2',
-          200: '#fecaca',
-          300: '#fca5a5',
-          400: '#f87171',
-          500: '#ef4444',
-          600: '#e53935',
-          700: '#b91c1c',
-          800: '#991b1b',
-          900: '#7f1d1d'
+        /* ==========================================================
+         * 主题语义色（推荐新代码使用，亮/暗自动适配）
+         * ----------------------------------------------------------
+         * 通过 CSS 变量驱动，支持 <alpha-value>：
+         *   bg-canvas / bg-canvas/80
+         *   text-fg-secondary
+         *   border / border-soft / border-strong
+         *   border/50
+         * ========================================================== */
+        canvas: 'rgb(var(--c-canvas) / <alpha-value>)',
+        panel: 'rgb(var(--c-panel) / <alpha-value>)',
+        content: 'rgb(var(--c-content) / <alpha-value>)',
+        toolbar: 'rgb(var(--c-toolbar) / <alpha-value>)',
+        'hover-bg': 'rgb(var(--c-hover) / 0.04)',
+        'active-bg': 'rgb(var(--c-active) / 0.06)',
+
+        border: {
+          DEFAULT: 'rgb(var(--c-border) / <alpha-value>)',
+          soft: 'rgb(var(--c-border-soft) / <alpha-value>)',
+          strong: 'rgb(var(--c-border-strong) / <alpha-value>)'
         },
+
+        fg: {
+          DEFAULT: 'rgb(var(--c-text) / <alpha-value>)',
+          primary: 'rgb(var(--c-text) / <alpha-value>)',
+          secondary: 'rgb(var(--c-text-secondary) / <alpha-value>)',
+          muted: 'rgb(var(--c-text-muted) / <alpha-value>)',
+          faint: 'rgb(var(--c-text-faint) / <alpha-value>)'
+        },
+
+        /* 品牌色（CSS 变量驱动，亮暗自动适配） */
+        brand: {
+          DEFAULT: 'rgb(var(--c-brand) / <alpha-value>)',
+          soft: 'rgb(var(--c-brand-soft) / <alpha-value>)',
+          hover: 'rgb(var(--c-brand-hover) / <alpha-value>)',
+          fg: 'rgb(var(--c-brand-fg) / <alpha-value>)'
+        },
+
+        /* 兼容旧色阶（保留供老代码使用，新代码推荐用语义类） */
         ink: {
           50: '#fafaf9',
           100: '#f5f5f4',

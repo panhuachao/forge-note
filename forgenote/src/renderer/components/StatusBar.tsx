@@ -49,15 +49,15 @@ export function StatusBar() {
   }
 
   return (
-    <div className="h-7 flex items-center justify-between px-3 text-[11px] text-ink-500 border-t border-ink-200 bg-ink-100 select-none">
+    <div className="h-7 flex items-center justify-between px-3 text-[11px] text-fg-muted border-t border-border bg-toolbar select-none">
       {/* 左侧：知识库切换 + wordmark */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         {activeKb && (
           <>
             <select
               value={activeKb.id}
               onChange={(e) => handleSwitchKb(e.target.value)}
-              className="text-[11px] bg-transparent border border-ink-200 rounded px-1.5 py-0.5 outline-none max-w-[160px] truncate"
+              className="text-[11px] bg-transparent border border-border-soft rounded px-1.5 py-0.5 outline-none max-w-[160px] truncate hover:border-border-strong"
               title="切换知识库"
             >
               {kbs.map((k) => (
@@ -69,30 +69,29 @@ export function StatusBar() {
               className="icon-btn text-xs"
               title="新建知识库"
             ><Icon name="plus" className="w-3.5 h-3.5" /></button>
-            <span className="text-ink-300">|</span>
+            <span className="w-1 h-1 rounded-full bg-fg-faint shrink-0" />
             <span>{noteText} 条笔记</span>
-            <span className="text-ink-300">|</span>
           </>
         )}
         <button
           onClick={() => setMainView('home')}
-          className="font-semibold text-ink-600 hover:text-brand-600"
+          className="font-semibold text-fg-secondary hover:text-brand"
           title="返回首页"
         >
           forgenote
         </button>
       </div>
       {/* 右侧：字数统计 + 标签数 */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         {stats && (
           <>
             <span>{stats.words} 词</span>
-            <span className="text-ink-300">|</span>
+            <span className="w-1 h-1 rounded-full bg-fg-faint shrink-0" />
             <span>{stats.total} 字符</span>
-            <span className="text-ink-300">|</span>
           </>
         )}
-        <span className="text-ink-300">{tabs.length} 标签</span>
+        {stats && <span className="w-1 h-1 rounded-full bg-fg-faint shrink-0" />}
+        <span className="text-fg-faint">{tabs.length} 标签</span>
       </div>
     </div>
   );

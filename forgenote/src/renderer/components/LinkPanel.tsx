@@ -21,7 +21,7 @@ export function LinkPanel({ inlinks, outlinks, broken, onOpen }: Props) {
               {inlinks.map((p) => (
                 <li
                   key={p}
-                  className="text-brand-600 hover:underline cursor-pointer truncate text-xs"
+                  className="text-brand hover:underline cursor-pointer truncate text-xs"
                   onClick={() => onOpen(p)}
                   title={p}
                 >
@@ -38,7 +38,7 @@ export function LinkPanel({ inlinks, outlinks, broken, onOpen }: Props) {
           ) : (
             <ul className="space-y-0.5">
               {outlinks.map((p) => (
-                <li key={p} className="text-brand-600 truncate text-xs" title={p}>
+                <li key={p} className="text-brand truncate text-xs" title={p}>
                   → {p.replace(/\.md$/i, '')}
                 </li>
               ))}
