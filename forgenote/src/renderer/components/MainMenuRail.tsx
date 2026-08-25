@@ -30,7 +30,7 @@ export function MainMenuRail() {
 
   return (
     <nav
-      className="w-14 border-r border-border bg-canvas flex flex-col items-center pt-10 pb-2 gap-1.5"
+      className="w-14 border-r border-border bg-canvas flex flex-col items-center pt-[72px] pb-2 gap-1.5"
       data-testid="main-menu-rail"
     >
       {/* 快速笔记（最前面） */}

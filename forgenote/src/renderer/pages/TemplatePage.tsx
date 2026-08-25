@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { TemplateMeta, AppliedTemplate, NoteTemplateInfo } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
-import { Icon } from '../components/Icon';
+import { PageHeader } from '../components/PageHeader';
 
 export function TemplatePage() {
   const { activeKb, applied, setApplied, pushToast } = useKBStore();
@@ -79,10 +79,8 @@ export function TemplatePage() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
-      <div className="h-10 flex items-center px-4 border-b border-border bg-content text-sm">
-        <span className="font-medium flex items-center gap-1.5"><Icon name="clipboard" className="w-4 h-4 text-brand" /> 知识库模板</span>
-      </div>
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <PageHeader icon="clipboard" title="知识库模板" />
+      <div className="flex-1 overflow-y-auto p-6 pt-20 space-y-6">
         {applied ? (
           <section className="bg-content rounded border border-border p-5">
             <div className="flex items-center justify-between">

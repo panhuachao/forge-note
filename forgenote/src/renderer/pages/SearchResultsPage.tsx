@@ -66,10 +66,10 @@ export default function SearchResultsPage() {
   return (
     <div className="flex-1 flex flex-col bg-content overflow-hidden">
       {/* 顶部：返回 + 搜索栏 + 知识库 */}
-      <div className="h-14 px-4 flex items-center gap-3 border-b border-border bg-content">
+      <div className="h-14 pl-0 pr-4 flex items-center gap-3 border-b border-border bg-content">
         <button
           onClick={() => setMainView('home')}
-          className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0"
+          className="w-8 h-8 flex items-center justify-center text-fg-muted hover:bg-hover-bg rounded-lg flex-shrink-0 ml-20"
           title="返回首页"
         >
           <Icon name="arrow-left" className="w-4 h-4" />
