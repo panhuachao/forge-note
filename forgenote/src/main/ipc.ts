@@ -69,7 +69,11 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.KB_GET_ACTIVE, async () => {
     const id = getConfig<string>('activeKb');
     if (!id) return null;
-    return getKB(id) || null;
+    const kb = getKB(id);
+    if (!kb) return null;
+    // 根目录已不存在则视为无有效知识库
+    if (!(await kbService.kbPathExists(kb.rootPath))) return null;
+    return kb;
   });
   ipcMain.handle(IPC.KB_SET_ACTIVE, async (_e, id: string) => {
     setConfig('activeKb', id);

@@ -178,10 +178,24 @@ class KBService {
     const kbs = listKBs();
     const result: KBSummary[] = [];
     for (const kb of kbs) {
+      // 跳过根目录在磁盘上已不存在的知识库（被删除/移动），让其重新走启动向导
+      if (!(await this.kbPathExists(kb.rootPath))) {
+        continue;
+      }
       const s = await this.getKBSummary(kb.id);
       if (s) result.push(s);
     }
     return result;
+  }
+
+  /** 知识库根目录是否仍存在于磁盘上 */
+  async kbPathExists(rootPath: string): Promise<boolean> {
+    try {
+      const stat = await fs.stat(rootPath);
+      return stat.isDirectory();
+    } catch {
+      return false;
+    }
   }
 }
 

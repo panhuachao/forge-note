@@ -15,6 +15,7 @@ import ChatPage from './pages/ChatPage';
 import SearchResultsPage from './pages/SearchResultsPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
+import { SetupWizard } from './components/SetupWizard';
 import { CreateNoteModal } from './components/CreateNoteModal';
 import { QuickNoteModal } from './components/QuickNoteModal';
 import { TopBar } from './components/TopBar';
@@ -29,11 +30,17 @@ export function App() {
   } = useKBStore();
   const { mainView, leftPanelCollapsed, rightPanelCollapsed } = useLayoutStore();
   const [quickNoteInitial, setQuickNoteInitial] = useState('');
+  const [showSetup, setShowSetup] = useState(false);
 
   useEffect(() => {
     (async () => {
       const kbs = await window.forge.kb.list();
       setKBs(kbs);
+      // 首次启动：没有任何知识库时，展示配置指引向导
+      if (kbs.length === 0) {
+        setShowSetup(true);
+        return;
+      }
       const active = await window.forge.kb.getActive();
       if (active) await openKb(active.id);
       const aiCfg = await window.forge.ai.getConfig();
@@ -111,6 +118,7 @@ export function App() {
       <StatusBar />
       <ToastContainer />
       <Onboarding />
+      {showSetup && <SetupWizard onDone={() => setShowSetup(false)} />}
       <TreeContextMenuRoot />
       <CreateNoteModal open={createNoteOpen} initialDirPath={createNoteDir} onClose={closeCreateNote} />
       <QuickNoteModal
