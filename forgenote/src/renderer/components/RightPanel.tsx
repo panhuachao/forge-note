@@ -253,6 +253,21 @@ export function RightPanel() {
               </Row>
               <Row label="创建时间"><span className="text-fg-secondary">{basics.created}</span></Row>
               <Row label="最后更新"><span className="text-fg-secondary">{basics.updated}</span></Row>
+              <Row label="路径">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-mono text-[11px] text-fg-secondary truncate" title={notePath}>
+                    {notePath || '—'}
+                  </span>
+                  <button
+                    onClick={() => notePath && navigator.clipboard?.writeText(notePath)}
+                    className="icon-btn shrink-0"
+                    title="复制路径"
+                    aria-label="复制路径"
+                  >
+                    <Icon name="copy" className="w-3 h-3" />
+                  </button>
+                </span>
+              </Row>
               <Row label="标签">
                 {basics.tags.length > 0 ? (
                   <span className="flex flex-wrap gap-1">

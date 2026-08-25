@@ -185,10 +185,10 @@ export function HomePage() {
               <button
                 key={m.id}
                 onClick={() => setMode(m.id)}
-                className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm transition-colors ${
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm transition-all ${
                   active
-                    ? 'bg-active-bg text-fg shadow-sm'
-                    : 'bg-content text-fg-secondary hover:bg-hover-bg shadow-sm border border-border-soft'
+                    ? 'bg-brand-soft text-brand border border-brand/20 shadow-sm'
+                    : 'bg-content text-fg-secondary hover:bg-hover-bg border border-border-soft'
                 }`}
                 title={m.desc}
               >

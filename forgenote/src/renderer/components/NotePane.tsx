@@ -56,7 +56,7 @@ export function NotePane(props: Props) {
   const { activeKb, pushToast } = useKBStore();
   const { markTabDirty } = useLayoutStore();
   const [note, setNote] = useState<{ content: string; outlinks: string[]; inlinks: string[]; brokenLinks: string[]; mtime: number; ctime: number; frontmatter: Record<string, unknown> } | null>(null);
-  const [tab, setTab] = useState<'edit' | 'preview' | 'split'>('split');
+  const [tab, setTab] = useState<'edit' | 'preview' | 'split'>('preview');
   // 实时内容：编辑器每次变更都会更新，用于分屏实时预览（不依赖写盘）
   const [liveContent, setLiveContent] = useState('');
   // 编辑器仅在切换笔记时重建：记录已加载完成的路径，作为初始化 effect 的唯一依赖
