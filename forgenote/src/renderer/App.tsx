@@ -29,7 +29,7 @@ export function App() {
     openCreateNote, createNoteOpen, createNoteDir, closeCreateNote,
     quickNoteOpen, closeQuickNote
   } = useKBStore();
-  const { mainView, leftPanelCollapsed, rightPanelCollapsed, fontSize, lineHeight } = useLayoutStore();
+  const { mainView, leftPanelCollapsed, rightPanelCollapsed, fontSize, lineHeight, themeColor } = useLayoutStore();
   const [quickNoteInitial, setQuickNoteInitial] = useState('');
   const [showSetup, setShowSetup] = useState(false);
 
@@ -105,7 +105,8 @@ export function App() {
     const el = document.documentElement;
     el.setAttribute('data-fontsize', fontSize);
     el.setAttribute('data-lineheight', lineHeight);
-  }, [fontSize, lineHeight]);
+    el.setAttribute('data-theme-color', themeColor);
+  }, [fontSize, lineHeight, themeColor]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-canvas">

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
+import type { ThemeColorKey } from '../stores/layout-store';
 import type { AIModelConfig } from '@shared/types';
 import { PageHeader } from '../components/PageHeader';
 
 export function SettingsPage() {
   const { aiConfig, setAIConfig, pushToast, activeKb } = useKBStore();
-  const { fontSize, lineHeight, setFontSize, setLineHeight } = useLayoutStore();
+  const { fontSize, lineHeight, themeColor, setFontSize, setLineHeight, setThemeColor } = useLayoutStore();
   const [cfg, setCfg] = useState<AIModelConfig>(aiConfig);
   const [saving, setSaving] = useState(false);
 
@@ -55,6 +56,33 @@ export function SettingsPage() {
                     className={`px-4 py-1 text-sm ${lineHeight === k ? 'bg-brand text-brand-fg' : 'text-fg-secondary hover:bg-hover-bg'}`}
                   >
                     {k === 'sm' ? '小' : k === 'md' ? '中' : '大'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-fg-muted">主题色</label>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {(
+                  [
+                    { k: 'red', label: '红', color: '#ef4444' },
+                    { k: 'blue', label: '深蓝', color: '#2563eb' },
+                    { k: 'green', label: '绿', color: '#16a34a' },
+                    { k: 'purple', label: '紫', color: '#7c3aed' },
+                    { k: 'amber', label: '橙', color: '#d97706' },
+                    { k: 'teal', label: '青', color: '#0d9488' }
+                  ] as { k: ThemeColorKey; label: string; color: string }[]
+                ).map((opt) => (
+                  <button
+                    key={opt.k}
+                    onClick={() => setThemeColor(opt.k)}
+                    title={opt.label}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${themeColor === opt.k ? 'ring-2 ring-offset-2 ring-brand scale-110' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: opt.color }}
+                  >
+                    {themeColor === opt.k && (
+                      <span className="text-white text-sm leading-none">✓</span>
+                    )}
                   </button>
                 ))}
               </div>

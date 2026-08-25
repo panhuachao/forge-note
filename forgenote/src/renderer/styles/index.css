@@ -93,6 +93,60 @@
   --app-line-height: 2.1;
 }
 
+/* 主题色（data-theme-color 挂在 <html> 上）。
+   每套覆盖品牌色相关变量：主色 / hover / 浅高亮底 / fg，以及 Tailwind 用的 rgb 数字。
+   --color-brand / --color-brand-light / --color-accent 已在 :root 用 var() 引用，自动跟随。 */
+:root[data-theme-color="blue"] {
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-soft: #dbeafe;
+  --brand-fg: #ffffff;
+  --c-brand: 37 99 235;
+  --c-brand-hover: 29 78 216;
+  --c-brand-soft: 219 234 254;
+  --c-brand-fg: 255 255 255;
+}
+:root[data-theme-color="green"] {
+  --brand: #16a34a;
+  --brand-hover: #15803d;
+  --brand-soft: #dcfce7;
+  --brand-fg: #ffffff;
+  --c-brand: 22 163 74;
+  --c-brand-hover: 21 128 61;
+  --c-brand-soft: 220 252 231;
+  --c-brand-fg: 255 255 255;
+}
+:root[data-theme-color="purple"] {
+  --brand: #7c3aed;
+  --brand-hover: #6d28d9;
+  --brand-soft: #ede9fe;
+  --brand-fg: #ffffff;
+  --c-brand: 124 58 237;
+  --c-brand-hover: 109 40 217;
+  --c-brand-soft: 237 233 254;
+  --c-brand-fg: 255 255 255;
+}
+:root[data-theme-color="amber"] {
+  --brand: #d97706;
+  --brand-hover: #b45309;
+  --brand-soft: #fef3c7;
+  --brand-fg: #ffffff;
+  --c-brand: 217 119 6;
+  --c-brand-hover: 180 83 9;
+  --c-brand-soft: 254 243 199;
+  --c-brand-fg: 255 255 255;
+}
+:root[data-theme-color="teal"] {
+  --brand: #0d9488;
+  --brand-hover: #0f766e;
+  --brand-soft: #ccfbf1;
+  --brand-fg: #ffffff;
+  --c-brand: 13 148 136;
+  --c-brand-hover: 15 118 110;
+  --c-brand-soft: 204 251 241;
+  --c-brand-fg: 255 255 255;
+}
+
 .dark {
   /* 表面层次（暗色预览，后续扩展用） */
   --bg-canvas: #161514;

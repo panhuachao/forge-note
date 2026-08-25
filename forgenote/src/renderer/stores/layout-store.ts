@@ -7,6 +7,7 @@ export type TreeView = 'tree' | 'tags';
 export type SortMode = 'name' | 'mtime' | 'created';
 export type FontSizeKey = 'sm' | 'md' | 'lg';
 export type LineHeightKey = 'sm' | 'md' | 'lg';
+export type ThemeColorKey = 'red' | 'blue' | 'green' | 'purple' | 'amber' | 'teal';
 
 export interface OpenTab {
   id: string; // 唯一 id
@@ -40,6 +41,8 @@ interface LayoutState {
   // 外观样式：字体大小 / 行间距（小/中/大，持久化）
   fontSize: FontSizeKey;
   lineHeight: LineHeightKey;
+  // 外观样式：主题色（持久化）
+  themeColor: ThemeColorKey;
   // actions
   setMainView: (v: MainView) => void;
   setTreeView: (v: TreeView) => void;
@@ -48,6 +51,7 @@ interface LayoutState {
   setChatWithNote: (v: boolean) => void;
   setFontSize: (v: FontSizeKey) => void;
   setLineHeight: (v: LineHeightKey) => void;
+  setThemeColor: (v: ThemeColorKey) => void;
   toggleLeftRail: () => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
@@ -73,12 +77,13 @@ interface PersistedLayout {
   sortMode: SortMode;
   fontSize: FontSizeKey;
   lineHeight: LineHeightKey;
+  themeColor: ThemeColorKey;
 }
 
 function loadPersisted(): PersistedLayout {
   const def: PersistedLayout = {
     leftPanelWidth: 260, rightPanelWidth: 280, leftPanelCollapsed: false, rightPanelCollapsed: false,
-    leftRailCollapsed: false, sortMode: 'name', fontSize: 'sm', lineHeight: 'sm'
+    leftRailCollapsed: false, sortMode: 'name', fontSize: 'sm', lineHeight: 'sm', themeColor: 'red'
   };
   if (typeof localStorage === 'undefined') return def;
   try {
@@ -93,7 +98,8 @@ function loadPersisted(): PersistedLayout {
       leftRailCollapsed: !!v.leftRailCollapsed,
       sortMode: v.sortMode ?? 'name',
       fontSize: (v.fontSize === 'md' || v.fontSize === 'lg' ? v.fontSize : 'sm') as FontSizeKey,
-      lineHeight: (v.lineHeight === 'md' || v.lineHeight === 'lg' ? v.lineHeight : 'sm') as LineHeightKey
+      lineHeight: (v.lineHeight === 'md' || v.lineHeight === 'lg' ? v.lineHeight : 'sm') as LineHeightKey,
+      themeColor: (['blue', 'green', 'purple', 'amber', 'teal'].includes(v.themeColor) ? v.themeColor : 'red') as ThemeColorKey
     };
   } catch {
     return def;
@@ -124,6 +130,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     chatWithNote: false,
     fontSize: persisted.fontSize,
     lineHeight: persisted.lineHeight,
+    themeColor: persisted.themeColor,
     setMainView: (v) => set({ mainView: v }),
     setSelectedTag: (tag) => set({ selectedTag: tag }),
     setChatWithNote: (v) => set({ chatWithNote: v }),
@@ -145,6 +152,16 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
         leftPanelCollapsed: cur.leftPanelCollapsed, rightPanelCollapsed: cur.rightPanelCollapsed,
         leftRailCollapsed: cur.leftRailCollapsed, sortMode: cur.sortMode,
         fontSize: cur.fontSize, lineHeight: v
+      });
+    },
+    setThemeColor: (v) => {
+      set({ themeColor: v });
+      const cur = get();
+      savePersisted({
+        leftPanelWidth: cur.leftPanelWidth, rightPanelWidth: cur.rightPanelWidth,
+        leftPanelCollapsed: cur.leftPanelCollapsed, rightPanelCollapsed: cur.rightPanelCollapsed,
+        leftRailCollapsed: cur.leftRailCollapsed, sortMode: cur.sortMode,
+        fontSize: cur.fontSize, lineHeight: cur.lineHeight, themeColor: v
       });
     },
     setTreeView: (v) => set({ treeView: v }),
