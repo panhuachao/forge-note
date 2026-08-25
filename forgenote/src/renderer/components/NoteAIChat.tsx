@@ -65,7 +65,7 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-4 text-sm">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4 text-sm">
         {messages.length === 0 && (
           <div className="text-center py-8">
             <div className="text-fg-faint text-xs mb-4 leading-relaxed">
@@ -143,28 +143,33 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-border-soft p-2.5 flex items-end gap-2 bg-toolbar/60">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          rows={1}
-          placeholder="基于本篇笔记提问…（Enter 发送 / Shift+Enter 换行）"
-          className="flex-1 resize-none px-3 py-2 max-h-28 bg-content rounded-xl border border-border-soft outline-none text-sm focus:border-brand/40 transition-colors"
-          disabled={loading}
-        />
-        <button
-          onClick={() => send()}
-          disabled={loading || !input.trim()}
-          className="btn btn-primary h-9 px-4 shrink-0 disabled:opacity-40"
-        >
-          发送
-        </button>
+      <div className="border-t border-border-soft p-2.5 bg-toolbar/60">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            rows={1}
+            placeholder="基于本篇笔记提问"
+            className="flex-1 resize-none px-3 py-2 max-h-28 bg-content rounded-xl border border-border-soft outline-none text-sm focus:border-brand/40 transition-colors"
+            disabled={loading}
+          />
+          <button
+            onClick={() => send()}
+            disabled={loading || !input.trim()}
+            className="btn btn-primary h-9 px-4 shrink-0 disabled:opacity-40"
+          >
+            发送
+          </button>
+        </div>
+        <div className="mt-1.5 text-[10px] text-fg-faint pl-1">
+          *Enter 发送 / Shift+Enter 换行
+        </div>
       </div>
     </div>
   );

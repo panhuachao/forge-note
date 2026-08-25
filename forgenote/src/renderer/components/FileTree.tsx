@@ -122,23 +122,23 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
       >
         {/* 视图内顶部快捷操作栏：新建笔记 / 新建目录 / 排序 / 折叠 / 展开
             （属于知识库视图内的快捷操作，不占用 LeftPanel 顶部） */}
-        <div className="h-10 flex items-center gap-0.5 px-1 border-b border-border-soft bg-toolbar text-xs">
+        <div className="h-12 flex items-center gap-0.5 px-1 border-b border-border-soft bg-toolbar text-xs">
           <button
             onClick={() => openCreateNote()}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
+            className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="新建笔记"
           ><Icon name="document-plus" className="w-4 h-4" /></button>
           <button
             onClick={() => handleCreateDir('')}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
+            className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="新建目录"
           ><Icon name="folder-plus" className="w-4 h-4" /></button>
           <div className="relative group">
             <button
-              className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
+              className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
               title="排序方式"
             ><Icon name="arrows-up-down" className="w-4 h-4" /></button>
-            <div className="absolute left-0 top-full mt-1 bg-content border border-border-soft rounded shadow-lg z-30 hidden group-hover:block min-w-[120px]">
+            <div className="absolute left-0 top-full mt-1 bg-content border border-border-soft rounded-xl shadow-lg z-30 hidden group-hover:block min-w-[120px] overflow-hidden">
               {([
                 { v: 'name', l: '按名称' },
                 { v: 'mtime', l: '按修改时间' },
@@ -150,8 +150,8 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
                     useLayoutStore.getState().setSortMode(s.v);
                     window.dispatchEvent(new CustomEvent('forgenote:sort', { detail: s.v }));
                   }}
-                  className={`block w-full text-left px-3 py-1 hover:bg-hover-bg ${
-                    sortMode === s.v ? 'text-brand font-medium' : 'text-fg-secondary'
+                  className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-hover-bg ${
+                    sortMode === s.v ? 'text-brand bg-brand-soft/30' : 'text-fg-secondary'
                   }`}
                 >
                   {s.l}
@@ -161,12 +161,12 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
           </div>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('forgenote:collapseAll'))}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
+            className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="全部折叠"
           ><Icon name="chevron-up" className="w-4 h-4" /></button>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('forgenote:expandAll'))}
-            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
+            className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="全部展开"
           ><Icon name="chevron-down" className="w-4 h-4" /></button>
         </div>

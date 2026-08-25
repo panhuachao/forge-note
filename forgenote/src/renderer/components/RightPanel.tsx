@@ -36,6 +36,8 @@ interface CurrentInfo {
 
 export function RightPanel() {
   const { activeKb } = useKBStore();
+  const { rightPanelWidth, setRightPanelWidth } = useLayoutStore();
+  const [resizing, setResizing] = useState(false);
   const [info, setInfo] = useState<CurrentInfo | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [linkSuggestions, setLinkSuggestions] = useState<LinkInfo[]>([]);
@@ -52,6 +54,26 @@ export function RightPanel() {
     window.addEventListener(EVT_ACTIVE_HEADING, fn);
     return () => window.removeEventListener(EVT_ACTIVE_HEADING, fn);
   }, []);
+
+  // 拖拽调整右侧面板宽度
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (e: MouseEvent) => {
+      // 面板在右侧，宽度 = 窗口右边缘 - 鼠标 x
+      setRightPanelWidth(Math.max(220, Math.min(480, window.innerWidth - e.clientX)));
+    };
+    const onUp = () => setResizing(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizing, setRightPanelWidth]);
 
   useEffect(() => {
     const read = () => {
@@ -145,7 +167,10 @@ export function RightPanel() {
   }, [info]);
 
   return (
-    <aside className="w-72 shrink-0 border-l border-border-soft bg-panel flex flex-col overflow-hidden">
+    <aside
+      style={{ width: rightPanelWidth }}
+      className="shrink-0 relative border-l border-border-soft bg-panel flex flex-col overflow-hidden"
+    >
       {/* 顶部操作区：中间 基本信息/大纲 切换，右侧 更多 */}
       <div
         className="h-12 flex items-center gap-2 px-3 border-b border-border-soft shrink-0 relative"
@@ -206,21 +231,23 @@ export function RightPanel() {
       <div className="flex-1 min-h-0 flex flex-col">
         {panelTab === 'chat' ? (
           notePath && activeKb ? (
-            <>
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <div className="h-9 shrink-0 flex items-center gap-1.5 px-3 bg-panel/60 text-xs text-fg-muted">
                 <Icon name="chat-bubble" className="w-3.5 h-3.5 text-brand" />
                 <span className="truncate">对话上下文：{notePath.split('/').pop()}</span>
               </div>
-              <NoteAIChat
-                kbId={activeKb.id}
-                notePath={notePath}
-                onAppend={(text) => {
-                  window.dispatchEvent(
-                    new CustomEvent('forgenote:append-note', { detail: { text } })
-                  );
-                }}
-              />
-            </>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <NoteAIChat
+                  kbId={activeKb.id}
+                  notePath={notePath}
+                  onAppend={(text) => {
+                    window.dispatchEvent(
+                      new CustomEvent('forgenote:append-note', { detail: { text } })
+                    );
+                  }}
+                />
+              </div>
+            </div>
           ) : (
             <div className="flex-1 flex items-center justify-center text-fg-faint text-xs">
               请先打开一篇笔记
@@ -334,7 +361,18 @@ export function RightPanel() {
       </div>
         )}
       </div>
+      <ResizeHandle onStart={() => setResizing(true)} />
     </aside>
+  );
+}
+
+function ResizeHandle({ onStart }: { onStart: () => void }) {
+  return (
+    <div
+      onMouseDown={onStart}
+      className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-brand/30 z-10"
+      title="拖动调整宽度"
+    />
   );
 }
 
