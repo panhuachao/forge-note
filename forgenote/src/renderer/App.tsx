@@ -13,6 +13,7 @@ import { AuditPage } from './pages/AuditPage';
 import { SettingsPage } from './pages/SettingsPage';
 import ChatPage from './pages/ChatPage';
 import SearchResultsPage from './pages/SearchResultsPage';
+import { TagNotesPage } from './pages/TagNotesPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { SetupWizard } from './components/SetupWizard';
@@ -90,11 +91,13 @@ export function App() {
     if (mainView === 'settings') return <SettingsPage />;
     if (mainView === 'chat') return <ChatPage />;
     if (mainView === 'search-results') return <SearchResultsPage />;
+    if (mainView === 'tag-notes') return <TagNotesPage />;
     return <MultiNoteEditor />;
   }
 
   const isNoteView = mainView === 'note';
-  const showLeft = isNoteView && !leftPanelCollapsed;
+  const isTagNotesView = mainView === 'tag-notes';
+  const showLeft = (isNoteView || isTagNotesView) && !leftPanelCollapsed;
   const showRight = isNoteView && !rightPanelCollapsed;
 
   return (
@@ -108,7 +111,8 @@ export function App() {
           避免各 page 自己的 h-10 标题栏与窗口控件重叠 */}
       <div className="flex-1 flex overflow-hidden">
         <MainMenuRail />
-        {isNoteView && (showLeft ? <LeftPanel /> : <CollapsedLeftHandle />)}
+        {showLeft && <LeftPanel />}
+        {isNoteView && !showLeft && <CollapsedLeftHandle />}
         <div className="flex-1 flex flex-col overflow-hidden bg-content">
           {isNoteView && <TopBar />}
           <div className="flex-1 flex overflow-hidden">{renderMain()}</div>

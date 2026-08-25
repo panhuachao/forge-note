@@ -18,7 +18,9 @@ import type {
   SearchResult,
   AuditEntry,
   FSChangeEvent,
-  NoteTemplateInfo
+  NoteTemplateInfo,
+  TagInfo,
+  TagNote
 } from '@shared/types';
 
 const api = {
@@ -43,7 +45,9 @@ const api = {
     deleteDir: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_DELETE_DIR, kbId, p) as Promise<void>,
     renameDir: (kbId: string, dirPath: string, name: string) => ipcRenderer.invoke(IPC.FS_RENAME_DIR, kbId, dirPath, name) as Promise<string>,
     readText: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_READ_TEXT, kbId, p) as Promise<string>,
-    writeText: (kbId: string, p: string, c: string) => ipcRenderer.invoke(IPC.FS_WRITE_TEXT, kbId, p, c) as Promise<void>
+    writeText: (kbId: string, p: string, c: string) => ipcRenderer.invoke(IPC.FS_WRITE_TEXT, kbId, p, c) as Promise<void>,
+    listTags: (kbId: string) => ipcRenderer.invoke(IPC.FS_LIST_TAGS, kbId) as Promise<TagInfo[]>,
+    notesByTag: (kbId: string, tag: string) => ipcRenderer.invoke(IPC.FS_NOTES_BY_TAG, kbId, tag) as Promise<TagNote[]>
   },
   links: {
     getBacklinks: (kbId: string, p: string) => ipcRenderer.invoke(IPC.LINKS_GET_BACKLINKS, kbId, p) as Promise<string[]>,

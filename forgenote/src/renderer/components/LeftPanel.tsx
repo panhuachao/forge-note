@@ -1,19 +1,16 @@
-// 左侧面板：目录/搜索/标签视图
-// 顶部（h-9）：视图切换（📁🔍🏷）+ ⮜ 收起左栏 - 左侧顶部操作栏
+// 左侧面板：目录/标签视图
+// 顶部：视图切换（📁🏷）+ ⮜ 收起左栏 - 左侧顶部操作栏
 // 中部：视图内容
 //   - 知识库视图（tree）：FileTree（含内部顶部快捷操作栏）
-//   - 搜索视图（search）：SearchPanel
 //   - 标签视图（tags）：TagsView
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore, TreeView } from '../stores/layout-store';
 import { FileTree } from './FileTree';
-import { SearchPanel } from './SearchPanel';
 import { Icon, IconName } from './Icon';
 
 const viewTabs: { id: TreeView; icon: IconName; label: string }[] = [
   { id: 'tree', icon: 'folder', label: '知识库' },
-  { id: 'search', icon: 'search', label: '搜索' },
   { id: 'tags', icon: 'tag', label: '标签' }
 ];
 
@@ -127,10 +124,6 @@ export function LeftPanel() {
       <div className="flex-1 overflow-y-auto">
         {treeView === 'tree' && tree ? (
           <FileTree node={tree} onOpenNote={(p) => openTab(p)} />
-        ) : treeView === 'search' ? (
-          <div className="p-2">
-            <SearchPanel />
-          </div>
         ) : (
           <TagsView />
         )}
@@ -152,38 +145,23 @@ function ResizeHandle({ onStart }: { onStart: () => void }) {
 
 function TagsView() {
   const { activeKb } = useKBStore();
+  const setSelectedTag = useLayoutStore((s) => s.setSelectedTag);
+  const setMainView = useLayoutStore((s) => s.setMainView);
+  const selectedTag = useLayoutStore((s) => s.selectedTag);
   const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
   const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     if (!activeKb) return;
     setLoading(true);
     (async () => {
       try {
-        const tree = await window.forge.fs.listTree(activeKb.id);
-        // 递归收集所有笔记路径
-        const paths: string[] = [];
-        const walk = (n: any) => {
-          if (!n) return;
-          if (n.kind === 'note' && n.path) paths.push(n.path);
-          if (Array.isArray(n.children)) n.children.forEach(walk);
-        };
-        walk(tree);
-        const counter: Record<string, number> = {};
-        for (const p of paths) {
-          try {
-            const note = await window.forge.fs.readNote(activeKb.id, p);
-            const matches = note.content.match(/(?:^|\s)#([\p{L}\p{N}_\-]+)/gu) || [];
-            for (const m of matches) {
-              const t = m.trim().replace(/^#/, '');
-              if (t) counter[t] = (counter[t] || 0) + 1;
-            }
-          } catch {}
-        }
-        const list = Object.entries(counter)
-          .map(([tag, count]) => ({ tag, count }))
-          .sort((a, b) => b.count - a.count);
+        const list = await window.forge.fs.listTags(activeKb.id);
         setTags(list);
+      } catch {
+        setTags([]);
       } finally {
         setLoading(false);
       }
@@ -196,23 +174,65 @@ function TagsView() {
   if (tags.length === 0) {
     return <div className="p-3 text-fg-muted text-sm">暂无标签（笔记中使用 #标签 自动收集）</div>;
   }
+
+  // 按标签首字符分组（通讯录式索引）
+  const groups = new Map<string, { tag: string; count: number }[]>();
+  for (const t of tags) {
+    const key = (t.tag.trim().charAt(0) || '#').toUpperCase();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(t);
+  }
+  const keys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+
+  const scrollTo = (key: string) => {
+    sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
-    <div className="py-1">
-      {tags.map((t) => (
-        <div
-          key={t.tag}
-          onClick={() => {
-            // 触发搜索视图并预填标签
-            useLayoutStore.getState().setTreeView('search');
-            window.dispatchEvent(new CustomEvent('forgenote:search', { detail: `#${t.tag}` }));
-          }}
-          className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-hover-bg text-sm"
-        >
-          <Icon name="tag" className="w-4 h-4 text-fg-muted" />
-          <span className="flex-1 truncate">#{t.tag}</span>
-          <span className="text-fg-faint text-xs">{t.count}</span>
-        </div>
-      ))}
+    <div className="relative h-full">
+      <div ref={scrollRef} className="h-full overflow-y-auto pb-2">
+        {keys.map((key) => (
+          <div
+            key={key}
+            ref={(el) => {
+              sectionRefs.current[key] = el;
+            }}
+          >
+            <div className="sticky top-0 z-10 bg-panel/95 backdrop-blur px-3 py-1 text-xs font-semibold text-fg-faint border-b border-border-soft">
+              {key}
+            </div>
+            {groups.get(key)!.map((t) => (
+              <div
+                key={t.tag}
+                onClick={() => {
+                  setSelectedTag(t.tag);
+                  setMainView('tag-notes');
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-hover-bg text-sm ${
+                  selectedTag === t.tag ? 'bg-active-bg' : ''
+                }`}
+              >
+                <Icon name="tag" className="w-4 h-4 text-fg-muted" />
+                <span className="flex-1 truncate">#{t.tag}</span>
+                <span className="text-fg-faint text-xs">{t.count}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* 右侧索引条 */}
+      <div className="absolute top-1 right-1 flex flex-col items-center gap-0.5 max-h-full overflow-hidden text-[10px] text-fg-faint select-none">
+        {keys.map((key) => (
+          <button
+            key={key}
+            onClick={() => scrollTo(key)}
+            className="w-4 h-4 leading-none hover:text-brand hover:bg-hover-bg rounded"
+            title={key}
+          >
+            {key}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

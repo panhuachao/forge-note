@@ -54,3 +54,21 @@ export interface NoteTemplateInfo {
   hasCustom: boolean; // 用户是否自定义过
   variables: string[]; // 支持的变量列表
 }
+
+// 标签信息：标签名与命中笔记数
+export interface TagInfo {
+  tag: string;
+  count: number;
+}
+
+// 标签下的笔记（含一级目录分组信息）
+export interface TagNote {
+  path: string;
+  name: string;
+  dirPath: string;
+  // 一级目录（相对根目录的第一层）
+  topDir: string;
+  topDirName: string;
+  mtime: number;
+  size: number;
+}

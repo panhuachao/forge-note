@@ -2,8 +2,8 @@
 import { create } from 'zustand';
 import type { TreeNode } from '@shared/types';
 
-export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results';
-export type TreeView = 'tree' | 'search' | 'tags';
+export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results' | 'tag-notes';
+export type TreeView = 'tree' | 'tags';
 export type SortMode = 'name' | 'mtime' | 'created';
 
 export interface OpenTab {
@@ -31,10 +31,13 @@ interface LayoutState {
   // 各面板是否折叠
   leftPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  // 当前选中的标签（用于标签笔记检索视图）
+  selectedTag: string | null;
   // actions
   setMainView: (v: MainView) => void;
   setTreeView: (v: TreeView) => void;
   setSortMode: (s: SortMode) => void;
+  setSelectedTag: (tag: string | null) => void;
   toggleLeftRail: () => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
@@ -100,7 +103,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     sortMode: persisted.sortMode,
     leftPanelCollapsed: persisted.leftPanelCollapsed,
     rightPanelCollapsed: persisted.rightPanelCollapsed,
+    selectedTag: null,
     setMainView: (v) => set({ mainView: v }),
+    setSelectedTag: (tag) => set({ selectedTag: tag }),
     setTreeView: (v) => set({ treeView: v }),
     setSortMode: (s) => {
       set({ sortMode: s });

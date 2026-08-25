@@ -57,6 +57,8 @@ export function NotePane(props: Props) {
   const [tab, setTab] = useState<'edit' | 'preview' | 'split'>('split');
   // 实时内容：编辑器每次变更都会更新，用于分屏实时预览（不依赖写盘）
   const [liveContent, setLiveContent] = useState('');
+  // 编辑器仅在切换笔记时重建：记录已加载完成的路径，作为初始化 effect 的唯一依赖
+  const [loadedPath, setLoadedPath] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -82,6 +84,7 @@ export function NotePane(props: Props) {
         };
         setNote(info);
         setLiveContent(c.content);
+        setLoadedPath(props.notePath);
         props.onContentChange?.(info);
       } catch (e) {
         if (cancelled) return;
@@ -93,9 +96,9 @@ export function NotePane(props: Props) {
     };
   }, [activeKb?.id, props.notePath]);
 
-  // 初始化 CodeMirror（仅在笔记切换时重建，预览/编辑/分屏切换不再销毁）
+  // 初始化 CodeMirror（仅在切换笔记 loadedPath 变化时重建，自动保存不再触发重建）
   useEffect(() => {
-    if (!containerRef.current || !note) return;
+    if (!containerRef.current || !note || loadedPath !== props.notePath) return;
     if (viewRef.current) {
       viewRef.current.destroy();
       viewRef.current = null;
@@ -144,8 +147,7 @@ export function NotePane(props: Props) {
       view.destroy();
       viewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note?.content, props.notePath]);
+  }, [loadedPath]);
 
   // 实时预览 HTML（基于 liveContent，分屏编辑即时同步）
   const [previewHtml, setPreviewHtml] = useState('');

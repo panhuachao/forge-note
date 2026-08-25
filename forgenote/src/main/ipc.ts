@@ -92,6 +92,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.FS_RENAME_DIR, async (_e, kbId: string, dirPath: string, name: string) => fsService.renameDir(kbId, dirPath, name));
   ipcMain.handle(IPC.FS_READ_TEXT, async (_e, kbId: string, p: string) => fsService.readText(kbId, p));
   ipcMain.handle(IPC.FS_WRITE_TEXT, async (_e, kbId: string, p: string, c: string) => fsService.writeText(kbId, p, c));
+  ipcMain.handle(IPC.FS_LIST_TAGS, async (_e, kbId: string) => fsService.listTags(kbId));
+  ipcMain.handle(IPC.FS_NOTES_BY_TAG, async (_e, kbId: string, tag: string) => fsService.notesByTag(kbId, tag));
 
   // Links
   ipcMain.handle(IPC.LINKS_GET_BACKLINKS, async (_e, kbId: string, p: string) => linkIndex.getBacklinks(kbId, p));

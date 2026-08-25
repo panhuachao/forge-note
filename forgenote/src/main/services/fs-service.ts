@@ -2,9 +2,9 @@
 import { promises as fs } from 'fs';
 import { join, dirname, basename } from 'path';
 import { nanoid } from 'nanoid';
-import type { NoteInfo, NoteContent } from '@shared/types';
+import type { NoteInfo, NoteContent, TagInfo, TagNote } from '@shared/types';
 import { atomicWrite, safeJoin } from '../utils/fs';
-import { extractWikiLinks, parseFrontMatter } from '../utils/markdown';
+import { extractWikiLinks, parseFrontMatter, extractTags } from '../utils/markdown';
 import { getKB } from './store';
 import { linkIndex } from './link-index';
 import { kbService } from './kb-service';
@@ -236,6 +236,79 @@ class FSService {
   async listTree(kbId: string) {
     const root = this.rootOf(kbId);
     return await kbService.buildTree(root, kbId);
+  }
+
+  /**
+   * 列出知识库内全部标签及其命中笔记数（按数量降序）
+   */
+  async listTags(kbId: string): Promise<TagInfo[]> {
+    const root = this.rootOf(kbId);
+    const counter = new Map<string, number>();
+    const walk = async (dir: string) => {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.name.startsWith('.')) continue;
+        const full = join(dir, e.name);
+        if (e.isDirectory()) {
+          await walk(full);
+        } else if (e.isFile() && e.name.toLowerCase().endsWith('.md')) {
+          try {
+            const raw = await fs.readFile(full, 'utf-8');
+            for (const t of extractTags(raw)) {
+              counter.set(t, (counter.get(t) || 0) + 1);
+            }
+          } catch {
+            // 读取失败跳过
+          }
+        }
+      }
+    };
+    await walk(root);
+    return [...counter.entries()]
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  }
+
+  /**
+   * 返回带有指定标签的全部笔记（含一级目录分组信息）
+   */
+  async notesByTag(kbId: string, tag: string): Promise<TagNote[]> {
+    const root = this.rootOf(kbId);
+    const rootName = basename(root);
+    const result: TagNote[] = [];
+    const target = tag.trim();
+    const walk = async (dir: string) => {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.name.startsWith('.')) continue;
+        const full = join(dir, e.name);
+        if (e.isDirectory()) {
+          await walk(full);
+        } else if (e.isFile() && e.name.toLowerCase().endsWith('.md')) {
+          try {
+            const raw = await fs.readFile(full, 'utf-8');
+            if (!extractTags(raw).includes(target)) continue;
+            const rel = root ? full.slice(root.length + 1) : e.name;
+            const parts = rel.split('/');
+            const topDir = parts.length > 1 ? parts[0] : '';
+            const stat = await fs.stat(full);
+            result.push({
+              path: rel,
+              name: e.name,
+              dirPath: dirname(rel),
+              topDir,
+              topDirName: topDir ? topDir : rootName,
+              mtime: stat.mtimeMs,
+              size: stat.size
+            });
+          } catch {
+            // 读取失败跳过
+          }
+        }
+      }
+    };
+    await walk(root);
+    return result.sort((a, b) => b.mtime - a.mtime);
   }
 }
 

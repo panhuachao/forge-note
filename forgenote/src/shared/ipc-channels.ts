@@ -21,6 +21,8 @@ export const IPC = {
   FS_RENAME_DIR: 'fs:renameDir',
   FS_READ_TEXT: 'fs:readText',
   FS_WRITE_TEXT: 'fs:writeText',
+  FS_LIST_TAGS: 'fs:listTags',
+  FS_NOTES_BY_TAG: 'fs:notesByTag',
 
   // Links
   LINKS_GET_BACKLINKS: 'links:getBacklinks',
