@@ -190,43 +190,57 @@ function TagsView() {
 
   return (
     <div className="relative h-full">
-      <div ref={scrollRef} className="h-full overflow-y-auto pb-2">
+      <div ref={scrollRef} className="h-full overflow-y-auto pb-2 px-2">
         {keys.map((key) => (
           <div
             key={key}
             ref={(el) => {
               sectionRefs.current[key] = el;
             }}
+            className="pt-1"
           >
-            <div className="sticky top-0 z-10 bg-panel/95 backdrop-blur px-3 py-1 text-xs font-semibold text-fg-faint border-b border-border-soft">
+            <div className="sticky top-0 z-10 bg-panel/95 backdrop-blur px-2 py-1.5 text-[11px] font-semibold text-fg-muted tracking-wide">
               {key}
             </div>
-            {groups.get(key)!.map((t) => (
-              <div
-                key={t.tag}
-                onClick={() => {
-                  setSelectedTag(t.tag);
-                  setMainView('tag-notes');
-                }}
-                className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-hover-bg text-sm ${
-                  selectedTag === t.tag ? 'bg-active-bg' : ''
-                }`}
-              >
-                <Icon name="tag" className="w-4 h-4 text-fg-muted" />
-                <span className="flex-1 truncate">#{t.tag}</span>
-                <span className="text-fg-faint text-xs">{t.count}</span>
-              </div>
-            ))}
+            {groups.get(key)!.map((t) => {
+              const active = selectedTag === t.tag;
+              return (
+                <div
+                  key={t.tag}
+                  onClick={() => {
+                    setSelectedTag(t.tag);
+                    setMainView('tag-notes');
+                  }}
+                  className={`relative flex items-center gap-2 rounded-xl px-3 py-2 mb-1 cursor-pointer transition-colors text-sm ${
+                    active
+                      ? 'bg-brand-soft/40 text-brand'
+                      : 'text-fg-secondary hover:bg-hover-bg'
+                  }`}
+                >
+                  {active && (
+                    <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-brand" />
+                  )}
+                  <Icon
+                    name="tag"
+                    className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-brand' : 'text-fg-muted'}`}
+                  />
+                  <span className="flex-1 truncate">#{t.tag}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-hover-bg text-fg-faint">
+                    {t.count}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
       {/* 右侧索引条 */}
-      <div className="absolute top-1 right-1 flex flex-col items-center gap-0.5 max-h-full overflow-hidden text-[10px] text-fg-faint select-none">
+      <div className="absolute top-2 right-1.5 flex flex-col items-center gap-0.5 max-h-full overflow-hidden text-[10px] text-fg-faint select-none">
         {keys.map((key) => (
           <button
             key={key}
             onClick={() => scrollTo(key)}
-            className="w-4 h-4 leading-none hover:text-brand hover:bg-hover-bg rounded"
+            className="w-5 h-5 leading-none hover:text-brand hover:bg-hover-bg rounded-md transition-colors"
             title={key}
           >
             {key}

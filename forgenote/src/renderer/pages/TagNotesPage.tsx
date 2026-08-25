@@ -62,44 +62,52 @@ export function TagNotesPage() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* 顶部标题栏：高度与左侧 ViewTabs 保持一致 */}
-      <div
-        className="h-14 shrink-0 flex items-center gap-2 px-4 border-b border-border-soft bg-toolbar"
-      >
+      {/* 顶部标题栏：高度与全局标题栏一致 */}
+      <div className="h-12 shrink-0 flex items-center gap-2 px-3 border-b border-border-soft bg-toolbar">
         <button
           onClick={() => setMainView('note')}
-          className="btn btn-ghost text-xs"
+          className="icon-btn"
           title="返回笔记"
         >
           <Icon name="chevron-left" className="w-4 h-4" />
         </button>
         <Icon name="tag" className="w-4 h-4 text-brand" />
-        <span className="font-medium text-fg">#{selectedTag}</span>
+        <span className="font-medium text-fg text-sm">#{selectedTag}</span>
         <span className="text-fg-faint text-xs">· 共 {notes.length} 篇</span>
         <div className="flex-1" />
         <button
           onClick={() => setSelectedTag(null)}
-          className="text-fg-faint hover:text-fg-muted text-xs"
-          title="清除"
+          className="icon-btn"
+          title="清除筛选"
         >
           <Icon name="x" className="w-4 h-4" />
         </button>
       </div>
 
       {/* 内容区 */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto px-4 py-4 bg-canvas">
         {loading ? (
-          <div className="text-fg-muted text-sm p-4">加载中…</div>
+          <div className="h-full flex items-center justify-center text-fg-muted text-sm">
+            加载中…
+          </div>
         ) : notes.length === 0 ? (
-          <div className="text-fg-muted text-sm p-4">该标签下暂无笔记</div>
+          <div className="h-full flex flex-col items-center justify-center text-center px-6">
+            <div className="w-12 h-12 rounded-2xl bg-hover-bg flex items-center justify-center mb-3">
+              <Icon name="tag" className="w-6 h-6 text-fg-muted" />
+            </div>
+            <p className="text-sm text-fg-secondary mb-1">该标签下暂无笔记</p>
+            <p className="text-xs text-fg-faint">尝试在笔记中使用 #{selectedTag} 添加标签</p>
+          </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-6 max-w-6xl mx-auto">
             {groups.map(([dirName, items]) => (
               <section key={dirName}>
-                <div className="flex items-center gap-2 mb-2 text-fg-secondary">
+                <div className="flex items-center gap-2 mb-3 text-fg-secondary">
                   <Icon name="folder-open" className="w-4 h-4 text-fg-muted" />
-                  <span className="text-sm font-medium">{dirName}</span>
-                  <span className="text-fg-faint text-xs">{items.length}</span>
+                  <span className="text-sm font-semibold">{dirName}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-hover-bg text-fg-faint">
+                    {items.length}
+                  </span>
                 </div>
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {items.map((n) => (
@@ -109,9 +117,9 @@ export function TagNotesPage() {
                         openTab(n.path);
                         setMainView('note');
                       }}
-                      className="text-left rounded-xl border border-border-soft bg-content hover:border-brand/50 hover:bg-hover-bg/60 transition-colors p-3 flex flex-col gap-1 min-h-[88px]"
+                      className="text-left rounded-xl border border-border-soft bg-content shadow-[0_1px_2px_rgba(17,24,39,0.04)] hover:shadow-[0_4px_12px_rgba(17,24,39,0.06)] hover:border-brand/50 hover:bg-brand-soft/30 active:bg-brand-soft/50 transition-all p-3.5 flex flex-col gap-1.5 min-h-[92px]"
                     >
-                      <span className="font-medium text-fg text-sm truncate">
+                      <span className="font-medium text-fg text-sm leading-snug line-clamp-2">
                         {n.name.replace(/\.md$/i, '')}
                       </span>
                       <span className="text-xs text-fg-faint truncate">{n.dirPath || '根目录'}</span>
@@ -133,7 +141,7 @@ export function TagNotesPage() {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="btn btn-ghost text-xs"
+            className="btn btn-ghost text-xs px-2.5"
           >
             上一页
           </button>
@@ -141,8 +149,8 @@ export function TagNotesPage() {
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`w-7 h-7 rounded-md text-xs ${
-                p === page ? 'bg-brand text-brand-fg' : 'text-fg-muted hover:bg-hover-bg'
+              className={`w-7 h-7 rounded-xl text-xs transition-colors ${
+                p === page ? 'bg-brand-soft text-brand font-medium' : 'text-fg-muted hover:bg-hover-bg'
               }`}
             >
               {p}
@@ -151,7 +159,7 @@ export function TagNotesPage() {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="btn btn-ghost text-xs"
+            className="btn btn-ghost text-xs px-2.5"
           >
             下一页
           </button>
