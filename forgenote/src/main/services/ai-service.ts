@@ -2,7 +2,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getKB, getConfig, setConfig, saveAIPreset, getAIPresets } from './store';
-import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft } from '@shared/types';
+import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult } from '@shared/types';
 import { extractWikiLinks, previewLine } from '../utils/markdown';
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
@@ -363,6 +363,82 @@ class AIService {
       });
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * 快速笔记：一次性产出 标题 / 摘要 / 归属目录 / 标签 / 双向链接
+   * 供主菜单「快速笔记」使用——用户输入一段内容，AI 自动整理入库。
+   */
+  async quickNote(kbId: string, content: string, opts?: { dirId?: string }): Promise<QuickNoteResult> {
+    const kb = getKB(kbId);
+    if (!kb) throw new Error('知识库不存在');
+    const text = content.trim();
+    if (!text) throw new Error('内容为空');
+
+    // 1) 目录说明（用于归属判断 + 链接推荐）
+    const metaPath = join(kb.rootPath, '.kb_template.json');
+    let meta: { dirs: { id: string; name: string; readme?: string }[] } | null = null;
+    try {
+      meta = JSON.parse(await fs.readFile(metaPath, 'utf-8'));
+    } catch {}
+    const dirInfo =
+      meta?.dirs.map((d) => {
+        const realDir = `${d.id} ${d.name}`;
+        return { id: d.id, name: d.name, realDir, readme: d.readme || '' };
+      }) ?? [];
+
+    const aiConfig = await this.getAIConfigContent(kbId);
+
+    // 2) 候选链接（基于内容检索）
+    const candidates = await searchService.query(kbId, text.slice(0, 200), { limit: 15 });
+
+    // 3) 若调用方已指定归属目录，则跳过目录推断
+    const dirSection =
+      opts?.dirId && dirInfo.find((d) => d.id === opts.dirId)
+        ? `用户已指定归属目录：${dirInfo.find((d) => d.id === opts.dirId)!.realDir}，无需重新推断，dirId 必须填 "${opts.dirId}"。`
+        : `# 知识库目录（用于推断归属）\n${dirInfo
+            .map((d) => `## ${d.realDir}\n${(d.readme || '').slice(0, 400)}`)
+            .join('\n\n')}`;
+
+    const sys = `${BASE_SYSTEM}\n\n你是一个知识整理助手。用户提交了一段原始内容，请一次性整理为结构化笔记草稿。\n\n# 基本原则\n1. 忠实于原文，不编造事实。\n2. 归属目录必须从给定目录中选最合适的一个。\n3. 标签 2-5 个，精炼、可复用。\n4. 双向链接从候选笔记中挑选最相关的 2-4 个，用笔记名（不含 .md）。\n\n# AI_CONFIG\n${aiConfig}\n\n${dirSection}\n\n# 候选相关笔记（用于双向链接）\n${candidates
+      .slice(0, 10)
+      .map((c) => `- ${c.noteName}（${c.notePath}）`)
+      .join('\n')}\n\n# 输出格式（严格 JSON，不要多余文字）\n{\n  "title": "一句话标题",\n  "summary": "200 字内摘要，概括要点",\n  "dirId": "${dirInfo.map((d) => d.id).join('|') || '00'}",\n  "dirName": "归属目录真实名（如 01 项目）",\n  "tags": ["标签1", "标签2"],\n  "links": ["相关笔记名1", "相关笔记名2"]\n}`;
+
+    const user = `# 用户原始内容\n${text.slice(0, 6000)}`;
+    const raw = await this.chat(user, sys);
+    return this.parseQuickNote(raw, dirInfo, opts?.dirId);
+  }
+
+  private parseQuickNote(
+    raw: string,
+    dirInfo: { id: string; name: string; realDir: string }[],
+    forcedDirId?: string
+  ): QuickNoteResult {
+    const m = /```json\s*([\s\S]+?)\s*```/.exec(raw) || /(\{[\s\S]+\})/s.exec(raw);
+    const fallback: QuickNoteResult = {
+      title: '快速笔记',
+      summary: '',
+      dirId: forcedDirId || dirInfo[0]?.id || '00',
+      dirName: dirInfo[0]?.realDir || '00 未分类',
+      tags: [],
+      links: []
+    };
+    if (!m) return fallback;
+    try {
+      const obj = JSON.parse(m[1]);
+      const dir = dirInfo.find((d) => d.id === (obj.dirId || forcedDirId)) || dirInfo[0];
+      return {
+        title: String(obj.title || '快速笔记').slice(0, 80),
+        summary: String(obj.summary || '').slice(0, 600),
+        dirId: dir?.id || fallback.dirId,
+        dirName: dir?.realDir || obj.dirName || fallback.dirName,
+        tags: Array.isArray(obj.tags) ? obj.tags.map(String).slice(0, 8) : [],
+        links: Array.isArray(obj.links) ? obj.links.map(String).slice(0, 6) : []
+      };
+    } catch {
+      return fallback;
     }
   }
 

@@ -74,3 +74,13 @@ export interface AIConfigPreset {
   content: string;
   active: boolean;
 }
+
+/** 快速笔记：大模型一次性产出的结构化结果 */
+export interface QuickNoteResult {
+  title: string; // 笔记标题
+  summary: string; // 摘要（200 字内）
+  dirId: string; // 推荐归属目录 id
+  dirName: string; // 推荐归属目录真实名（NN 名称）
+  tags: string[]; // 自动标签
+  links: string[]; // 推荐双向链接（笔记名，不含 .md）
+}

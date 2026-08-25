@@ -16,13 +16,15 @@ import SearchResultsPage from './pages/SearchResultsPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { CreateNoteModal } from './components/CreateNoteModal';
+import { QuickNoteModal } from './components/QuickNoteModal';
 import { TopBar } from './components/TopBar';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
 
 export function App() {
   const {
     setKBs, setActiveKb, setTree, setApplied, setAIConfig,
-    openCreateNote, createNoteOpen, createNoteDir, closeCreateNote
+    openCreateNote, createNoteOpen, createNoteDir, closeCreateNote,
+    quickNoteOpen, closeQuickNote
   } = useKBStore();
   const { mainView, leftPanelCollapsed, rightPanelCollapsed } = useLayoutStore();
 
@@ -100,6 +102,7 @@ export function App() {
       <ToastContainer />
       <Onboarding />
       <CreateNoteModal open={createNoteOpen} initialDirPath={createNoteDir} onClose={closeCreateNote} />
+      <QuickNoteModal open={quickNoteOpen} onClose={closeQuickNote} />
     </div>
   );
 }

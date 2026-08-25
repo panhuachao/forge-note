@@ -11,6 +11,7 @@ import type {
   AIModelConfig,
   DirSuggestion,
   CardDraft,
+  QuickNoteResult,
   AppliedTemplate,
   TemplateMeta,
   AIConfigPreset,
@@ -56,6 +57,8 @@ const api = {
     suggestDir: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_SUGGEST_DIR, kbId, p) as Promise<DirSuggestion[]>,
     suggestLinks: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_SUGGEST_LINKS, kbId, p) as Promise<LinkInfo[]>,
     forgeCard: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_FORGE_CARD, kbId, p) as Promise<CardDraft>,
+    quickNote: (kbId: string, content: string, opts?: { dirId?: string }) =>
+      ipcRenderer.invoke(IPC.AI_QUICK_NOTE, kbId, content, opts) as Promise<QuickNoteResult>,
     insertLinks: (kbId: string, p: string, targets: string[]) => ipcRenderer.invoke(IPC.AI_INSERT_LINKS, kbId, p, targets) as Promise<void>
   },
   template: {

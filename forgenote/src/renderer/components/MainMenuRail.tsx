@@ -26,13 +26,25 @@ const items: MenuItem[] = [
 
 export function MainMenuRail() {
   const { mainView, setMainView, toggleLeftRail } = useLayoutStore();
-  const { activeKb, theme, setTheme } = useKBStore();
+  const { activeKb, theme, setTheme, openQuickNote } = useKBStore();
 
   return (
     <nav
       className="w-12 border-r border-ink-200 bg-ink-50 flex flex-col items-center pt-9 gap-1"
       data-testid="main-menu-rail"
     >
+      {/* 快速笔记（最前面） */}
+      <button
+        onClick={openQuickNote}
+        title="快速笔记：粘贴内容，AI 自动整理归档"
+        className="group relative w-9 h-9 flex items-center justify-center rounded bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+      >
+        <Icon name="sparkles" className="w-5 h-5" />
+        <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-ink-800 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+          快速笔记
+        </span>
+      </button>
+
       {/* 主菜单图标（首页/笔记/图谱/模板/历史/设置） */}
       <div className="flex-1 flex flex-col items-center gap-1">
         {items.map((it) => {

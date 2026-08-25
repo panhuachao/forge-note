@@ -83,6 +83,9 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.AI_SUGGEST_DIR, async (_e, kbId: string, p: string) => aiService.suggestDir(kbId, p));
   ipcMain.handle(IPC.AI_SUGGEST_LINKS, async (_e, kbId: string, p: string) => aiService.suggestLinks(kbId, p));
   ipcMain.handle(IPC.AI_FORGE_CARD, async (_e, kbId: string, p: string) => aiService.forgeCard(kbId, p));
+  ipcMain.handle(IPC.AI_QUICK_NOTE, async (_e, kbId: string, content: string, opts?: { dirId?: string }) =>
+    aiService.quickNote(kbId, content, opts)
+  );
   ipcMain.handle(IPC.AI_INSERT_LINKS, async (_e, kbId: string, p: string, targets: string[]) => {
     await aiService.insertLinks(kbId, p, targets);
     auditService.record(kbId, 'insertLink', { notePath: p, targets });
