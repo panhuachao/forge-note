@@ -35,7 +35,7 @@ function sortNodes(nodes: TreeNode[] | undefined, mode: SortMode): TreeNode[] {
 
 export function FileTree({ node, depth = 0, onOpenNote }: Props) {
   const { activeKb, pushToast, setTree, openCreateNote } = useKBStore();
-  const { sortMode } = useLayoutStore();
+  const { sortMode, activeTabId } = useLayoutStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // 目录重命名 / 新建后内联编辑态：{ path, name }
   const [editing, setEditing] = useState<{ path: string; name: string } | null>(null);
@@ -122,20 +122,20 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
       >
         {/* 视图内顶部快捷操作栏：新建笔记 / 新建目录 / 排序 / 折叠 / 展开
             （属于知识库视图内的快捷操作，不占用 LeftPanel 顶部） */}
-        <div className="h-9 flex items-center border-b border-border-soft bg-toolbar text-xs">
+        <div className="h-10 flex items-center gap-0.5 px-1 border-b border-border-soft bg-toolbar text-xs">
           <button
             onClick={() => openCreateNote()}
-            className="h-full w-9 flex items-center justify-center border-r border-border-soft text-fg-secondary hover:bg-hover-bg"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
             title="新建笔记"
           ><Icon name="document-plus" className="w-4 h-4" /></button>
           <button
             onClick={() => handleCreateDir('')}
-            className="h-full w-9 flex items-center justify-center border-r border-border-soft text-fg-secondary hover:bg-hover-bg"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
             title="新建目录"
           ><Icon name="folder-plus" className="w-4 h-4" /></button>
           <div className="relative group">
             <button
-              className="h-full w-9 flex items-center justify-center border-r border-border-soft text-fg-secondary hover:bg-hover-bg"
+              className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
               title="排序方式"
             ><Icon name="arrows-up-down" className="w-4 h-4" /></button>
             <div className="absolute left-0 top-full mt-1 bg-content border border-border-soft rounded shadow-lg z-30 hidden group-hover:block min-w-[120px]">
@@ -161,12 +161,12 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
           </div>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('forgenote:collapseAll'))}
-            className="h-full w-9 flex items-center justify-center border-r border-border-soft text-fg-secondary hover:bg-hover-bg"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
             title="全部折叠"
           ><Icon name="chevron-up" className="w-4 h-4" /></button>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('forgenote:expandAll'))}
-            className="h-full w-9 flex items-center justify-center border-r border-border-soft text-fg-secondary hover:bg-hover-bg"
+            className="h-9 w-9 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-lg transition-colors"
             title="全部展开"
           ><Icon name="chevron-down" className="w-4 h-4" /></button>
         </div>
@@ -183,7 +183,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
     return (
       <div>
         <div
-          className="group flex items-center gap-1 py-0.5 pr-2 hover:bg-hover-bg text-sm cursor-pointer"
+          className="group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-lg hover:bg-hover-bg text-sm cursor-pointer transition-colors"
           style={indent}
           onClick={() => {
             const ns = new Set(expanded);
@@ -296,7 +296,11 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
   const fileName = node.name.replace(/\.md$/i, '');
   return (
     <div
-      className="group flex items-center gap-1 py-0.5 pr-2 hover:bg-hover-bg text-sm cursor-pointer"
+      className={`group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-lg text-sm cursor-pointer transition-colors ${
+        node.path === activeTabId
+          ? 'bg-brand-soft/50 shadow-[inset_2px_0_0_var(--brand)] text-brand font-medium'
+          : 'hover:bg-hover-bg'
+      }`}
       style={indent}
       onClick={() => onOpenNote(node.path)}
       title={node.path}

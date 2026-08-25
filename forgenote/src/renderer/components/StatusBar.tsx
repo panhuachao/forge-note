@@ -49,7 +49,7 @@ export function StatusBar() {
   }
 
   return (
-    <div className="h-7 flex items-center justify-between px-3 text-[11px] text-fg-muted border-t border-border bg-toolbar select-none">
+    <div className="h-7 flex items-center justify-between px-3.5 text-[11px] text-fg-muted border-t border-border-soft bg-toolbar select-none">
       {/* 左侧：知识库切换 + wordmark */}
       <div className="flex items-center gap-2.5">
         {activeKb && (

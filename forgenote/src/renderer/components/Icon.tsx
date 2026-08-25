@@ -115,7 +115,10 @@ const outlineMap: Record<string, any> = {
   bolt: HeroiconsOutline.BoltIcon,
   microphone: HeroiconsOutline.MicrophoneIcon,
   'arrow-up': HeroiconsOutline.ArrowUpIcon,
-  'check-circle': HeroiconsOutline.CheckCircleIcon
+  'check-circle': HeroiconsOutline.CheckCircleIcon,
+  focus: HeroiconsOutline.ArrowsPointingInIcon,
+  'view-columns': HeroiconsOutline.EyeIcon,
+  'document-text': HeroiconsOutline.DocumentTextIcon
 };
 
 const solidMap: Record<string, any> = {

@@ -145,10 +145,10 @@ export function RightPanel() {
   }, [info]);
 
   return (
-    <aside className="w-72 shrink-0 border-l border-border bg-panel flex flex-col overflow-hidden">
+    <aside className="w-72 shrink-0 border-l border-border-soft bg-panel flex flex-col overflow-hidden">
       {/* 顶部操作区：中间 基本信息/大纲 切换，右侧 更多 */}
       <div
-        className="h-14 flex items-center gap-2 px-3 border-b border-border-soft shrink-0 relative"
+        className="h-12 flex items-center gap-2 px-3 border-b border-border-soft shrink-0 relative"
         style={TITLEBAR_DRAG_STYLE}
         ref={moreRef}
         onDoubleClick={handleTitleBarDoubleClick}
@@ -159,7 +159,7 @@ export function RightPanel() {
             onClick={() => setPanelTab('info')}
             title="基本信息"
             aria-label="基本信息"
-            className={`h-8 w-8 inline-flex items-center justify-center rounded transition-colors ${panelTab === 'info' ? 'text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}
+            className={`h-8 w-8 inline-flex items-center justify-center rounded-lg transition-colors ${panelTab === 'info' ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:text-fg-secondary hover:bg-hover-bg'}`}
           >
             <Icon name="bars-3-center-left" className="w-4 h-4" />
           </button>
@@ -167,7 +167,7 @@ export function RightPanel() {
             onClick={() => setPanelTab('outline')}
             title="大纲"
             aria-label="大纲"
-            className={`h-8 w-8 inline-flex items-center justify-center rounded transition-colors ${panelTab === 'outline' ? 'text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}
+            className={`h-8 w-8 inline-flex items-center justify-center rounded-lg transition-colors ${panelTab === 'outline' ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:text-fg-secondary hover:bg-hover-bg'}`}
           >
             <Icon name="list-bullet" className="w-4 h-4" />
           </button>

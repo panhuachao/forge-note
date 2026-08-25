@@ -29,17 +29,17 @@ export function MainMenuRail() {
 
   return (
     <nav
-      className="w-14 border-r border-border bg-canvas flex flex-col items-center pb-2 gap-1.5"
+      className="w-14 border-r border-border-soft bg-canvas flex flex-col items-center pb-2 gap-1.5"
       data-testid="main-menu-rail"
     >
       {/* 顶部标题栏区域：与三栏操作栏同高同色（bg-toolbar），
-          macOS 红黄绿按钮（hiddenInset）浮在其上。
-          支持双击放大/还原、按住拖动（Electron -webkit-app-region: drag）。 */}
-      <div
-        className="h-14 w-full bg-toolbar shrink-0"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        onDoubleClick={() => window.forge?.win?.maximizeToggle().catch(() => {})}
-      />
+        macOS 红黄绿按钮（hiddenInset）浮在其上。
+        支持双击放大/还原、按住拖动（Electron -webkit-app-region: drag）。 */}
+    <div
+      className="h-12 w-full bg-toolbar shrink-0"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      onDoubleClick={() => window.forge?.win?.maximizeToggle().catch(() => {})}
+    />
       {/* 菜单按钮区顶部间距 */}
       <div className="mt-2" />
 
@@ -59,7 +59,7 @@ export function MainMenuRail() {
       <div className="w-7 my-1 border-t border-border-soft" />
 
       {/* 主菜单图标（首页/笔记/图谱/模板/历史/设置） */}
-      <div className="flex-1 flex flex-col items-center gap-1.5">
+      <div className="flex-1 flex flex-col items-center gap-2">
         {items.map((it) => {
           const disabled = !!it.requireKb && !activeKb;
           const active = mainView === it.id;
@@ -69,16 +69,16 @@ export function MainMenuRail() {
               onClick={() => !disabled && setMainView(it.id)}
               disabled={disabled}
               title={it.label}
-              className={`group relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
+              className={`group relative w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${
                 active
-                  ? 'bg-content text-brand shadow-sm'
+                  ? 'bg-brand-soft text-brand'
                   : disabled
                   ? 'text-fg-faint cursor-not-allowed'
                   : 'text-fg-muted hover:bg-hover-bg hover:text-fg'
               }`}
             >
-              <Icon name={it.icon} className="w-[22px] h-[22px]" />
-              <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              <Icon name={it.icon} className="w-[23px] h-[23px]" />
+              <span className="pointer-events-none absolute left-full ml-2 px-2.5 py-1 rounded-lg bg-canvas text-fg border border-border-soft text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-sm">
                 {it.label}
               </span>
             </button>

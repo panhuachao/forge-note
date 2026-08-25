@@ -18,17 +18,17 @@
  * 当前：仅亮白主题。后续 .dark 下覆盖变量即可，无需改组件。
  * ========================================================================= */
 :root {
-  /* 表面层次（亮白） */
-  --bg-canvas: #f1efed;          /* 主菜单 / 最外层 */
-  --bg-panel: #f7f5f3;           /* 左右侧栏 */
-  --bg-content: #ffffff;         /* 中间正文（突出） */
-  --bg-toolbar: #f1efed;         /* 顶部操作栏 */
+  /* 表面层次（亮白 + 柔和浅灰，营造画布→卡片→浮层三层材质） */
+  --bg-canvas: #f4f5f7;          /* 主菜单 / 最外层（冷调浅灰，更现代） */
+  --bg-panel: #f7f8fa;           /* 左右侧栏（比画布略亮，贴边不抢眼） */
+  --bg-content: #ffffff;         /* 中间正文（突出白底） */
+  --bg-toolbar: #fbfbfc;         /* 顶部操作栏（近白，轻量） */
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-active: rgba(0, 0, 0, 0.06);
 
   /* 边框 */
-  --border: #e3e1df;             /* 强分割线 */
-  --border-soft: #ecebe9;        /* 弱分割线 */
+  --border: #e6e8ec;             /* 强分割线 */
+  --border-soft: #eef0f3;        /* 弱分割线 */
   --border-strong: #c8c6c3;
 
   /* 文本 */
@@ -197,6 +197,42 @@
   --color-brand: var(--brand);
   --color-brand-light: var(--brand-soft);
   --color-accent: var(--brand-hover);
+
+  /* 圆角 token（统一现代卡片感） */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  /* 卡片阴影（浮起感，替代硬边框） */
+  --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.04), 0 6px 16px rgba(17, 24, 39, 0.06);
+  --shadow-panel: 0 1px 3px rgba(17, 24, 39, 0.05);
+}
+
+/* 全局细窄滚动条（hover 才明显，提升简约感） */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.12);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.28);
+}
+
+/* 分屏浏览：去掉中间硬线，用画布色分隔带区分原文/预览 */
+.pane-split-divider {
+  background: var(--bg-canvas);
+  width: 12px;
 }
 
 html, body, #root {

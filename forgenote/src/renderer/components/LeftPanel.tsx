@@ -61,7 +61,7 @@ export function LeftPanel() {
   function ViewTabs() {
     return (
       <div
-        className="fixed top-0 left-0 z-20 h-14 flex items-center border-b border-border bg-toolbar pr-2 gap-1 text-xs"
+        className="fixed top-0 left-0 z-20 h-12 flex items-center border-b border-border-soft bg-toolbar pr-2 gap-1 text-xs"
         style={{
           width: 56 + leftPanelWidth,
           paddingLeft: 72,
@@ -79,8 +79,8 @@ export function LeftPanel() {
               <button
                 key={t.id}
                 onClick={() => setTreeView(t.id)}
-                className={`h-7 w-8 flex items-center justify-center rounded-md transition-colors ${
-                  active ? 'bg-content text-fg shadow-sm' : 'text-fg-muted hover:bg-hover-bg'
+                className={`h-7 w-8 flex items-center justify-center rounded-lg transition-colors ${
+                  active ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:bg-hover-bg'
                 }`}
                 title={t.label}
               >
@@ -103,7 +103,7 @@ export function LeftPanel() {
 
   if (!activeKb) {
     return (
-      <aside style={{ width: leftPanelWidth }} className="border-r border-border bg-panel flex flex-col">
+      <aside style={{ width: leftPanelWidth }} className="border-r border-border-soft bg-panel flex flex-col">
         <div className="flex-1 flex items-center justify-center text-fg-muted text-sm p-4 text-center">
           请先在「首页」选择文件夹，开启我的知识库
         </div>
@@ -118,7 +118,7 @@ export function LeftPanel() {
   return (
     <aside
       style={{ width: leftPanelWidth }}
-      className="border-r border-border bg-panel flex flex-col relative pt-14"
+      className="border-r border-border-soft bg-panel flex flex-col relative pt-12"
     >
       <ViewTabs />
       <div className="flex-1 overflow-y-auto">
