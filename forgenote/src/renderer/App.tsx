@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { useKBStore } from './stores/kb-store';
 import { useLayoutStore } from './stores/layout-store';
 import { MainMenuRail } from './components/MainMenuRail';
-import { TitleBar } from './components/TitleBar';
 import { ToastContainer } from './components/Toast';
 import { LeftPanel } from './components/LeftPanel';
 import { RightPanel } from './components/RightPanel';
@@ -15,7 +14,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { CreateNoteModal } from './components/CreateNoteModal';
-import { TopToolbar } from './components/TopToolbar';
+import { TopBar } from './components/TopBar';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
 
 export function App() {
@@ -77,12 +76,15 @@ export function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-ink-50">
-      <TitleBar />
+      {/* 主体三栏：MainMenuRail / LeftPanel / Middle / RightPanel
+          TopBar 嵌在中列顶部，与主体共用同一水平行
+          → 左/中/右的分割线可贯穿到顶（窗口控件行）
+          → 左/右 TopBar 段背景浅灰、中段白底 */}
       <div className="flex-1 flex overflow-hidden">
         <MainMenuRail />
         {isNoteView && (showLeft ? <LeftPanel /> : <CollapsedLeftHandle />)}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {isNoteView && <TopToolbar />}
+        <div className="flex-1 flex flex-col overflow-hidden bg-white">
+          {isNoteView && <TopBar />}
           <div className="flex-1 flex overflow-hidden">{renderMain()}</div>
         </div>
         {isNoteView && (showRight ? <RightPanel /> : <CollapsedRightHandle />)}

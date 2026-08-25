@@ -1,20 +1,20 @@
 // 左侧面板：目录/搜索/标签视图
-// 顶部（高 32px）：快捷操作栏（视图切换/新建笔记/新建目录/排序/全部折叠/全部展开/收起）
+// 顶部 1（高 32px）：视图切换（📁 知识库 / 🔍 搜索 / 🏷 标签）
+// 顶部 2（高 32px）：快捷操作栏（新建笔记/新建目录/排序/全部折叠/全部展开）
 // 中部：树/搜索/标签内容
 import { useState, useEffect } from 'react';
 import { useKBStore } from '../stores/kb-store';
-import { useLayoutStore, SortMode } from '../stores/layout-store';
+import { useLayoutStore, TreeView, SortMode } from '../stores/layout-store';
 import { FileTree } from './FileTree';
 import { SearchPanel } from './SearchPanel';
-import { Icon } from './Icon';
+import { Icon, IconName } from './Icon';
 
 export function LeftPanel() {
   const { tree, activeKb, kbs, setActiveKb, setTree, setApplied, pushToast, openCreateNote, setKBs } = useKBStore();
   const {
     treeView, setTreeView,
     openTab, leftPanelWidth, setLeftPanelWidth,
-    sortMode, setSortMode,
-    toggleLeftPanel
+    sortMode, setSortMode
   } = useLayoutStore();
   const [resizing, setResizing] = useState(false);
 
@@ -78,15 +78,12 @@ export function LeftPanel() {
     return (
       <aside style={{ width: leftPanelWidth }} className="border-r border-ink-200 bg-white flex flex-col">
         <LeftToolbar
-          treeView={treeView}
-          setTreeView={setTreeView}
           onAddNote={() => openCreateNote()}
           onAddDir={handleNewDir}
           onSort={emitSort}
           sortMode={sortMode}
           onCollapseAll={emitCollapseAll}
           onExpandAll={emitExpandAll}
-          onClose={toggleLeftPanel}
         />
         <div className="flex-1 flex items-center justify-center text-ink-400 text-sm p-4 text-center">
           请先在「首页」选择文件夹，开启我的知识库
@@ -104,16 +101,14 @@ export function LeftPanel() {
       style={{ width: leftPanelWidth }}
       className="border-r border-ink-200 bg-white flex flex-col relative"
     >
+      <LeftViewTabs treeView={treeView} setTreeView={setTreeView} />
       <LeftToolbar
-        treeView={treeView}
-        setTreeView={setTreeView}
         onAddNote={() => openCreateNote()}
         onAddDir={handleNewDir}
         onSort={emitSort}
         sortMode={sortMode}
         onCollapseAll={emitCollapseAll}
         onExpandAll={emitExpandAll}
-        onClose={toggleLeftPanel}
       />
 
       <div className="flex-1 overflow-y-auto py-1">
@@ -132,50 +127,56 @@ export function LeftPanel() {
   );
 }
 
-// 左侧快捷操作栏（顶部）
-function LeftToolbar({
-  treeView, setTreeView,
-  onAddNote, onAddDir, onSort, sortMode,
-  onCollapseAll, onExpandAll,
-  onClose
+// 左侧视图切换栏（位于主菜单栏右侧顶部，参考 Obsidian）
+// 📁 知识库 / 🔍 搜索 / 🏷 标签
+function LeftViewTabs({
+  treeView, setTreeView
 }: {
-  treeView: 'tree' | 'search' | 'tags';
-  setTreeView: (v: 'tree' | 'search' | 'tags') => void;
+  treeView: TreeView;
+  setTreeView: (v: TreeView) => void;
+}) {
+  const tabs: { id: TreeView; icon: IconName; label: string }[] = [
+    { id: 'tree', icon: 'folder', label: '知识库' },
+    { id: 'search', icon: 'search', label: '搜索' },
+    { id: 'tags', icon: 'tag', label: '标签' }
+  ];
+  return (
+    <div className="h-8 flex items-center border-b border-ink-200 bg-ink-50 text-xs">
+      {tabs.map((t) => {
+        const active = treeView === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => setTreeView(t.id)}
+            className={`h-full w-9 flex items-center justify-center border-r border-ink-200 ${
+              active ? 'bg-ink-200 text-brand-700' : 'text-ink-600 hover:bg-ink-200'
+            }`}
+            title={t.label}
+          >
+            <Icon name={t.icon} className="w-4 h-4" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// 左侧快捷操作栏（位于视图切换栏下方，参考 Obsidian）
+// 新建笔记 / 新建目录 / 排序 / 折叠 / 展开
+function LeftToolbar({
+  onAddNote, onAddDir, onSort, sortMode,
+  onCollapseAll, onExpandAll
+}: {
   onAddNote: () => void;
   onAddDir: () => void;
   onSort: (mode: SortMode) => void;
   sortMode: SortMode;
   onCollapseAll: () => void;
   onExpandAll: () => void;
-  onClose: () => void;
 }) {
   return (
     <div className="h-8 flex items-center border-b border-ink-200 bg-white text-xs">
-      {/* 视图切换：知识库 / 搜索 / 标签 */}
-      <div className="flex items-center h-full">
-        <button
-          onClick={() => setTreeView('tree')}
-          className={`h-full w-8 flex items-center justify-center border-r border-ink-200 ${
-            treeView === 'tree' ? 'bg-ink-100 text-brand-700' : 'text-ink-600 hover:bg-ink-100'
-          }`}
-          title="知识库目录"
-        ><Icon name="folder" className="w-4 h-4" /></button>
-        <button
-          onClick={() => setTreeView('search')}
-          className={`h-full w-8 flex items-center justify-center border-r border-ink-200 ${
-            treeView === 'search' ? 'bg-ink-100 text-brand-700' : 'text-ink-600 hover:bg-ink-100'
-          }`}
-          title="搜索"
-        ><Icon name="search" className="w-4 h-4" /></button>
-        <button
-          onClick={() => setTreeView('tags')}
-          className={`h-full w-8 flex items-center justify-center border-r border-ink-200 ${
-            treeView === 'tags' ? 'bg-ink-100 text-brand-700' : 'text-ink-600 hover:bg-ink-100'
-          }`}
-          title="标签"
-        ><Icon name="tag" className="w-4 h-4" /></button>
-      </div>
-      {/* 快捷操作 */}
+      {/* 快捷操作：新建笔记 / 新建目录 / 排序 / 折叠 / 展开 */}
       <button
         onClick={onAddNote}
         className="h-full w-8 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
@@ -219,12 +220,6 @@ function LeftToolbar({
         className="h-full w-8 flex items-center justify-center border-r border-ink-200 text-ink-600 hover:bg-ink-100"
         title="全部展开"
       ><Icon name="chevron-down" className="w-4 h-4" /></button>
-      <div className="flex-1" />
-      <button
-        onClick={onClose}
-        className="h-full w-8 flex items-center justify-center text-ink-500 hover:bg-ink-100 text-sm"
-        title="收起侧栏"
-      ><Icon name="chevron-right" className="w-4 h-4" /></button>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 // 右侧属性/大纲面板
-// 顶部行 1：文章的额外信息项（4 个 AI 操作图标）
-// 顶部行 2：搜索 / 大纲 双标签 + 更多 + 关闭
+// 顶部：AI 操作（📝🔗📂⚒）+ 大纲 / 搜索 双标签
 import { useState, useEffect, useCallback } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
@@ -13,7 +12,7 @@ import { Icon, IconName } from './Icon';
 type RightTab = 'outline' | 'search';
 
 export function RightPanel() {
-  const { rightPanelWidth, setRightPanelWidth, toggleRightPanel, tabs, activeTabId } = useLayoutStore();
+  const { rightPanelWidth, setRightPanelWidth, tabs, activeTabId } = useLayoutStore();
   const { activeKb } = useKBStore();
   const [resizing, setResizing] = useState(false);
   const [tab, setTab] = useState<RightTab>('outline');
@@ -71,8 +70,9 @@ export function RightPanel() {
       style={{ width: rightPanelWidth }}
       className="border-l border-ink-200 bg-white flex flex-col relative"
     >
-      {/* 行 1：文章的额外信息项（4 个 AI 操作图标） */}
-      <div className="h-8 flex items-center border-b border-ink-200 bg-white text-xs">
+      {/* 顶部：AI 操作 + 大纲 / 搜索 双标签 */}
+      <div className="flex items-center h-8 bg-ink-50 border-b border-ink-200 text-xs">
+        {/* AI 操作（左侧） */}
         {aiActions.map((a) => (
           <button
             key={a.id}
@@ -86,15 +86,7 @@ export function RightPanel() {
             <Icon name={a.icon} className="w-4 h-4" />
           </button>
         ))}
-        <div className="flex-1" />
-        <button
-          className="h-full w-8 flex items-center justify-center text-ink-400 hover:bg-ink-100 text-base"
-          title="更多"
-        ><Icon name="ellipsis" className="w-4 h-4" /></button>
-      </div>
-
-      {/* 行 2：搜索 / 大纲 双标签 + 关闭 */}
-      <div className="flex items-center h-8 bg-ink-50 border-b border-ink-200 text-xs">
+        {/* 大纲 / 搜索 双标签 */}
         <button
           onClick={() => setTab('outline')}
           className={`h-full px-3 flex items-center gap-1 border-r border-ink-200 ${
@@ -112,14 +104,6 @@ export function RightPanel() {
           title="搜索"
         >
           <Icon name="search" className="w-4 h-4" /> 搜索
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={toggleRightPanel}
-          className="h-full w-8 flex items-center justify-center text-ink-500 hover:bg-ink-100"
-          title="收起"
-        >
-          <Icon name="chevron-right" className="w-4 h-4" />
         </button>
       </div>
 
