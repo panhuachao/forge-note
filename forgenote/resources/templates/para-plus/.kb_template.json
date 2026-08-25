@@ -1,0 +1,17 @@
+{
+  "templateId": "para-plus",
+  "name": "姜胡说 PARA+",
+  "version": "1.0.0",
+  "author": "ForgeNote Official",
+  "description": "基于 Tiago Forte PARA 方法，结合姜胡说内容创作者知识生产管线扩展的 7 目录体系。",
+  "dirs": [
+    { "id": "00", "name": "灵感库", "icon": "💡", "color": "#facc15", "flow": ["01", "02", "06"] },
+    { "id": "01", "name": "项目", "icon": "🎯", "color": "#3b82f6", "flow": ["04", "02"] },
+    { "id": "02", "name": "资产", "icon": "💎", "color": "#10b981", "flow": [] },
+    { "id": "03", "name": "外部资源", "icon": "📚", "color": "#8b5cf6", "flow": ["02", "06", "04"] },
+    { "id": "04", "name": "归档", "icon": "🗄", "color": "#6b7280", "flow": [], "sink": true },
+    { "id": "05", "name": "技能", "icon": "🛠", "color": "#f97316", "flow": ["02", "06"] },
+    { "id": "06", "name": "Wiki", "icon": "📖", "color": "#ec4899", "flow": [] }
+  ],
+  "aiConfig": "AI_CONFIG.md"
+}

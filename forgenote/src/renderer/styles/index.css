@@ -1,0 +1,205 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #fafaf9;
+  --color-bg-elevated: #ffffff;
+  --color-border: #e7e5e4;
+  --color-text: #1c1917;
+  --color-text-muted: #78716c;
+  --color-brand: #e53935;
+  --color-brand-light: #fef2f2;
+  --color-accent: #b91c1c;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.dark {
+  --color-bg: #1c1917;
+  --color-bg-elevated: #292524;
+  --color-border: #44403c;
+  --color-text: #fafaf9;
+  --color-text-muted: #a8a29e;
+  --color-brand: #f87171;
+  --color-brand-light: #450a0a;
+  --color-accent: #fca5a5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
+}
+
+/* CodeMirror 主题调整 */
+.cm-editor {
+  height: 100%;
+  font-size: 15px;
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  background: transparent;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+.cm-scroller {
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+.cm-line {
+  padding: 0 4px;
+}
+.cm-content {
+  caret-color: var(--color-brand);
+}
+.cm-cursor {
+  border-left-color: var(--color-brand) !important;
+}
+.cm-activeLineGutter, .cm-activeLine {
+  background: rgba(229, 57, 53, 0.04) !important;
+}
+
+.markdown-preview h1 {
+  font-size: 1.8em;
+  font-weight: 700;
+  margin: 0.8em 0 0.4em;
+  color: #1c1917;
+}
+.markdown-preview h2 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid #e7e5e4;
+}
+.markdown-preview h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+.markdown-preview p {
+  margin: 0.6em 0;
+  line-height: 1.7;
+}
+.markdown-preview a {
+  color: var(--color-brand);
+  text-decoration: none;
+}
+.markdown-preview a:hover {
+  text-decoration: underline;
+}
+.markdown-preview .wiki-link {
+  color: var(--color-brand);
+  background: var(--color-brand-light);
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-decoration: none;
+}
+.markdown-preview .wiki-link.broken {
+  color: #ef4444;
+  background: #fee2e2;
+  text-decoration: line-through;
+  text-decoration-style: wavy;
+}
+.markdown-preview code {
+  background: #f5f5f4;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.markdown-preview pre {
+  background: #1c1917;
+  color: #fafaf9;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.markdown-preview blockquote {
+  border-left: 3px solid var(--color-brand);
+  margin: 0.6em 0;
+  padding: 0.4em 0.8em;
+  color: #57534e;
+  background: #fafaf9;
+}
+.markdown-preview ul, .markdown-preview ol {
+  padding-left: 1.6em;
+  line-height: 1.7;
+}
+.markdown-preview table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  width: 100%;
+}
+.markdown-preview th, .markdown-preview td {
+  border: 1px solid #e7e5e4;
+  padding: 6px 10px;
+  text-align: left;
+}
+.markdown-preview th {
+  background: #f5f5f4;
+  font-weight: 600;
+}
+.markdown-preview .task-list-item {
+  list-style: none;
+  margin-left: -1.2em;
+}
+
+.btn {
+  @apply px-3 py-1.5 rounded text-sm transition-colors;
+}
+.btn-primary {
+  @apply bg-brand-600 text-white hover:bg-brand-700;
+}
+.btn-secondary {
+  @apply bg-ink-100 text-ink-800 hover:bg-ink-200;
+}
+.btn-ghost {
+  @apply text-ink-600 hover:bg-ink-100;
+}
+
+.icon-btn {
+  @apply p-1.5 rounded hover:bg-ink-100 text-ink-500 hover:text-ink-800 transition-colors;
+}
+
+.input {
+  @apply w-full px-3 py-1.5 rounded border border-ink-200 bg-white text-sm focus:outline-none focus:border-brand-600;
+}
+
+.badge {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs;
+}
+.badge-brand {
+  @apply bg-brand-100 text-brand-700;
+}
+.badge-gray {
+  @apply bg-ink-100 text-ink-600;
+}
