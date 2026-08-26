@@ -36,6 +36,12 @@ const api = {
     listTree: (kbId: string) => ipcRenderer.invoke(IPC.FS_LIST_TREE, kbId) as Promise<TreeNode>,
     readNote: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_READ_NOTE, kbId, p) as Promise<NoteContent>,
     writeNote: (kbId: string, p: string, c: string) => ipcRenderer.invoke(IPC.FS_WRITE_NOTE, kbId, p, c) as Promise<void>,
+    updateTags: (kbId: string, p: string, tags: string[]) =>
+      ipcRenderer.invoke(IPC.FS_UPDATE_TAGS, kbId, p, tags) as Promise<void>,
+    updateSummary: (kbId: string, p: string, s: string) =>
+      ipcRenderer.invoke(IPC.FS_UPDATE_SUMMARY, kbId, p, s) as Promise<void>,
+    allTags: (kbId: string) =>
+      ipcRenderer.invoke(IPC.FS_ALL_TAGS, kbId) as Promise<{ tag: string; count: number }[]>,
     createNote: (kbId: string, dirPath: string, opts?: { useTemplate?: boolean; name?: string }) =>
       ipcRenderer.invoke(IPC.FS_CREATE_NOTE, kbId, dirPath, opts) as Promise<NoteInfo>,
     deleteNote: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_DELETE_NOTE, kbId, p) as Promise<void>,
@@ -59,6 +65,7 @@ const api = {
     setConfig: (cfg: Partial<AIModelConfig>) => ipcRenderer.invoke(IPC.AI_SET_CONFIG, cfg) as Promise<void>,
     ask: (kbId: string, q: string, opts?: { templateDirIds?: string[] }) => ipcRenderer.invoke(IPC.AI_ASK, kbId, q, opts) as Promise<string>,
     summarize: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_SUMMARIZE, kbId, p) as Promise<string>,
+    generateTags: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_GENERATE_TAGS, kbId, p) as Promise<string[]>,
     suggestDir: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_SUGGEST_DIR, kbId, p) as Promise<DirSuggestion[]>,
     suggestLinks: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_SUGGEST_LINKS, kbId, p) as Promise<LinkInfo[]>,
     forgeCard: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_FORGE_CARD, kbId, p) as Promise<CardDraft>,

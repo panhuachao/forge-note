@@ -53,12 +53,20 @@ class LinkIndex {
 
   /**
    * 解析链接 target 为真实路径
+   * 匹配规则（按顺序）：
+   *  1. 完整 notePath 相等 / +.md 相等 / 去 .md 相等
+   *  2. notePath 的 basename（去 .md）等于 target
    */
   resolve(kbId: string, target: string): string | undefined {
     const map = this.ensure(kbId);
-    // 1. 直接匹配文件名（不含 .md）
+    const t = target.trim();
     for (const p of map.keys()) {
-      if (p === target || p === `${target}.md` || p.replace(/\.md$/i, '') === target) return p;
+      if (p === t || p === `${t}.md` || p.replace(/\.md$/i, '') === t) return p;
+    }
+    // 退化匹配：按 basename（去 .md）匹配，便于 [[笔记名]] 跨目录解析
+    for (const p of map.keys()) {
+      const base = p.split('/').pop()?.replace(/\.md$/i, '') || '';
+      if (base === t) return p;
     }
     return undefined;
   }

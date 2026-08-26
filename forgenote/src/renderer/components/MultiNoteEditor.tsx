@@ -99,6 +99,56 @@ export function MultiNoteEditor() {
     return r;
   }, [activeKb]);
 
+  // AI 生成标签（合并去重已有 + 新标签，最多 8 个）
+  const handleGenerateTags = useCallback(async (notePath: string) => {
+    if (!activeKb) return [];
+    const generated = await window.forge.ai.generateTags(activeKb.id, notePath);
+    // 重新读取笔记以获取最新 tags + frontmatter
+    const fresh = await window.forge.fs.readNote(activeKb.id, notePath);
+    setCurrentInfo({
+      content: fresh.content,
+      outlinks: fresh.outlinks,
+      inlinks: fresh.inlinks,
+      brokenLinks: fresh.brokenLinks,
+      mtime: fresh.mtime,
+      ctime: fresh.ctime,
+      frontmatter: fresh.frontmatter
+    });
+    return generated;
+  }, [activeKb]);
+
+  // 更新笔记的 frontmatter tags；写盘后重新 readNote 同步 currentInfo
+  const handleUpdateTags = useCallback(async (notePath: string, tags: string[]) => {
+    if (!activeKb) return;
+    await window.forge.fs.updateTags(activeKb.id, notePath, tags);
+    const fresh = await window.forge.fs.readNote(activeKb.id, notePath);
+    setCurrentInfo({
+      content: fresh.content,
+      outlinks: fresh.outlinks,
+      inlinks: fresh.inlinks,
+      brokenLinks: fresh.brokenLinks,
+      mtime: fresh.mtime,
+      ctime: fresh.ctime,
+      frontmatter: fresh.frontmatter
+    });
+  }, [activeKb]);
+
+  // 把当前 AI 摘要写入 frontmatter（便于固定为笔记摘要）
+  const handleApplySummary = useCallback(async (notePath: string, s: string) => {
+    if (!activeKb) return;
+    await window.forge.fs.updateSummary(activeKb.id, notePath, s);
+    const fresh = await window.forge.fs.readNote(activeKb.id, notePath);
+    setCurrentInfo({
+      content: fresh.content,
+      outlinks: fresh.outlinks,
+      inlinks: fresh.inlinks,
+      brokenLinks: fresh.brokenLinks,
+      mtime: fresh.mtime,
+      ctime: fresh.ctime,
+      frontmatter: fresh.frontmatter
+    });
+  }, [activeKb]);
+
   const handleForgeCard = useCallback(async (notePath: string) => {
     if (!activeKb) throw new Error('无知识库');
     const d = await window.forge.ai.forgeCard(activeKb.id, notePath);
@@ -126,13 +176,17 @@ export function MultiNoteEditor() {
       summarize: (path: string) => handleSummarize(path),
       links: (path: string) => handleSuggestLinks(path),
       dir: (path: string) => handleSuggestDir(path),
-      forge: (path: string) => handleForgeCard(path)
+      forge: (path: string) => handleForgeCard(path),
+      // 标签 / 摘要写盘
+      generateTags: (path: string) => handleGenerateTags(path),
+      updateTags: (path: string, tags: string[]) => handleUpdateTags(path, tags),
+      applySummary: (path: string, s: string) => handleApplySummary(path, s)
     };
     (window as any).__forgeNoteActions = actions;
     return () => {
       if ((window as any).__forgeNoteActions === actions) delete (window as any).__forgeNoteActions;
     };
-  }, [handleSummarize, handleSuggestLinks, handleSuggestDir, handleForgeCard]);
+  }, [handleSummarize, handleSuggestLinks, handleSuggestDir, handleForgeCard, handleGenerateTags, handleUpdateTags, handleApplySummary]);
 
   if (!activeTab) {
     return (

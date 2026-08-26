@@ -304,14 +304,78 @@ class AIService {
   }
 
   /**
-   * 摘要
+   * 摘要：纯文本（不使用任何 markdown 符号），不超过 250 字，
+   * 不输出"好的，这是..."等 AI 回复开场语，只输出摘要正文本身。
    */
   async summarize(kbId: string, notePath: string): Promise<string> {
     const kb = getKB(kbId);
     if (!kb) return '';
     const content = await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => '');
-    const sys = `${BASE_SYSTEM}\n\n请对以下笔记生成结构化摘要：要点列表 + 关键词 + 一句话总结。`;
-    return this.chat(content.slice(0, 4000), sys);
+    const sys = `${BASE_SYSTEM}\n\n请为以下笔记生成一段中文摘要，要求：\n1) 严格使用纯文本，禁止使用任何 Markdown 符号（如 #、*、-、>、代码块、加粗等）。\n2) 字数不超过 250 字。\n3) 直接输出摘要正文，不要任何开场语、解释、标题或前缀，例如不要出现"好的""以下是""摘要："等。`;
+    const raw = await this.chat(content.slice(0, 4000), sys);
+    // 后处理
+    return this.sanitizeSummary(raw);
+  }
+
+  /**
+   * 摘要清洗：剥离 markdown 符号、压缩空白、限制字数。
+   */
+  private sanitizeSummary(text: string): string {
+    if (!text) return '';
+    let s = text;
+    // 去除围栏代码块与行内代码
+    s = s.replace(/```[\s\S]*?```/g, ' ').replace(/`([^`]+)`/g, '$1');
+    // 去除标题 / 引用 / 列表 / 强调 / 链接 / 图片
+    s = s.replace(/^#{1,6}\s*/gm, '');
+    s = s.replace(/^>\s?/gm, '');
+    s = s.replace(/^\s*[-*+]\s+/gm, '');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '$1');
+    s = s.replace(/\*([^*]+)\*/g, '$1');
+    s = s.replace(/__([^_]+)__/g, '$1');
+    s = s.replace(/_([^_]+)_/g, '$1');
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+    s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1');
+    // 去除常见 AI 开场语
+    s = s.replace(
+      /^\s*(好的[,，]?\s*|以下是[^。]*[：:]\s*|摘要[：:]\s*|这是[^。]*[：:]\s*|下面[^。]*[：:]\s*|以下为[^。]*[：:]\s*|好的[,，]?这是[^。]*[。.]\s*)/i,
+      ''
+    );
+    // 压缩空白
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+  }
+
+  /**
+   * 自动生成标签
+   * 输出 3~6 个简短中文/英文标签（与笔记 frontmatter tags 语义一致）。
+   * 返回空数组或非 JSON 时回退到文本解析（按行/逗号）。
+   */
+  async generateTags(kbId: string, notePath: string): Promise<string[]> {
+    const kb = getKB(kbId);
+    if (!kb) return [];
+    const content = await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => '');
+    if (!content) return [];
+    const sys = `${BASE_SYSTEM}\n\n请基于以下笔记内容生成 3~6 个简洁标签（每项 1~4 个词），用于知识管理。\n严格只输出 JSON 数组，不要任何解释，例如：["标签1","标签2"]`;
+    const raw = (await this.chat(content.slice(0, 4000), sys)) || '';
+    // 优先解析 JSON 数组
+    const m = raw.match(/\[[\s\S]*?\]/);
+    if (m) {
+      try {
+        const arr = JSON.parse(m[0]);
+        if (Array.isArray(arr)) {
+          return arr
+            .map((x) => String(x).trim())
+            .filter((x) => x && x.length <= 20)
+            .slice(0, 6);
+        }
+      } catch {}
+    }
+    // 退化解析：按行 / 逗号 / # 号
+    return raw
+      .split(/[\n,，#]/)
+      .map((s) => s.replace(/^[\s\-*·•]+|[\s"']+$/g, '').trim())
+      .filter((s) => s && s.length <= 20)
+      .slice(0, 6);
   }
 
   /**

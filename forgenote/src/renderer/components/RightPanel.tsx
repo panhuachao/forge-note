@@ -43,10 +43,17 @@ export function RightPanel() {
   const [linkSuggestions, setLinkSuggestions] = useState<LinkInfo[]>([]);
   const [dirSuggestions, setDirSuggestions] = useState<DirSuggestion[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  // 标签编辑（本地镜像 + 写盘回写）
+  const [localTags, setLocalTags] = useState<string[]>([]);
+  const [tagSuggest, setTagSuggest] = useState<string[]>([]);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [tagBusy, setTagBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const [activeLine, setActiveLine] = useState<number | null>(null);
   const [panelTab, setPanelTab] = useState<'info' | 'outline' | 'chat'>('info');
+  const notePath = (window as any).__forgeNoteData?.notePath as string | undefined;
 
   // 监听正文滚动，更新大纲高亮（双向同步）
   useEffect(() => {
@@ -97,9 +104,103 @@ export function RightPanel() {
       setSummary(data.summary);
     };
     read();
+    read();
     window.addEventListener('forgenote:note-data', read);
     return () => window.removeEventListener('forgenote:note-data', read);
   }, []);
+
+  // 同步当前笔记的标签到 localTags
+  useEffect(() => {
+    if (!info) {
+      setLocalTags([]);
+      return;
+    }
+    const fm = info.frontmatter || {};
+    const fmTags = (fm['tags'] ?? fm['标签'] ?? fm['Tag'] ?? fm['TAG']) as unknown;
+    let tags: string[] = [];
+    if (Array.isArray(fmTags)) tags = fmTags.map(String);
+    else if (typeof fmTags === 'string' && fmTags.trim()) tags = fmTags.split(/[\s,，]+/).filter(Boolean);
+    if (tags.length === 0) {
+      const m = info.content.match(/#\s*标签\s*[:：]\s*(.+)/);
+      if (m) tags = m[1].split(/\s+/).map((s) => s.replace(/^#/, '')).filter(Boolean);
+    }
+    setLocalTags(tags);
+    // 从 frontmatter.summary 恢复摘要显示（重新打开笔记时同步）
+    const fmSummary = (fm['summary'] ?? fm['摘要'] ?? fm['Summary']) as unknown;
+    if (typeof fmSummary === 'string' && fmSummary.trim()) {
+      setSummary(fmSummary.trim());
+    }
+  }, [info]);
+
+  // 加载知识库已有标签作为下拉建议
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeKb) return;
+    (async () => {
+      try {
+        const list = await window.forge.fs.allTags(activeKb.id);
+        if (!cancelled) setTagSuggest(list.map((x) => x.tag));
+      } catch {
+        if (!cancelled) setTagSuggest([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeKb?.id]);
+
+  // 写盘并刷新 currentInfo
+  const persistTags = useCallback(
+    async (next: string[]) => {
+      if (!activeKb || !notePath) return;
+      setLocalTags(next);
+      try {
+        const actions = (window as any).__forgeNoteActions as
+          | { updateTags: (p: string, tags: string[]) => Promise<void> }
+          | undefined;
+        if (actions?.updateTags) {
+          await actions.updateTags(notePath, next);
+        } else {
+          await window.forge.fs.updateTags(activeKb.id, notePath, next);
+        }
+      } catch (e) {
+        console.error('updateTags failed', e);
+      }
+    },
+    [activeKb, notePath]
+  );
+
+  const removeTag = (t: string) => persistTags(localTags.filter((x) => x !== t));
+
+  const addTag = (t: string) => {
+    const v = t.trim().replace(/^#/, '');
+    if (!v) return;
+    if (localTags.includes(v)) return;
+    persistTags([...localTags, v]);
+  };
+
+  const handleAiTags = useCallback(async () => {
+    if (!activeKb || !notePath) return;
+    const actions = (window as any).__forgeNoteActions as
+      | { generateTags: (p: string) => Promise<string[]> }
+      | undefined;
+    setTagBusy(true);
+    try {
+      let generated: string[] = [];
+      if (actions?.generateTags) {
+        generated = await actions.generateTags(notePath);
+      } else {
+        generated = await window.forge.ai.generateTags(activeKb.id, notePath);
+      }
+      // 合并去重（已有 + 新生成，最多 8 个）
+      const merged = Array.from(new Set([...localTags, ...generated])).slice(0, 8);
+      await persistTags(merged);
+    } catch (e) {
+      console.error('generateTags failed', e);
+    } finally {
+      setTagBusy(false);
+    }
+  }, [activeKb, notePath, localTags, persistTags]);
 
   // 点击外部关闭更多菜单
   useEffect(() => {
@@ -111,7 +212,16 @@ export function RightPanel() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [moreOpen]);
 
-  const notePath = (window as any).__forgeNoteData?.notePath as string | undefined;
+  // 点击外部关闭标签下拉
+  useEffect(() => {
+    if (!tagPickerOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('[data-tag-picker]')) setTagPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [tagPickerOpen]);
 
   const runAction = useCallback(async (kind: 'summary' | 'links' | 'dir' | 'forge') => {
     setMoreOpen(false);
@@ -124,6 +234,27 @@ export function RightPanel() {
         setSummaryLoading(true);
         const r = await actions.summarize(notePath);
         setSummary(r);
+        // 生成后直接写入 frontmatter 的 summary 字段（自动保存）
+        try {
+          await window.forge.fs.updateSummary(activeKb.id, notePath, r);
+          // 写盘后重新读取，确保当前笔记信息（含 frontmatter.summary）同步
+          const fresh = await window.forge.fs.readNote(activeKb.id, notePath);
+          (window as any).__forgeNoteData = {
+            ...(window as any).__forgeNoteData,
+            currentInfo: {
+              content: fresh.content,
+              outlinks: fresh.outlinks,
+              inlinks: fresh.inlinks,
+              brokenLinks: fresh.brokenLinks,
+              mtime: fresh.mtime,
+              ctime: fresh.ctime,
+              frontmatter: fresh.frontmatter
+            }
+          };
+          window.dispatchEvent(new CustomEvent('forgenote:note-data', { detail: (window as any).__forgeNoteData }));
+        } catch (e) {
+          console.error('保存摘要失败', e);
+        }
         setSummaryLoading(false);
       } else if (kind === 'links') {
         await actions.links(notePath);
@@ -220,7 +351,6 @@ export function RightPanel() {
         </button>
         {moreOpen && (
           <div className="absolute right-3 top-11 z-20 mt-1 w-44 bg-content border border-border rounded-xl shadow-lg py-1">
-            <MenuItem icon="sparkles" label="AI 摘要" onClick={() => runAction('summary')} loading={summaryLoading} />
             <MenuItem icon="link" label="AI 链接推荐" onClick={() => runAction('links')} />
             <MenuItem icon="folder-tree" label="AI 归纳推荐" onClick={() => runAction('dir')} />
             <MenuItem icon="cards" label="锻造知识卡片" onClick={() => runAction('forge')} />
@@ -272,11 +402,24 @@ export function RightPanel() {
           <PanelCard title="基本信息">
             <dl className="space-y-2.5 text-xs">
               <Row label="摘要">
-                {summary ? (
-                  <span className="text-fg-secondary leading-relaxed line-clamp-3">{summary}</span>
-                ) : (
-                  <span className="text-fg-faint">点击「更多 → AI 摘要」生成</span>
-                )}
+                <div className="flex items-start gap-2 min-w-0">
+                  <div className="flex-1 min-w-0">
+                    {summary ? (
+                      <span className="text-fg-secondary leading-relaxed line-clamp-3 block">{summary}</span>
+                    ) : (
+                      <span className="text-fg-faint">可点击「AI生成摘要」生成</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => runAction('summary')}
+                    disabled={summaryLoading}
+                    className="icon-btn shrink-0"
+                    title="AI 生成摘要"
+                    aria-label="AI 生成摘要"
+                  >
+                    <Icon name="sparkles" className={`w-3.5 h-3.5 ${summaryLoading ? 'animate-pulse' : ''}`} />
+                  </button>
+                </div>
               </Row>
               <Row label="创建时间"><span className="text-fg-secondary">{basics.created}</span></Row>
               <Row label="最后更新"><span className="text-fg-secondary">{basics.updated}</span></Row>
@@ -296,15 +439,97 @@ export function RightPanel() {
                 </span>
               </Row>
               <Row label="标签">
-                {basics.tags.length > 0 ? (
-                  <span className="flex flex-wrap gap-1">
-                    {basics.tags.map((tg) => (
-                      <span key={tg} className="px-1.5 py-0.5 rounded-full bg-brand-soft text-brand text-[11px]">#{tg}</span>
-                    ))}
-                  </span>
-                ) : (
-                  <span className="text-fg-faint">无</span>
-                )}
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {localTags.length > 0 ? (
+                      localTags.map((tg) => (
+                        <span
+                          key={tg}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-soft text-brand text-[11px]"
+                        >
+                          #{tg}
+                          <button
+                            onClick={() => removeTag(tg)}
+                            className="text-brand/70 hover:text-brand"
+                            title={`删除标签 ${tg}`}
+                            aria-label={`删除标签 ${tg}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-fg-faint text-[11px]">无</span>
+                    )}
+                    <div className="relative">
+                      <button
+                        onClick={async () => {
+                          setTagPickerOpen((v) => !v);
+                          setTagInput('');
+                        }}
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-border-soft text-fg-secondary hover:bg-hover-bg text-[11px]"
+                        title="添加标签"
+                        aria-label="添加标签"
+                      >+</button>
+                      {tagPickerOpen && (
+                        <div
+                          data-tag-picker
+                          className="absolute z-20 left-0 top-6 w-56 bg-content border border-border rounded-lg shadow-lg p-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            autoFocus
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (tagInput.trim()) addTag(tagInput);
+                                setTagInput('');
+                                setTagPickerOpen(false);
+                              } else if (e.key === 'Escape') {
+                                setTagPickerOpen(false);
+                              }
+                            }}
+                            placeholder="自定义标签，回车确认"
+                            className="w-full px-2 py-1 text-[11px] bg-canvas border border-border-soft rounded outline-none focus:border-brand"
+                          />
+                          <div className="mt-2 max-h-40 overflow-y-auto">
+                            <div className="text-[10px] text-fg-faint px-1 mb-1">已有标签</div>
+                            {tagSuggest
+                              .filter((s) => !localTags.includes(s))
+                              .filter((s) => !tagInput || s.toLowerCase().includes(tagInput.toLowerCase()))
+                              .slice(0, 30)
+                              .map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => {
+                                    addTag(s);
+                                    setTagPickerOpen(false);
+                                  }}
+                                  className="w-full text-left px-2 py-1 text-[11px] hover:bg-hover-bg rounded text-fg-secondary"
+                                >
+                                  #{s}
+                                </button>
+                              ))}
+                            {tagSuggest.filter((s) => !localTags.includes(s)).length === 0 && (
+                              <div className="text-[10px] text-fg-faint px-1 py-1">无更多建议</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleAiTags}
+                      disabled={tagBusy}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-border-soft text-fg-secondary hover:bg-hover-bg text-[11px] disabled:opacity-50"
+                      title="AI 生成标签"
+                      aria-label="AI 生成标签"
+                    >
+                      <Icon name="sparkles" className={`w-3 h-3 ${tagBusy ? 'animate-pulse' : ''}`} />
+                      <span>AI 生成</span>
+                    </button>
+                  </div>
+                </div>
               </Row>
               <Row label="双链">
                 <span className="text-fg-secondary">

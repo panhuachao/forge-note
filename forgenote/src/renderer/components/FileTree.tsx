@@ -15,6 +15,9 @@ interface Props {
   node: TreeNode;
   depth?: number;
   onOpenNote: (path: string) => void;
+  // 展开状态由根实例（kb_root）统一持有并向下透传，保证“全部展开/折叠”对所有层级生效
+  expanded?: Set<string>;
+  setExpanded?: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 function sortNodes(nodes: TreeNode[] | undefined, mode: SortMode): TreeNode[] {
@@ -33,10 +36,15 @@ function sortNodes(nodes: TreeNode[] | undefined, mode: SortMode): TreeNode[] {
   return [...dirs.sort(cmp), ...files.sort(cmp)];
 }
 
-export function FileTree({ node, depth = 0, onOpenNote }: Props) {
+export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, setExpanded: setExpandedProp }: Props) {
   const { activeKb, pushToast, setTree, openCreateNote } = useKBStore();
   const { sortMode, activeTabId } = useLayoutStore();
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // 展开状态默认在本地创建；非根实例使用从根透传的共享状态（保证全局展开/折叠生效）
+  const [localExpanded, setLocalExpanded] = useState<Set<string>>(new Set());
+  const expanded = depth === 0 ? localExpanded : (expandedProp ?? localExpanded);
+  const setExpanded = depth === 0 ? setLocalExpanded : (setExpandedProp ?? setLocalExpanded);
+  // 顶部“全部展开/折叠”按钮的状态：false=折叠（默认），true=展开
+  const [allExpanded, setAllExpanded] = useState(false);
   // 目录重命名 / 新建后内联编辑态：{ path, name }
   const [editing, setEditing] = useState<{ path: string; name: string } | null>(null);
 
@@ -83,7 +91,10 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
   // 监听全局折叠/展开/排序事件
   useEffect(() => {
     function onCollapseAll() {
-      if (depth === 0) setExpanded(new Set([node.id]));
+      if (depth === 0) {
+        setExpanded(new Set([node.id]));
+        setAllExpanded(false);
+      }
     }
     function onExpandAll() {
       if (depth === 0) {
@@ -95,6 +106,7 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
         };
         walk(node);
         setExpanded(allDirs);
+        setAllExpanded(true);
       }
     }
     window.addEventListener('forgenote:collapseAll', onCollapseAll);
@@ -160,18 +172,26 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
             </div>
           </div>
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('forgenote:collapseAll'))}
+            onClick={() => {
+              if (allExpanded) {
+                window.dispatchEvent(new CustomEvent('forgenote:collapseAll'));
+              } else {
+                window.dispatchEvent(new CustomEvent('forgenote:expandAll'));
+              }
+            }}
             className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
-            title="全部折叠"
-          ><Icon name="chevron-up" className="w-4 h-4" /></button>
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('forgenote:expandAll'))}
-            className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
-            title="全部展开"
-          ><Icon name="chevron-down" className="w-4 h-4" /></button>
+            title={allExpanded ? '全部折叠' : '全部展开'}
+          ><Icon name={allExpanded ? 'chevron-up' : 'chevron-down'} className="w-4 h-4" /></button>
         </div>
         {sortedChildren.map((c) => (
-          <FileTree key={c.id} node={c} depth={depth + 1} onOpenNote={onOpenNote} />
+          <FileTree
+            key={c.id}
+            node={c}
+            depth={depth + 1}
+            onOpenNote={onOpenNote}
+            expanded={expanded}
+            setExpanded={setExpanded}
+          />
         ))}
       </div>
     );
@@ -283,7 +303,14 @@ export function FileTree({ node, depth = 0, onOpenNote }: Props) {
         {isOpen && (
           <div>
             {sortedChildren.map((c) => (
-              <FileTree key={c.id} node={c} depth={depth + 1} onOpenNote={onOpenNote} />
+              <FileTree
+                key={c.id}
+                node={c}
+                depth={depth + 1}
+                onOpenNote={onOpenNote}
+                expanded={expanded}
+                setExpanded={setExpanded}
+              />
             ))}
           </div>
         )}

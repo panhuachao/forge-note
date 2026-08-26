@@ -34,6 +34,8 @@ interface LayoutState {
   // 各面板是否折叠
   leftPanelCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  // 专注模式：同时收起左右栏
+  focusMode: boolean;
   // 当前选中的标签（用于标签笔记检索视图）
   selectedTag: string | null;
   // 右侧属性面板是否展开「围绕本篇笔记的 AI 聊天」
@@ -55,6 +57,7 @@ interface LayoutState {
   toggleLeftRail: () => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
+  toggleFocusMode: () => void;
   setLeftPanelWidth: (w: number) => void;
   setRightPanelWidth: (w: number) => void;
   openTab: (notePath: string, title?: string) => void;
@@ -126,6 +129,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     sortMode: persisted.sortMode,
     leftPanelCollapsed: persisted.leftPanelCollapsed,
     rightPanelCollapsed: persisted.rightPanelCollapsed,
+    focusMode: false,
     selectedTag: null,
     chatWithNote: false,
     fontSize: persisted.fontSize,
@@ -212,6 +216,20 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
         rightPanelWidth: cur.rightPanelWidth,
         leftPanelCollapsed: cur.leftPanelCollapsed,
         rightPanelCollapsed: v,
+        leftRailCollapsed: cur.leftRailCollapsed,
+        sortMode: cur.sortMode
+      });
+    },
+    toggleFocusMode: () => {
+      const next = !get().focusMode;
+      // 专注模式：同时收起左右栏；退出：同时展开左右栏
+      set({ focusMode: next, leftPanelCollapsed: next, rightPanelCollapsed: next });
+      const cur = get();
+      savePersisted({
+        leftPanelWidth: cur.leftPanelWidth,
+        rightPanelWidth: cur.rightPanelWidth,
+        leftPanelCollapsed: cur.leftPanelCollapsed,
+        rightPanelCollapsed: cur.rightPanelCollapsed,
         leftRailCollapsed: cur.leftRailCollapsed,
         sortMode: cur.sortMode
       });

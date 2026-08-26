@@ -7,6 +7,7 @@ import { atomicWrite, safeJoin } from '../utils/fs';
 import { extractWikiLinks, parseFrontMatter, extractTags } from '../utils/markdown';
 import { getKB } from './store';
 import { linkIndex } from './link-index';
+import matter from 'gray-matter';
 import { kbService } from './kb-service';
 import { templateService } from './template-service';
 import { eventBus } from '../utils/event-bus';
@@ -39,9 +40,10 @@ class FSService {
     const { content, data } = parseFrontMatter(raw);
     const outlinks = extractWikiLinks(content);
     const inlinks = linkIndex.getBacklinks(kbId, notePath);
-    const allOut = linkIndex.getAllOutlinks(kbId);
-    const existing = new Set(allOut.keys());
-    const broken = outlinks.filter((o) => !existing.has(o) && !existing.has(`${o}.md`));
+    // 失效链接：outlinks 是 wiki target 集合（如 [[笔记名]] 中的「笔记名」），
+    // 需通过 linkIndex.resolve(target) 判定是否可解析到真实 notePath，
+    // 不能直接用 notePath 集合去比对 target，否则所有出链都会被误判为失效
+    const broken = outlinks.filter((o) => !linkIndex.resolve(kbId, o));
     return {
       path: notePath,
       content,
@@ -65,6 +67,79 @@ class FSService {
     linkIndex.updateOutlinks(kbId, notePath, newOutlinks);
     // 触发事件
     eventBus.emit('fsChange', { type: 'change', path: notePath });
+  }
+
+  /**
+   * 仅更新 frontmatter 中的 tags（去重、过滤空值），保留 body 其它内容不变。
+   * 写入后由 readNote 重新计算 outlinks 等元数据，无需重建索引。
+   */
+  async updateTags(kbId: string, notePath: string, tags: string[]): Promise<void> {
+    const abs = this.abs(kbId, notePath);
+    const raw = await fs.readFile(abs, 'utf-8');
+    const { content, data } = parseFrontMatter(raw);
+    const norm = Array.from(
+      new Set(
+        (tags || [])
+          .map((t) => String(t).trim())
+          .filter((t) => t.length > 0 && t.length <= 30)
+      )
+    );
+    const nextData = { ...(data || {}), tags: norm };
+    const yaml = matter.stringify(content, nextData);
+    await atomicWrite(abs, yaml);
+    eventBus.emit('fsChange', { type: 'change', path: notePath });
+  }
+
+  /**
+   * 更新 frontmatter 中的 summary 字段，用于「AI 摘要」一键应用。
+   */
+  async updateSummary(kbId: string, notePath: string, summary: string): Promise<void> {
+    const abs = this.abs(kbId, notePath);
+    const raw = await fs.readFile(abs, 'utf-8');
+    const { content, data } = parseFrontMatter(raw);
+    const nextData = { ...(data || {}), summary: String(summary || '').trim() };
+    const yaml = matter.stringify(content, nextData);
+    await atomicWrite(abs, yaml);
+    eventBus.emit('fsChange', { type: 'change', path: notePath });
+  }
+
+  /**
+   * 收集知识库中所有笔记的 frontmatter tags（含未被任何笔记引用的「孤立」标签），
+   * 返回 { tag -> 计数 }。供属性面板「选择已有标签」下拉使用。
+   */
+  async getAllTags(kbId: string): Promise<{ tag: string; count: number }[]> {
+    const root = this.rootOf(kbId);
+    if (!root) return [];
+    const counter = new Map<string, number>();
+    const walk = async (dir: string) => {
+      let entries: Dirent[] = [];
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        if (e.name.startsWith('.')) continue;
+        const full = join(dir, e.name);
+        if (e.isDirectory()) {
+          await walk(full);
+        } else if (e.isFile() && e.name.toLowerCase().endsWith('.md')) {
+          try {
+            const raw = await fs.readFile(full, 'utf-8');
+            const { data } = parseFrontMatter(raw);
+            const list = Array.isArray((data as any)?.tags) ? (data as any).tags : [];
+            for (const t of list) {
+              const s = String(t).trim();
+              if (s) counter.set(s, (counter.get(s) || 0) + 1);
+            }
+          } catch {}
+        }
+      }
+    };
+    await walk(root);
+    return Array.from(counter.entries())
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
   }
 
   /**

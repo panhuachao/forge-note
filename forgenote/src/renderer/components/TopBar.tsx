@@ -11,19 +11,13 @@ import { Icon } from './Icon';
 export function TopBar() {
   const {
     tabs, activeTabId, setActiveTab, closeTab, closeAllTabs,
-    toggleRightPanel, toggleLeftPanel, leftPanelCollapsed, rightPanelCollapsed
+    toggleRightPanel, focusMode, toggleFocusMode
   } = useLayoutStore();
   const { openCreateNote } = useKBStore();
 
   // 双击标题栏：最大化 / 还原
   const handleDoubleClick = () => {
     window.forge.win?.maximizeToggle().catch(() => {});
-  };
-
-  // 专注模式：同时收起左右栏，让编辑区独占窗口
-  const toggleFocus = () => {
-    if (!leftPanelCollapsed) toggleLeftPanel();
-    if (!rightPanelCollapsed) toggleRightPanel();
   };
 
   return (
@@ -38,11 +32,11 @@ export function TopBar() {
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <button
-          onClick={toggleFocus}
+          onClick={toggleFocusMode}
           className="w-8 h-8 flex items-center justify-center rounded-xl text-fg-muted hover:bg-hover-bg hover:text-brand transition-colors"
-          title="专注模式（隐藏左右侧栏）"
+          title={focusMode ? '退出专注模式（显示左右侧栏）' : '专注模式（隐藏左右侧栏）'}
         >
-          <Icon name="focus" className="w-4 h-4" />
+          <Icon name={focusMode ? 'arrows-pointing-out' : 'focus'} className="w-4 h-4" />
         </button>
       </div>
 

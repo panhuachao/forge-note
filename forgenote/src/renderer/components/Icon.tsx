@@ -117,6 +117,7 @@ const outlineMap: Record<string, any> = {
   'arrow-up': HeroiconsOutline.ArrowUpIcon,
   'check-circle': HeroiconsOutline.CheckCircleIcon,
   focus: HeroiconsOutline.ArrowsPointingInIcon,
+  'arrows-pointing-out': HeroiconsOutline.ArrowsPointingOutIcon,
   'view-columns': HeroiconsOutline.EyeIcon,
   'document-text': HeroiconsOutline.DocumentTextIcon,
   'copy': HeroiconsOutline.DocumentDuplicateIcon
