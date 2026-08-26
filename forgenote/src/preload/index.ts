@@ -76,6 +76,8 @@ const api = {
   ai: {
     getConfig: () => ipcRenderer.invoke(IPC.AI_GET_CONFIG) as Promise<AIModelConfig>,
     setConfig: (cfg: Partial<AIModelConfig>) => ipcRenderer.invoke(IPC.AI_SET_CONFIG, cfg) as Promise<void>,
+    getPrompts: () => ipcRenderer.invoke(IPC.AI_GET_PROMPTS) as Promise<AIPrompts>,
+    setPrompts: (prompts: AIPrompts) => ipcRenderer.invoke(IPC.AI_SET_PROMPTS, prompts) as Promise<void>,
     ask: (kbId: string, q: string, opts?: { templateDirIds?: string[] }) => ipcRenderer.invoke(IPC.AI_ASK, kbId, q, opts) as Promise<string>,
     summarize: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_SUMMARIZE, kbId, p) as Promise<string>,
     generateTags: (kbId: string, p: string) => ipcRenderer.invoke(IPC.AI_GENERATE_TAGS, kbId, p) as Promise<string[]>,

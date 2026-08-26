@@ -15,41 +15,6 @@ interface InspirationMode {
   prompt: string;
 }
 
-const MODES: InspirationMode[] = [
-  {
-    key: 'blindspot',
-    icon: 'light-bulb',
-    title: '思维盲区',
-    desc: '找出我可能忽略的角度、前提与反例',
-    prompt:
-      '请基于我的知识库，指出我在当前议题上的「思维盲区」：我可能忽略的视角、隐含前提、常见认知偏差、以及关键反例。用「大多数人都容易忽略…」的口吻，给出 4~6 条具体、可对照的点。'
-  },
-  {
-    key: 'complement',
-    icon: 'sparkles',
-    title: '补充思路',
-    desc: '完善我现有的想法，补齐结构性缺口',
-    prompt:
-      '请基于我的知识库，对我的当前想法做「补充与完善」：补齐逻辑链缺口、补充关键证据/方法、指出可合并的相关笔记。给出 4~6 条可直接并入现有思路的补充项。'
-  },
-  {
-    key: 'cases',
-    icon: 'book-open',
-    title: '延伸案例',
-    desc: '提供类比、案例与跨领域参照，帮我了解更多',
-    prompt:
-      '请基于我的知识库，提供「延伸案例与跨领域参照」：类比、真实/行业案例、可迁移的方法论，帮助我把当前议题理解得更广。每条标注「类比点」与「可借鉴之处」，给 4~6 条。'
-  },
-  {
-    key: 'reframe',
-    icon: 'arrows-pointing-out',
-    title: '换个角度',
-    desc: '用不同范式/角色重新框架化问题',
-    prompt:
-      '请基于我的知识库，用「换框架」的方式重构我的议题：分别用第一性原理、用户视角、长期主义、逆向思维等 3~4 个框架重新提问并给出新结论，帮我突破原有思路。'
-  }
-];
-
 export function InspirationPage() {
   const { activeKb, aiConfig } = useKBStore();
   const [topic, setTopic] = useState('');
@@ -57,9 +22,24 @@ export function InspirationPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
   const [error, setError] = useState('');
+  const [modes, setModes] = useState<InspirationMode[]>([]);
+  const [dailyInsightPrompt, setDailyInsightPrompt] = useState('');
+  const [lastAction, setLastAction] = useState<'generate' | 'dailyInsight' | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const mode = useMemo(() => MODES.find((m) => m.key === modeKey)!, [modeKey]);
+  // 从高级设置读取固定的灵感提示词（持久化配置）
+  useEffect(() => {
+    window.forge.ai.getPrompts().then((p) => {
+      setModes(p.inspirationModes as InspirationMode[]);
+      setDailyInsightPrompt(p.dailyInsight);
+      setModeKey((k) => p.inspirationModes.some((m) => m.key === k) ? k : (p.inspirationModes[0]?.key ?? ''));
+    });
+  }, []);
+
+  const mode = useMemo(
+    () => modes.find((m) => m.key === modeKey) ?? modes[0],
+    [modes, modeKey]
+  );
   const aiEnabled = activeKb && aiConfig && aiConfig.provider !== 'none' && !!aiConfig.model;
 
   // 渲染结果 Markdown（与笔记预览一致）
@@ -85,6 +65,7 @@ export function InspirationPage() {
       setError('请先在「设置」中配置可用的 AI 模型（provider / model / apiKey）。');
       return;
     }
+    setLastAction('generate');
     setLoading(true);
     setError('');
     try {
@@ -98,9 +79,45 @@ export function InspirationPage() {
     }
   };
 
+  
+  const buildDailyInsightQuestion = () => {
+    return [
+      '【每天灵感一现】',
+      '',
+      '硬性约束：',
+      '1) 禁止输出"完成比完美更重要""先行动再优化""自律改变命运"这类随处可见的鸡汤式答案；',
+      '2) 给出的认知必须有真实出处、可查证，而非泛泛而谈；',
+      '3) 必须贴合我知识库的主题领域，不要天马行空跑题；',
+      '4) 仍然满足用户下方的具体要求。',
+      '',
+      '用户要求：',
+      dailyInsightPrompt
+    ].join('\n');
+  };
+
+  const dailyInsight = async () => {
+    if (!activeKb || !aiEnabled) {
+      setError('请先在「设置」中配置可用的 AI 模型（provider / model / apiKey）。');
+      return;
+    }
+    setLastAction('dailyInsight');
+    setLoading(true);
+    setError('');
+    try {
+      const ans = await window.forge.ai.ask(activeKb.id, buildDailyInsightQuestion());
+      setResult(ans || '（AI 未返回内容）');
+    } catch (e) {
+      setError(String(e));
+      setResult('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const saveAsNote = () => {
     if (!activeKb || !result.trim()) return;
-    const title = `灵感-${mode.title}-${new Date().toISOString().slice(0, 10)}`;
+    const actionLabel = lastAction === 'dailyInsight' ? '每天灵感一现' : mode.title;
+    const title = `灵感-${actionLabel}-${new Date().toISOString().slice(0, 10)}`;
     // 预填充：带元数据的完整内容，交给快速笔记弹窗（AI 自动整理标题/目录/标签/链接）
     const content = `---\ntitle: ${title}\nsource: inspiration\ntags: [灵感]\n---\n\n# ${mode.title}：${topic.trim() || '基于知识库的灵感'}\n\n> 方向：${mode.desc}\n\n${result}\n`;
     window.dispatchEvent(
@@ -120,10 +137,19 @@ export function InspirationPage() {
       <div className="flex-1 flex overflow-hidden pt-14">
         {/* 左：灵感方向 + 话题输入 */}
         <div className="w-72 shrink-0 border-r border-border-soft bg-canvas p-4 flex flex-col gap-4 overflow-y-auto">
+          <button
+            onClick={dailyInsight}
+            disabled={loading || !aiEnabled}
+            className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-brand-fg text-sm font-medium shadow-[0_2px_10px_-2px_rgba(220,38,38,0.35)] hover:shadow-[0_4px_14px_-2px_rgba(220,38,38,0.45)] transition-all disabled:opacity-50"
+          >
+            <Icon name="sparkles" className={`w-4 h-4 ${loading ? 'animate-pulse' : ''}`} />
+            每天灵光一现
+          </button>
+
           <div>
             <div className="text-xs font-medium text-fg-muted mb-1.5">选择灵感方向</div>
             <div className="flex flex-col gap-2">
-              {MODES.map((m) => (
+              {modes.map((m) => (
                 <button
                   key={m.key}
                   onClick={() => setModeKey(m.key)}
@@ -194,8 +220,8 @@ export function InspirationPage() {
                         灵感结果
                       </span>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-canvas border border-border-soft text-fg-muted text-[11px] shrink-0">
-                        <Icon name={mode.icon as any} className="w-3 h-3" />
-                        {mode.title}
+                        <Icon name={lastAction === 'dailyInsight' ? 'sun' : mode.icon as any} className="w-3 h-3" />
+                        {lastAction === 'dailyInsight' ? '每天灵感一现' : mode.title}
                       </span>
                       <span className="text-[11px] text-fg-faint shrink-0">
                         {result.length} 字
@@ -237,7 +263,7 @@ export function InspirationPage() {
                   思维盲区、补充思路、延伸案例或换角度的发散结果。
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-center">
-                  {MODES.map((m) => (
+                  {modes.map((m) => (
                     <span
                       key={m.key}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-canvas border border-border-soft text-[11px] text-fg-muted"

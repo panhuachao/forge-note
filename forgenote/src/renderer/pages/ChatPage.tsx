@@ -115,12 +115,10 @@ export default function ChatPage() {
   };
 
   // 新对话引导区的快捷提问（点击即可直接发送）
-  const QUICK_PROMPTS = [
-    '帮我总结一下今天的笔记',
-    '总结一下本周的笔记要点',
-    '我最近在关注哪些主题？帮我梳理一下',
-    '帮我把今天的笔记整理成待办清单'
-  ];
+  const [quickPrompts, setQuickPrompts] = useState<string[]>([]);
+  useEffect(() => {
+    window.forge.ai.getPrompts().then((p) => setQuickPrompts(p.chatQuickPrompts));
+  }, []);
 
   const useQuickPrompt = (text: string) => {
     setInput(text);
@@ -319,7 +317,7 @@ export default function ChatPage() {
                 在下方输入框输入问题，AI 将基于当前知识库为你作答
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2 max-w-sm mb-5">
-                {QUICK_PROMPTS.map((p) => (
+                {quickPrompts.map((p) => (
                   <button
                     key={p}
                     onClick={() => useQuickPrompt(p)}

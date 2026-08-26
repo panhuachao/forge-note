@@ -35,6 +35,8 @@ export const IPC = {
   // AI
   AI_GET_CONFIG: 'ai:getConfig',
   AI_SET_CONFIG: 'ai:setConfig',
+  AI_GET_PROMPTS: 'ai:getPrompts',
+  AI_SET_PROMPTS: 'ai:setPrompts',
   AI_ASK: 'ai:ask',
   AI_SUMMARIZE: 'ai:summarize',
   AI_GENERATE_TAGS: 'ai:generateTags',

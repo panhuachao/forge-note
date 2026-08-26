@@ -2,15 +2,21 @@ import { useEffect, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import type { ThemeColorKey } from '../stores/layout-store';
-import type { AIModelConfig } from '@shared/types';
+import type { AIModelConfig, AIPrompts, InspirationModePrompt } from '@shared/types';
+import { DEFAULT_AI_PROMPTS } from '@shared/types/ai';
 import type { UpdateStatus } from '@shared/ipc-channels';
 import { PageHeader } from '../components/PageHeader';
+
+type SettingsTab = 'basic' | 'advanced';
 
 export function SettingsPage() {
   const { aiConfig, setAIConfig, pushToast, activeKb } = useKBStore();
   const { fontSize, lineHeight, themeColor, setFontSize, setLineHeight, setThemeColor } = useLayoutStore();
   const [cfg, setCfg] = useState<AIModelConfig>(aiConfig);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<SettingsTab>('basic');
+  const [prompts, setPrompts] = useState<AIPrompts>(DEFAULT_AI_PROMPTS);
+  const [promptsSaving, setPromptsSaving] = useState(false);
 
   // 应用更新状态
   const [version, setVersion] = useState('');
@@ -78,11 +84,67 @@ export function SettingsPage() {
     }
   }
 
+  // 加载高级设置中的固定提示词
+  useEffect(() => {
+    window.forge.ai.getPrompts().then(setPrompts).catch(() => {});
+  }, []);
+
+  function patchPrompt(p: Partial<AIPrompts>) {
+    setPrompts((prev) => ({ ...prev, ...p }));
+  }
+
+  function patchMode(i: number, p: Partial<InspirationModePrompt>) {
+    setPrompts((prev) => ({
+      ...prev,
+      inspirationModes: prev.inspirationModes.map((m, idx) => (idx === i ? { ...m, ...p } : m))
+    }));
+  }
+
+  async function savePrompts() {
+    setPromptsSaving(true);
+    try {
+      await window.forge.ai.setPrompts(prompts);
+      pushToast({ level: 'success', text: '提示词配置已保存' });
+    } catch (e) {
+      pushToast({ level: 'error', text: String(e) });
+    } finally {
+      setPromptsSaving(false);
+    }
+  }
+
+  function resetPrompts() {
+    setPrompts(DEFAULT_AI_PROMPTS);
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
       <PageHeader icon="cog" title="设置" />
       <div className="flex-1 overflow-y-auto p-6 pt-20 space-y-6">
-        <section className="bg-content rounded border border-border p-5">
+        {/* Tab 切换：基础设置 / 高级设置 */}
+        <div className="flex items-center gap-2 w-fit">
+          {(
+            [
+              { k: 'basic', label: '基础设置' },
+              { k: 'advanced', label: '高级设置' }
+            ] as { k: SettingsTab; label: string }[]
+          ).map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setTab(t.k)}
+              className={`px-5 py-2 rounded-full text-sm transition-all ${
+                tab === t.k
+                  ? 'bg-brand-soft text-brand border border-brand/20'
+                  : 'bg-content text-fg-secondary border border-border-soft hover:bg-hover-bg'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'basic' && (
+        <>
+        <section className="bg-content rounded-xl border border-border-soft p-5">
           <h2 className="font-semibold mb-1">外观样式</h2>
           <p className="text-xs text-fg-muted mb-4">调整正文字体大小与行间距，实时生效并自动保存。</p>
           <div className="space-y-4 text-sm">
@@ -144,7 +206,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="bg-content rounded border border-border p-5">
+        <section className="bg-content rounded-xl border border-border-soft p-5">
           <h2 className="font-semibold mb-1">AI 模型配置</h2>
           <p className="text-xs text-fg-muted mb-4">
             选择本地 Ollama 或远端 OpenAI 兼容服务。关闭后所有 AI 操作降级为本地规则引擎。
@@ -227,14 +289,14 @@ export function SettingsPage() {
         </section>
 
         {activeKb && (
-          <section className="bg-content rounded border border-border p-5">
+          <section className="bg-content rounded-xl border border-border-soft p-5">
             <h2 className="font-semibold mb-1">知识库</h2>
             <p className="text-xs text-fg-muted mb-2">当前：{activeKb.name}</p>
             <p className="text-xs text-fg-muted break-all">路径：{activeKb.rootPath}</p>
           </section>
         )}
 
-        <section className="bg-content rounded border border-border p-5">
+        <section className="bg-content rounded-xl border border-border-soft p-5">
           <h2 className="font-semibold mb-2">备份指引</h2>
           <ul className="text-sm text-fg-secondary space-y-2 list-disc pl-5">
             <li>所有笔记均为本地 Markdown 文件，可直接复制整个知识库文件夹备份。</li>
@@ -244,7 +306,7 @@ export function SettingsPage() {
           </ul>
         </section>
 
-        <section className="bg-content rounded border border-border p-5">
+        <section className="bg-content rounded-xl border border-border-soft p-5">
           <h2 className="font-semibold mb-2">关于与更新</h2>
           <p className="text-sm text-fg-secondary">锦囊笔记 ForgeNote</p>
           <p className="text-xs text-fg-muted mt-1">
@@ -298,6 +360,85 @@ export function SettingsPage() {
             )}
           </div>
         </section>
+        </>
+        )}
+
+        {tab === 'advanced' && (
+          <section className="bg-content rounded-xl border border-border-soft p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold">提示词配置</h2>
+              <button onClick={resetPrompts} className="btn text-xs">恢复默认</button>
+            </div>
+            <p className="text-xs text-fg-muted mb-4">
+              以下为内置 AI 功能的固定提示词，可自定义后保存（持久化到本地，重新打开依然有效）。
+            </p>
+
+            <div className="space-y-5 text-sm">
+              {/* 每天灵感一现 */}
+              <div>
+                <label className="text-xs text-fg-muted">每天灵感一现（灵感工坊）</label>
+                <textarea
+                  value={prompts.dailyInsight}
+                  onChange={(e) => patchPrompt({ dailyInsight: e.target.value })}
+                  rows={4}
+                  className="input mt-1.5 w-full resize-y"
+                />
+              </div>
+
+              {/* 灵感方向 */}
+              <div>
+                <label className="text-xs text-fg-muted">灵感方向（灵感工坊，每组一条提示词）</label>
+                <div className="mt-1.5 space-y-3">
+                  {prompts.inspirationModes.map((m, i) => (
+                    <div key={m.key} className="rounded-xl border border-border-soft p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={m.title}
+                          onChange={(e) => patchMode(i, { title: e.target.value })}
+                          className="input flex-1"
+                          placeholder="方向标题"
+                        />
+                        <input
+                          value={m.desc}
+                          onChange={(e) => patchMode(i, { desc: e.target.value })}
+                          className="input flex-1"
+                          placeholder="一句话描述"
+                        />
+                      </div>
+                      <textarea
+                        value={m.prompt}
+                        onChange={(e) => patchMode(i, { prompt: e.target.value })}
+                        rows={3}
+                        className="input w-full resize-y"
+                        placeholder="该方向对应的 AI 提示词"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 对话快捷提问 */}
+              <div>
+                <label className="text-xs text-fg-muted">对话快捷提问（每行一条）</label>
+                <textarea
+                  value={prompts.chatQuickPrompts.join('\n')}
+                  onChange={(e) =>
+                    patchPrompt({ chatQuickPrompts: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })
+                  }
+                  rows={4}
+                  className="input mt-1.5 w-full resize-y"
+                  placeholder="每行一条快捷提问"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button onClick={savePrompts} disabled={promptsSaving} className="btn btn-primary">
+                  {promptsSaving ? '保存中…' : '保存提示词'}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

@@ -22,6 +22,74 @@ export interface AIModelConfig {
   apiKey?: string;
 }
 
+/** 灵感方向（灵感工坊固定提示词条目） */
+export interface InspirationModePrompt {
+  key: string;
+  icon: string;
+  title: string;
+  desc: string;
+  prompt: string;
+}
+
+/** 固定的 AI 角色 / 发送提示词，可在「高级设置」中编辑并持久化 */
+export interface AIPrompts {
+  /** 灵感工坊：每天灵感一现 固定发送文本 */
+  dailyInsight: string;
+  /** 灵感工坊：灵感方向列表 */
+  inspirationModes: InspirationModePrompt[];
+  /** 全局对话：快捷提问（点击直接发送） */
+  chatQuickPrompts: string[];
+}
+
+/** 灵感方向默认提示词（与改造前硬编码保持一致） */
+export const DEFAULT_INSPIRATION_MODES: InspirationModePrompt[] = [
+  {
+    key: 'blindspot',
+    icon: 'light-bulb',
+    title: '思维盲区',
+    desc: '找出我可能忽略的角度、前提与反例',
+    prompt:
+      '请基于我的知识库，指出我在当前议题上的「思维盲区」：我可能忽略的视角、隐含前提、常见认知偏差、以及关键反例。用「大多数人都容易忽略…」的口吻，给出 4~6 条具体、可对照的点。'
+  },
+  {
+    key: 'complement',
+    icon: 'sparkles',
+    title: '补充思路',
+    desc: '完善我现有的想法，补齐结构性缺口',
+    prompt:
+      '请基于我的知识库，对我的当前想法做「补充与完善」：补齐逻辑链缺口、补充关键证据/方法、指出可合并的相关笔记。给出 4~6 条可直接并入现有思路的补充项。'
+  },
+  {
+    key: 'cases',
+    icon: 'book-open',
+    title: '延伸案例',
+    desc: '提供类比、案例与跨领域参照，帮我了解更多',
+    prompt:
+      '请基于我的知识库，提供「延伸案例与跨领域参照」：类比、真实/行业案例、可迁移的方法论，帮助我把当前议题理解得更广。每条标注「类比点」与「可借鉴之处」，给 4~6 条。'
+  },
+  {
+    key: 'reframe',
+    icon: 'arrows-pointing-out',
+    title: '换个角度',
+    desc: '用不同范式/角色重新框架化问题',
+    prompt:
+      '请基于我的知识库，用「换框架」的方式重构我的议题：分别用第一性原理、用户视角、长期主义、逆向思维等 3~4 个框架重新提问并给出新结论，帮我突破原有思路。'
+  }
+];
+
+/** 固定的 AI 提示词默认值 */
+export const DEFAULT_AI_PROMPTS: AIPrompts = {
+  dailyInsight:
+    '请你给我一个醍醐灌顶的认知且当前知识库中未有的，它是有违人们常识的。人们平时做的都是反的，但真正正确的方法应该是这样的。正确的做法应该是什么样的？这个道理特别的简单，请你用大白话给我讲清楚，并且给我至少3个真实案例，每个案例要求有出处，不是运气。因为这个原理能够很好的佐证，刚才我们讲的那个常识，然后给一个最小可执行方法，一周以内的。不要鸡汤，我要实操。',
+  inspirationModes: DEFAULT_INSPIRATION_MODES,
+  chatQuickPrompts: [
+    '帮我总结一下今天的笔记',
+    '总结一下本周的笔记要点',
+    '我最近在关注哪些主题？帮我梳理一下',
+    '帮我把今天的笔记整理成待办清单'
+  ]
+};
+
 /** 不同 provider 的模型选项（供 UI 切换） */
 export const AI_MODELS: Record<Exclude<AIProvider, 'none'>, ModelOption[]> = {
   ollama: [

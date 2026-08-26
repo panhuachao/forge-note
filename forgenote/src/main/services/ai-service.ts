@@ -2,7 +2,8 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getKB, getConfig, setConfig, saveAIPreset, getAIPresets } from './store';
-import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult } from '@shared/types';
+import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult, AIPrompts } from '@shared/types';
+import { DEFAULT_AI_PROMPTS } from '@shared/types/ai';
 import { extractWikiLinks, previewLine } from '../utils/markdown';
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
@@ -30,6 +31,22 @@ class AIService {
     const next = { ...cur, ...cfg };
     setConfig('ai:config', next);
     this.configCache = next;
+  }
+
+  /** 读取固定的 AI 提示词（灵感方向 / 每天灵感一现 / 对话快捷提问），带默认值兜底 */
+  async getPrompts(): Promise<AIPrompts> {
+    const saved = getConfig<AIPrompts>('ai:prompts', DEFAULT_AI_PROMPTS);
+    // 深合并默认值，保证新增字段在旧配置中也有值
+    return {
+      dailyInsight: saved?.dailyInsight ?? DEFAULT_AI_PROMPTS.dailyInsight,
+      inspirationModes: saved?.inspirationModes?.length ? saved.inspirationModes : DEFAULT_AI_PROMPTS.inspirationModes,
+      chatQuickPrompts: saved?.chatQuickPrompts?.length ? saved.chatQuickPrompts : DEFAULT_AI_PROMPTS.chatQuickPrompts
+    };
+  }
+
+  /** 保存固定的 AI 提示词（持久化到 app_config） */
+  async setPrompts(prompts: AIPrompts): Promise<void> {
+    setConfig('ai:prompts', prompts);
   }
 
   private isEnabled(cfg: AIModelConfig): boolean {

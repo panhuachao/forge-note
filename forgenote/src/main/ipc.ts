@@ -106,6 +106,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // AI
   ipcMain.handle(IPC.AI_GET_CONFIG, async () => aiService.getConfig());
   ipcMain.handle(IPC.AI_SET_CONFIG, async (_e, cfg) => aiService.setConfig(cfg));
+  ipcMain.handle(IPC.AI_GET_PROMPTS, async () => aiService.getPrompts());
+  ipcMain.handle(IPC.AI_SET_PROMPTS, async (_e, prompts) => aiService.setPrompts(prompts));
   ipcMain.handle(IPC.AI_ASK, async (_e, kbId: string, q: string, opts) => aiService.ask(kbId, q, opts));
   ipcMain.handle(IPC.AI_SUMMARIZE, async (_e, kbId: string, p: string) => aiService.summarize(kbId, p));
   ipcMain.handle(IPC.AI_GENERATE_TAGS, async (_e, kbId: string, p: string) => aiService.generateTags(kbId, p));
