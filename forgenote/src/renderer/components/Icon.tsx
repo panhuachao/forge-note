@@ -39,6 +39,10 @@ export type IconName =
   | 'square-2-stack'
   | 'magnifying-glass'
   | 'hashtag'
+  | 'arrow-path'
+  | 'arrows-right-left'
+  | 'check'
+  | 'viewfinder-circle'
   | 'queue-list'
   | 'arrow-left'
   | 'arrow-right'
@@ -122,7 +126,11 @@ const outlineMap: Record<string, any> = {
   'arrows-pointing-out': HeroiconsOutline.ArrowsPointingOutIcon,
   'view-columns': HeroiconsOutline.EyeIcon,
   'document-text': HeroiconsOutline.DocumentTextIcon,
-  'copy': HeroiconsOutline.DocumentDuplicateIcon
+  'copy': HeroiconsOutline.DocumentDuplicateIcon,
+  'arrow-path': HeroiconsOutline.ArrowPathIcon,
+  'arrows-right-left': HeroiconsOutline.ArrowsRightLeftIcon,
+  'check': HeroiconsOutline.CheckIcon,
+  'viewfinder-circle': HeroiconsOutline.ViewfinderCircleIcon
 };
 
 const solidMap: Record<string, any> = {

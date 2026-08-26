@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import type { TreeNode } from '@shared/types';
 
-export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results' | 'tag-notes' | 'inspiration';
+export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results' | 'tag-notes' | 'inspiration' | 'diagnose';
 export type TreeView = 'tree' | 'tags';
 export type SortMode = 'name' | 'mtime' | 'created';
 export type FontSizeKey = 'sm' | 'md' | 'lg';

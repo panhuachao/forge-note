@@ -15,6 +15,7 @@ import ChatPage from './pages/ChatPage';
 import SearchResultsPage from './pages/SearchResultsPage';
 import { TagNotesPage } from './pages/TagNotesPage';
 import { InspirationPage } from './pages/InspirationPage';
+import { DiagnosePage } from './pages/DiagnosePage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { SetupWizard } from './components/SetupWizard';
@@ -94,12 +95,14 @@ export function App() {
     if (mainView === 'search-results') return <SearchResultsPage />;
     if (mainView === 'tag-notes') return <TagNotesPage />;
     if (mainView === 'inspiration') return <InspirationPage />;
+    if (mainView === 'diagnose') return <DiagnosePage />;
     return <MultiNoteEditor />;
   }
 
   const isNoteView = mainView === 'note';
   const isTagNotesView = mainView === 'tag-notes';
-  const showLeft = (isNoteView || isTagNotesView) && !leftPanelCollapsed;
+  const isDiagnoseView = mainView === 'diagnose';
+  const showLeft = (isNoteView || isTagNotesView || isDiagnoseView) && !leftPanelCollapsed;
   const showRight = isNoteView && !rightPanelCollapsed;
 
   // 外观样式：根据设置切换 <html> 上的 data 属性，驱动 CSS 变量（字体大小/行间距）

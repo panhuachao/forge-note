@@ -38,7 +38,7 @@ function sortNodes(nodes: TreeNode[] | undefined, mode: SortMode): TreeNode[] {
 
 export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, setExpanded: setExpandedProp }: Props) {
   const { activeKb, pushToast, setTree, openCreateNote } = useKBStore();
-  const { sortMode, activeTabId } = useLayoutStore();
+  const { sortMode, activeTabId, setMainView } = useLayoutStore();
   // 展开状态默认在本地创建；非根实例使用从根透传的共享状态（保证全局展开/折叠生效）
   const [localExpanded, setLocalExpanded] = useState<Set<string>>(new Set());
   const expanded = depth === 0 ? localExpanded : (expandedProp ?? localExpanded);
@@ -182,6 +182,11 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
             className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title={allExpanded ? '全部折叠' : '全部展开'}
           ><Icon name={allExpanded ? 'chevron-up' : 'chevron-down'} className="w-4 h-4" /></button>
+          <button
+            onClick={() => setMainView('diagnose')}
+            className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg hover:text-brand rounded-xl transition-colors"
+            title="AI 诊断知识库"
+          ><Icon name="viewfinder-circle" className="w-4 h-4" /></button>
         </div>
         {sortedChildren.map((c) => (
           <FileTree
