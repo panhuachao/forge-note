@@ -11,10 +11,10 @@ import { kbService } from './kb-service';
 
 // 内置模板路径
 function builtinTemplatePath(): string {
-  // electron-vite 打包后 resources 在 process.resourcesPath
-  // 开发期 __dirname = <root>/dist/main，向上两级到 <root>，再进 resources
+  // 打包后：resources/** 会被打进 app.asar 根下的 resources/，用 app.getAppPath() 定位 asar 根
+  // 开发期：__dirname = <root>/dist/main，向上两级到 <root>，再进 resources
   if (app.isPackaged) {
-    return join(process.resourcesPath, 'templates', 'para-plus');
+    return join(app.getAppPath(), 'resources', 'templates', 'para-plus');
   }
   return join(__dirname, '..', '..', 'resources', 'templates', 'para-plus');
 }

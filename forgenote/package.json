@@ -63,8 +63,8 @@
       "output": "release"
     },
     "files": [
-      "dist/**/*",
-      "resources/**/*",
+      "dist/**",
+      "resources/**",
       "package.json"
     ],
     "publish": [
