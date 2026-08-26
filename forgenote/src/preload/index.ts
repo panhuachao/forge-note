@@ -60,6 +60,19 @@ const api = {
     getOutlinks: (kbId: string, p: string) => ipcRenderer.invoke(IPC.LINKS_GET_OUTLINKS, kbId, p) as Promise<string[]>,
     suggest: (kbId: string, p: string) => ipcRenderer.invoke(IPC.LINKS_SUGGEST, kbId, p) as Promise<LinkInfo[]>
   },
+  app: {
+    getVersion: () => ipcRenderer.invoke(IPC.APP_VERSION) as Promise<string>,
+    checkUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_CHECK) as Promise<void>,
+    installUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_INSTALL) as Promise<void>,
+    setAutoCheck: (enabled: boolean) => ipcRenderer.invoke(IPC.APP_UPDATE_ENABLE_AUTO, enabled) as Promise<void>,
+    onUpdate: (cb: (status: any) => void) => {
+      const listener = (_e: IpcRendererEvent, status: any) => cb(status);
+      ipcRenderer.on(IPC.EV_APP_UPDATE, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.EV_APP_UPDATE, listener);
+      };
+    }
+  },
   ai: {
     getConfig: () => ipcRenderer.invoke(IPC.AI_GET_CONFIG) as Promise<AIModelConfig>,
     setConfig: (cfg: Partial<AIModelConfig>) => ipcRenderer.invoke(IPC.AI_SET_CONFIG, cfg) as Promise<void>,

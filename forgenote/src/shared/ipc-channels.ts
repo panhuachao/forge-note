@@ -82,7 +82,24 @@ export const IPC = {
   WIN_MAXIMIZE_TOGGLE: 'win:maximizeToggle',
   WIN_IS_MAXIMIZED: 'win:isMaximized',
   WIN_MINIMIZE: 'win:minimize',
-  WIN_CLOSE: 'win:close'
+  WIN_CLOSE: 'win:close',
+
+  // App update
+  APP_VERSION: 'app:version',
+  APP_UPDATE_CHECK: 'app:updateCheck',
+  APP_UPDATE_INSTALL: 'app:updateInstall',
+  APP_UPDATE_ENABLE_AUTO: 'app:updateEnableAuto',
+  EV_APP_UPDATE: 'ev:appUpdate'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
+
+// 自动更新状态（主进程 -> 渲染进程）
+export type UpdateStatus =
+  | { type: 'checking' }
+  | { type: 'available'; version: string; releaseNotes?: string }
+  | { type: 'not-available'; version: string }
+  | { type: 'progress'; percent: number; transferred: number; total: number }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; message: string };
+

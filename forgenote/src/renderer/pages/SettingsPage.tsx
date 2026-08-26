@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import type { ThemeColorKey } from '../stores/layout-store';
 import type { AIModelConfig } from '@shared/types';
+import type { UpdateStatus } from '@shared/ipc-channels';
 import { PageHeader } from '../components/PageHeader';
 
 export function SettingsPage() {
@@ -10,6 +11,59 @@ export function SettingsPage() {
   const { fontSize, lineHeight, themeColor, setFontSize, setLineHeight, setThemeColor } = useLayoutStore();
   const [cfg, setCfg] = useState<AIModelConfig>(aiConfig);
   const [saving, setSaving] = useState(false);
+
+  // 应用更新状态
+  const [version, setVersion] = useState('');
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [autoCheck, setAutoCheck] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  useEffect(() => {
+    const app = window.forge.app;
+    if (!app) return;
+    app.getVersion().then(setVersion).catch(() => setVersion(''));
+    const off = app.onUpdate((s) => {
+      setUpdate(s);
+      if (s.type === 'progress') setDownloading(true);
+      if (s.type === 'downloaded') setDownloading(false);
+    });
+    return off;
+  }, []);
+
+  function handleCheck() {
+    const app = window.forge.app;
+    if (!app) return;
+    setUpdate({ type: 'checking' });
+    app.checkUpdate().catch((e) => setUpdate({ type: 'error', message: String(e) }));
+  }
+
+  function handleInstall() {
+    const app = window.forge.app;
+    if (!app) return;
+    setDownloading(true);
+    app.installUpdate().catch((e) => {
+      setDownloading(false);
+      setUpdate({ type: 'error', message: String(e) });
+    });
+  }
+
+  function handleToggleAuto(v: boolean) {
+    const app = window.forge.app;
+    setAutoCheck(v);
+    app?.setAutoCheck(v).catch(() => {});
+  }
+
+  function updateStatusText(s: UpdateStatus | null) {
+    if (!s) return '尚未检查';
+    switch (s.type) {
+      case 'checking': return '正在检查更新…';
+      case 'available': return `发现新版本 v${s.version}`;
+      case 'not-available': return `已是最新（v${s.version}）`;
+      case 'progress': return `下载中 ${Math.round(s.percent)}%`;
+      case 'downloaded': return `v${s.version} 已下载，点击重启安装`;
+      case 'error': return `检查失败：${s.message}`;
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -191,9 +245,58 @@ export function SettingsPage() {
         </section>
 
         <section className="bg-content rounded border border-border p-5">
-          <h2 className="font-semibold mb-2">关于</h2>
-          <p className="text-sm text-fg-secondary">锦囊笔记 ForgeNote V1.1</p>
-          <p className="text-xs text-fg-muted mt-1">MIT License · Forge your knowledge.</p>
+          <h2 className="font-semibold mb-2">关于与更新</h2>
+          <p className="text-sm text-fg-secondary">锦囊笔记 ForgeNote</p>
+          <p className="text-xs text-fg-muted mt-1">
+            当前版本：<span className="font-mono">{version || '—'}</span> · MIT License · Forge your knowledge.
+          </p>
+
+          <div className="mt-4 pt-4 border-t border-border-soft">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm text-fg-secondary">{updateStatusText(update)}</div>
+                {update?.type === 'progress' && (
+                  <div className="mt-2 h-1.5 w-48 rounded-full bg-canvas overflow-hidden">
+                    <div
+                      className="h-full bg-brand transition-all"
+                      style={{ width: `${Math.round(update.percent)}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={handleCheck}
+                  disabled={update?.type === 'checking' || downloading}
+                  className="btn"
+                >
+                  {update?.type === 'checking' ? '检查中…' : '检查更新'}
+                </button>
+                {(update?.type === 'available' || update?.type === 'downloaded') && (
+                  <button onClick={handleInstall} disabled={downloading} className="btn btn-primary">
+                    {update?.type === 'downloaded' ? '重启并安装' : '下载更新'}
+                  </button>
+                )}
+              </div>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-xs text-fg-muted cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoCheck}
+                onChange={(e) => handleToggleAuto(e.target.checked)}
+                className="accent-brand"
+              />
+              启动时自动检查更新
+            </label>
+            {update?.type === 'available' && update.releaseNotes && (
+              <details className="mt-3 text-xs text-fg-muted">
+                <summary className="cursor-pointer">查看更新说明</summary>
+                <pre className="mt-2 whitespace-pre-wrap bg-canvas rounded p-2 max-h-48 overflow-auto">
+                  {update.releaseNotes}
+                </pre>
+              </details>
+            )}
+          </div>
         </section>
       </div>
     </div>

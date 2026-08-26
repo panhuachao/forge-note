@@ -29,7 +29,7 @@ export function App() {
   const {
     setKBs, setActiveKb, setTree, setApplied, setAIConfig,
     openCreateNote, createNoteOpen, createNoteDir, closeCreateNote,
-    quickNoteOpen, closeQuickNote
+    quickNoteOpen, closeQuickNote, pushToast
   } = useKBStore();
   const { mainView, leftPanelCollapsed, rightPanelCollapsed, fontSize, lineHeight, themeColor } = useLayoutStore();
   const [quickNoteInitial, setQuickNoteInitial] = useState('');
@@ -66,9 +66,18 @@ export function App() {
       useKBStore.getState().openQuickNote();
     };
     window.addEventListener('forgenote:open-quicknote', onOpenQuickNote);
+    // 启动自动检查更新（静默；仅在有新版本时提示）
+    const offUpdate =
+      window.forge.app?.onUpdate?.((s) => {
+        if (s.type === 'available') {
+          pushToast({ level: 'info', text: `发现新版本 v${s.version}，可在「设置」中更新` });
+        }
+      }) ?? (() => {});
+    window.forge.app?.checkUpdate?.().catch(() => {});
     return () => {
       off();
       offMenu();
+      offUpdate();
       window.removeEventListener('forgenote:open-quicknote', onOpenQuickNote);
     };
   }, []);
