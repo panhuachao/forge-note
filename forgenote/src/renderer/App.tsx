@@ -14,6 +14,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import ChatPage from './pages/ChatPage';
 import SearchResultsPage from './pages/SearchResultsPage';
 import { TagNotesPage } from './pages/TagNotesPage';
+import { InspirationPage } from './pages/InspirationPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { SetupWizard } from './components/SetupWizard';
@@ -92,6 +93,7 @@ export function App() {
     if (mainView === 'chat') return <ChatPage />;
     if (mainView === 'search-results') return <SearchResultsPage />;
     if (mainView === 'tag-notes') return <TagNotesPage />;
+    if (mainView === 'inspiration') return <InspirationPage />;
     return <MultiNoteEditor />;
   }
 

@@ -15,10 +15,10 @@ interface MenuItem {
 
 const items: MenuItem[] = [
   { id: 'home', icon: 'home', label: '首页' },
-  { id: 'note', icon: 'pencil', label: '笔记', requireKb: true },
+  { id: 'note', icon: 'folder', label: '笔记', requireKb: true },
+  { id: 'graph', icon: 'share', label: '图谱', requireKb: true },
   { id: 'chat', icon: 'chat-bubble', label: '对话', requireKb: true },
   { id: 'search-results', icon: 'search', label: '检索', requireKb: true },
-  { id: 'graph', icon: 'globe', label: '图谱', requireKb: true },
   { id: 'template', icon: 'clipboard', label: '模板', requireKb: true },
   { id: 'audit', icon: 'clock', label: '历史', requireKb: true }
 ];
@@ -43,15 +43,32 @@ export function MainMenuRail() {
       {/* 菜单按钮区顶部间距 */}
       <div className="mt-2" />
 
-      {/* 快速笔记（最前面） */}
+      {/* 快速笔记 + 灵感：一组操作入口 */}
       <button
         onClick={openQuickNote}
         title="快速笔记：粘贴内容，AI 自动整理归档"
         className="group relative w-10 h-10 flex items-center justify-center rounded-xl bg-brand text-brand-fg shadow-sm hover:bg-brand-hover hover:shadow transition-all"
       >
-        <Icon name="sparkles" className="w-5 h-5" />
+        <Icon name="plus" className="w-5 h-5" />
         <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
           快速笔记
+        </span>
+      </button>
+      <button
+        onClick={() => activeKb && setMainView('inspiration')}
+        disabled={!activeKb}
+        title="灵感工坊"
+        className={`group relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
+          mainView === 'inspiration'
+            ? 'bg-brand-soft text-brand'
+            : activeKb
+            ? 'text-fg-muted hover:bg-hover-bg hover:text-fg'
+            : 'text-fg-faint cursor-not-allowed'
+        }`}
+      >
+        <Icon name="light-bulb" className="w-5 h-5" />
+        <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+          灵感工坊
         </span>
       </button>
 

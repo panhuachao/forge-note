@@ -12,7 +12,8 @@ interface GraphNode {
   vy: number;
   path: string;
   name: string;
-  dir: string;        // 所在目录（用于按目录过滤）
+  dir: string;        // 所在直接父目录（保留用于内部用途）
+  topDir: string;     // 顶级（一级）目录名：仅 path 首段，用于右侧目录筛选/隐藏
   color: string;
   outlinkCount: number;
   inlinkCount: number;
@@ -140,6 +141,8 @@ export function GraphPage() {
         path: f.path,
         name: f.name,
         dir: f.dir,
+        // 顶级目录：仅保留路径的第一段（一级目录）。用于右侧目录筛选与隐藏判断。
+        topDir: f.path.includes('/') ? f.path.split('/')[0] : '',
         color: f.color,
         outlinkCount: (outMap.get(f.path) || []).length,
         inlinkCount: (inMap.get(f.path) || []).length
@@ -246,8 +249,8 @@ export function GraphPage() {
       const a = nodesRef.current[e.a];
       const b = nodesRef.current[e.b];
       if (!a || !b) continue;
-      // 隐藏端点的边跳过
-      if (hiddenDirsRef.current.has(a.dir) || hiddenDirsRef.current.has(b.dir)) continue;
+      // 隐藏端点的边跳过：按一级目录隐藏（一级隐藏则其下所有节点也隐藏）
+      if (hiddenDirsRef.current.has(a.topDir) || hiddenDirsRef.current.has(b.topDir)) continue;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -259,7 +262,7 @@ export function GraphPage() {
     const selectIdx = selectedNodeIdx;
     for (let i = 0; i < nodesRef.current.length; i++) {
       const n = nodesRef.current[i];
-      if (hiddenDirsRef.current.has(n.dir)) continue;
+      if (hiddenDirsRef.current.has(n.topDir)) continue;
       ctx.fillStyle = n.color;
       ctx.strokeStyle = i === hoverIdx || i === selectIdx ? '#0f172a' : '#ffffff';
       ctx.lineWidth = (i === hoverIdx || i === selectIdx ? 2 : 1.5) / zoom;
@@ -294,7 +297,7 @@ export function GraphPage() {
     let bestDist = threshold;
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
-      if (hiddenDirsRef.current.has(n.dir)) continue;
+      if (hiddenDirsRef.current.has(n.topDir)) continue;
       const d = Math.hypot(n.x - wx, n.y - wy);
       if (d < bestDist) {
         bestDist = d;
@@ -409,25 +412,26 @@ export function GraphPage() {
     viewRef.current.panY = sy - h / 2 - wyBefore * newZoom;
   }
 
-  // 目录列表（去重）。依赖 graphVersion（而非 nodesRef.current.length），
+  // 目录列表（去重，按一级目录聚合）。依赖 graphVersion（而非 nodesRef.current.length），
   // 因为 nodesRef 是 ref，赋值不会触发重渲染，必须用 graphVersion 驱动刷新。
   const dirs = useMemo(() => {
     const map = new Map<string, { name: string; color: string; count: number }>();
     for (const n of nodesRef.current) {
-      if (!n.dir) continue;
-      const e = map.get(n.dir) || { name: n.dir, color: n.color, count: 0 };
+      // 仅按顶级目录聚合（一级目录 = path 首段），隐藏一级目录会同时隐藏其下所有嵌套节点
+      if (!n.topDir) continue;
+      const e = map.get(n.topDir) || { name: n.topDir, color: n.color, count: 0 };
       e.count++;
-      map.set(n.dir, e);
+      map.set(n.topDir, e);
     }
     return Array.from(map.entries()).map(([k, v]) => ({ key: k, ...v }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphVersion]);
 
-  const visibleNodeCount = nodesRef.current.filter(n => !hiddenDirs.has(n.dir)).length;
+  const visibleNodeCount = nodesRef.current.filter(n => !hiddenDirs.has(n.topDir)).length;
   const visibleEdgeCount = edgesRef.current.filter(e => {
     const a = nodesRef.current[e.a];
     const b = nodesRef.current[e.b];
-    return a && b && !hiddenDirs.has(a.dir) && !hiddenDirs.has(b.dir);
+    return a && b && !hiddenDirs.has(a.topDir) && !hiddenDirs.has(b.topDir);
   }).length;
 
   function toggleDir(dir: string) {
@@ -441,7 +445,7 @@ export function GraphPage() {
 
   return (
     <div className="flex-1 flex flex-col bg-content overflow-hidden">
-      <PageHeader icon="globe" title="知识图谱">
+      <PageHeader icon="share" title="知识图谱">
         <span className="text-fg-muted text-xs">
           {visibleNodeCount} 个节点 · {visibleEdgeCount} 条链接 · 共 {nodesRef.current.length} 节点
         </span>

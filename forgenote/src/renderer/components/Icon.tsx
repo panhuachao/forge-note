@@ -12,6 +12,7 @@ export type IconName =
   | 'pencil'
   | 'pencil-square'
   | 'globe'
+  | 'share'
   | 'clipboard'
   | 'clock'
   | 'cog'
@@ -62,6 +63,7 @@ export type IconName =
 
 const outlineMap: Record<string, any> = {
   folder: HeroiconsOutline.FolderIcon,
+  share: HeroiconsOutline.ShareIcon,
   'folder-open': HeroiconsOutline.FolderOpenIcon,
   'folder-plus': HeroiconsOutline.FolderPlusIcon,
   document: HeroiconsOutline.DocumentIcon,

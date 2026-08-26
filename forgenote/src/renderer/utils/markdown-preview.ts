@@ -97,6 +97,12 @@ export function renderMarkdownPreview(md: string, kbId: string, currentPath: str
       );
       continue;
     }
+    // 水平分割线：整行 --- / *** / ___ 渲染为 <hr>
+    if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line)) {
+      out.push('<hr />');
+      i++;
+      continue;
+    }
     // 任务列表
     const task = /^\s*-\s\[( |x|X)\]\s+(.+)$/.exec(line);
     if (task) {
