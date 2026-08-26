@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getKB, getConfig, setConfig, saveAIPreset, getAIPresets } from './store';
 import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult, AIPrompts } from '@shared/types';
-import { DEFAULT_AI_PROMPTS } from '@shared/types/ai';
+import { DEFAULT_AI_PROMPTS, normalizeAIModelConfig } from '@shared/types/ai';
 import { extractWikiLinks, previewLine } from '../utils/markdown';
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
@@ -19,10 +19,8 @@ class AIService {
 
   async getConfig(): Promise<AIModelConfig> {
     if (this.configCache) return this.configCache;
-    const c = getConfig<AIModelConfig>('ai:config', {
-      provider: 'none'
-    });
-    this.configCache = c || { provider: 'none' };
+    const raw = getConfig<AIModelConfig>('ai:config', { provider: 'none' });
+    this.configCache = normalizeAIModelConfig(raw || { provider: 'none' });
     return this.configCache;
   }
 

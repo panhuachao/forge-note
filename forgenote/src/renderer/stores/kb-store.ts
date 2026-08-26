@@ -44,7 +44,7 @@ export const useKBStore = create<KBState>((set) => ({
   currentNote: null,
   theme: 'light',
   toasts: [],
-  aiConfig: { provider: 'none' },
+  aiConfig: { provider: 'none', serviceProvider: 'none' },
   setKBs: (kbs) => set({ kbs }),
   setActiveKb: (activeKb) => set({ activeKb }),
   setApplied: (applied) => set({ applied }),
@@ -139,3 +139,10 @@ export const useKBStore = create<KBState>((set) => ({
     }
   }
 }));
+
+// 启动时异步加载 AI 配置（含 serviceProvider 推断）
+if (typeof window !== 'undefined' && window.forge?.ai?.getConfig) {
+  window.forge.ai.getConfig().then((cfg) => {
+    useKBStore.getState().setAIConfig(cfg);
+  }).catch(() => {});
+}

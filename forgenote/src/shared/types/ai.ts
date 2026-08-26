@@ -2,7 +2,11 @@
 // 单一配置：AIModelConfig - 当前激活的模型设置
 // 模型选项：ModelOption[] - 供 UI 下拉切换
 
+/** 底层协议类型：Ollama 或 OpenAI 兼容 */
 export type AIProvider = 'ollama' | 'openai' | 'none';
+
+/** 用户可见的模型服务商（用于设置页与模型列表） */
+export type AIServiceProvider = 'deepseek' | 'openai' | 'moonshot' | 'ollama' | 'none';
 
 export interface ModelOption {
   /** 内部 id，例如 'deepseek-chat' */
@@ -16,7 +20,10 @@ export interface ModelOption {
 }
 
 export interface AIModelConfig {
+  /** 底层协议：ollama / openai / none */
   provider: AIProvider;
+  /** 用户选择的模型服务商（持久化，用于 UI 模型列表） */
+  serviceProvider?: AIServiceProvider;
   baseUrl?: string;
   model?: string;
   apiKey?: string;
@@ -91,27 +98,90 @@ export const DEFAULT_AI_PROMPTS: AIPrompts = {
 };
 
 /** 不同 provider 的模型选项（供 UI 切换） */
-export const AI_MODELS: Record<Exclude<AIProvider, 'none'>, ModelOption[]> = {
+/** 各服务商默认 Base URL */
+export const AI_SERVICE_DEFAULTS: Record<Exclude<AIServiceProvider, 'none'>, { label: string; protocol: AIProvider; baseUrl: string; defaultModel: string }> = {
+  deepseek: {
+    label: 'DeepSeek',
+    protocol: 'openai',
+    baseUrl: 'https://api.deepseek.com/v1',
+    defaultModel: 'deepseek-chat'
+  },
+  openai: {
+    label: 'OpenAI',
+    protocol: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4o-mini'
+  },
+  moonshot: {
+    label: 'Moonshot',
+    protocol: 'openai',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    defaultModel: 'moonshot-v1-128k'
+  },
+  ollama: {
+    label: 'Ollama',
+    protocol: 'ollama',
+    baseUrl: 'http://127.0.0.1:11434',
+    defaultModel: ''
+  }
+};
+
+/** 各服务商可选模型列表（设置页 / 模型下拉共用） */
+export const AI_SERVICE_MODELS: Record<Exclude<AIServiceProvider, 'none'>, ModelOption[]> = {
+  deepseek: [
+    { id: 'deepseek-chat', label: 'deepseek-chat', desc: 'DeepSeek V3 对话模型' },
+    { id: 'deepseek-reasoner', label: 'deepseek-reasoner', desc: 'DeepSeek R1 推理模型', reasoning: true }
+  ],
+  openai: [
+    { id: 'gpt-4o-mini', label: 'gpt-4o-mini', desc: 'OpenAI GPT-4o mini' },
+    { id: 'gpt-4o', label: 'gpt-4o', desc: 'OpenAI GPT-4o' }
+  ],
+  moonshot: [
+    { id: 'moonshot-v1-8k', label: 'moonshot-v1-8k', desc: 'Moonshot 8K' },
+    { id: 'moonshot-v1-32k', label: 'moonshot-v1-32k', desc: 'Moonshot 32K' },
+    { id: 'moonshot-v1-128k', label: 'moonshot-v1-128k', desc: 'Moonshot 128K' }
+  ],
   ollama: [
     { id: 'qwen2.5:7b', label: 'qwen2.5:7b', desc: '通义千问 7B（中文友好）' },
     { id: 'qwen2.5:14b', label: 'qwen2.5:14b', desc: '通义千问 14B' },
     { id: 'llama3.1:8b', label: 'llama3.1:8b', desc: 'Llama 3.1 8B' },
     { id: 'deepseek-r1:7b', label: 'deepseek-r1:7b', desc: 'DeepSeek 推理 7B', reasoning: true }
-  ],
-  openai: [
-    { id: 'deepseek-chat', label: 'deepseek-chat', desc: 'DeepSeek V3 对话模型' },
-    { id: 'deepseek-reasoner', label: 'deepseek-reasoner', desc: 'DeepSeek R1 推理模型', reasoning: true },
-    { id: 'gpt-4o-mini', label: 'gpt-4o-mini', desc: 'OpenAI GPT-4o mini' },
-    { id: 'gpt-4o', label: 'gpt-4o', desc: 'OpenAI GPT-4o' },
-    { id: 'moonshot-v1-128k', label: 'moonshot-v1-128k', desc: '月之暗面 Moonshot 128K' }
   ]
 };
 
+/** 旧协议标签（保留用于降级显示） */
 export const AI_PROVIDER_LABEL: Record<AIProvider, string> = {
   none: '未配置',
   ollama: 'Ollama',
   openai: 'OpenAI 兼容'
 };
+
+/** 从旧配置（仅有 provider/baseUrl）推断服务商，用于兼容升级 */
+export function inferServiceProvider(cfg: AIModelConfig): AIServiceProvider {
+  if (cfg.serviceProvider && cfg.serviceProvider !== 'none') return cfg.serviceProvider;
+  if (cfg.provider === 'ollama') return 'ollama';
+  const url = (cfg.baseUrl || '').toLowerCase();
+  if (url.includes('deepseek')) return 'deepseek';
+  if (url.includes('moonshot') || url.includes('moonshot.cn')) return 'moonshot';
+  if (url.includes('openai')) return 'openai';
+  // 旧 openai 兼容默认都是 DeepSeek
+  if (cfg.provider === 'openai') return 'deepseek';
+  return 'none';
+}
+
+/** 保证配置同时包含 provider（协议）和 serviceProvider（服务商），缺失则补齐默认值 */
+export function normalizeAIModelConfig(cfg: Partial<AIModelConfig>): AIModelConfig {
+  const serviceProvider = inferServiceProvider(cfg as AIModelConfig) || 'deepseek';
+  const def = AI_SERVICE_DEFAULTS[serviceProvider];
+  const provider = def ? def.protocol : (cfg.provider || 'openai');
+  return {
+    provider,
+    serviceProvider,
+    baseUrl: cfg.baseUrl || def?.baseUrl || '',
+    model: cfg.model || def?.defaultModel || '',
+    apiKey: cfg.apiKey || ''
+  };
+}
 
 /** AI 推荐笔记归档目录 */
 export interface DirSuggestion {

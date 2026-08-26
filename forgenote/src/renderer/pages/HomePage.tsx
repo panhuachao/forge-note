@@ -3,7 +3,7 @@ import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import { useChatStore } from '../stores/chat-store';
 import { Icon, IconName } from '../components/Icon';
-import { AI_MODELS, ModelOption, AIModelConfig } from '@shared/types/ai';
+import { AI_SERVICE_MODELS, ModelOption, AIModelConfig, inferServiceProvider } from '@shared/types/ai';
 import {
   handleTitleBarDoubleClick,
   TITLEBAR_DRAG_STYLE
@@ -41,7 +41,7 @@ export function HomePage() {
   // 占位提示（多行输入上方）
   const placeholder =
     mode === 'ask'
-      ? '今天帮你做些什么？\n@引用对话文件 · /调用技能与指令'
+      ? '今天帮你做些什么？'
       : '在所有笔记中检索关键词…\nEnter 跳转搜索结果';
 
   // 初始化：有 KB 但无 active 时自动激活第一个
@@ -93,16 +93,7 @@ export function HomePage() {
   }
 
   async function switchModel(modelId: string) {
-    // 根据选中的模型 id 推断其所属 provider（DeepSeek 等走 openai 兼容）
-    const providerForModel =
-      (Object.keys(AI_MODELS) as Array<keyof typeof AI_MODELS>).find((p) =>
-        AI_MODELS[p].some((m) => m.id === modelId)
-      ) || aiConfig.provider;
-    const next: AIModelConfig = {
-      ...aiConfig,
-      provider: providerForModel,
-      model: modelId
-    } as AIModelConfig;
+    const next: AIModelConfig = { ...aiConfig, model: modelId };
     setAIConfig(next);
     try {
       await window.forge.ai.setConfig(next);
@@ -129,11 +120,10 @@ export function HomePage() {
     setMainView('chat');
   }
 
-  // 当前 provider 可选模型
+  // 当前服务商可选模型（默认使用设置中的默认模型）
+  const serviceProvider = inferServiceProvider(aiConfig);
   const currentModels: ModelOption[] =
-    aiConfig.provider === 'ollama' || aiConfig.provider === 'openai'
-      ? AI_MODELS[aiConfig.provider]
-      : [];
+    serviceProvider !== 'none' ? AI_SERVICE_MODELS[serviceProvider] : [];
 
   // 无知识库：空状态
   if (kbs.length === 0) {

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import type { ThemeColorKey } from '../stores/layout-store';
-import type { AIModelConfig, AIPrompts, InspirationModePrompt } from '@shared/types';
-import { DEFAULT_AI_PROMPTS } from '@shared/types/ai';
+import type { AIModelConfig, AIPrompts, InspirationModePrompt, AIServiceProvider } from '@shared/types';
+import { DEFAULT_AI_PROMPTS, AI_SERVICE_DEFAULTS, AI_SERVICE_MODELS } from '@shared/types/ai';
 import type { UpdateStatus } from '@shared/ipc-channels';
 import { PageHeader } from '../components/PageHeader';
 
@@ -209,63 +209,73 @@ export function SettingsPage() {
         <section className="bg-content rounded-xl border border-border-soft p-5">
           <h2 className="font-semibold mb-1">AI 模型配置</h2>
           <p className="text-xs text-fg-muted mb-4">
-            选择本地 Ollama 或远端 OpenAI 兼容服务。关闭后所有 AI 操作降级为本地规则引擎。
+            选择模型服务商与默认模型。关闭后所有 AI 操作降级为本地规则引擎。
           </p>
           <div className="space-y-3 text-sm">
             <div>
-              <label className="text-xs text-fg-muted">服务类型</label>
+              <label className="text-xs text-fg-muted">模型服务商</label>
               <select
-                value={cfg.provider}
-                onChange={(e) => setCfg({ ...cfg, provider: e.target.value as AIModelConfig['provider'] })}
+                value={cfg.serviceProvider || 'none'}
+                onChange={(e) => {
+                  const sp = e.target.value as AIServiceProvider;
+                  if (sp === 'none') {
+                    setCfg({ ...cfg, provider: 'none', serviceProvider: 'none', model: '', baseUrl: '' });
+                  } else {
+                    const def = AI_SERVICE_DEFAULTS[sp];
+                    setCfg({
+                      ...cfg,
+                      provider: def.protocol,
+                      serviceProvider: sp,
+                      baseUrl: def.baseUrl,
+                      model: def.defaultModel
+                    });
+                  }
+                }}
                 className="input"
               >
                 <option value="none">关闭（本地规则引擎降级）</option>
-                <option value="ollama">Ollama（本地大模型，推荐）</option>
-                <option value="openai">OpenAI 兼容（DeepSeek / OpenAI / Moonshot 等）</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="moonshot">Moonshot</option>
+                <option value="ollama">Ollama</option>
               </select>
             </div>
-            {cfg.provider === 'ollama' && (
-              <>
-                <div>
-                  <label className="text-xs text-fg-muted">服务地址</label>
-                  <input
-                    value={cfg.baseUrl || 'http://127.0.0.1:11434'}
-                    onChange={(e) => setCfg({ ...cfg, baseUrl: e.target.value })}
-                    className="input"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-fg-muted">模型名称（如 qwen2.5:7b, llama3.1）</label>
-                  <input
-                    value={cfg.model || ''}
-                    onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
-                    className="input"
-                    placeholder="qwen2.5:7b"
-                  />
-                </div>
-              </>
-            )}
-            {cfg.provider === 'openai' && (
+            {cfg.serviceProvider !== 'none' && (
               <>
                 <div>
                   <label className="text-xs text-fg-muted">Base URL</label>
                   <input
-                    value={cfg.baseUrl || 'https://api.deepseek.com/v1'}
+                    value={cfg.baseUrl || ''}
                     onChange={(e) => setCfg({ ...cfg, baseUrl: e.target.value })}
                     className="input"
-                    placeholder="https://api.deepseek.com/v1"
+                    placeholder={AI_SERVICE_DEFAULTS[cfg.serviceProvider as Exclude<AIServiceProvider, 'none'>]?.baseUrl}
                   />
-                  <p className="text-xs text-fg-faint mt-1">DeepSeek 填 https://api.deepseek.com/v1；OpenAI 填 https://api.openai.com/v1；Moonshot 填 https://api.moonshot.cn/v1</p>
+                  <p className="text-xs text-fg-faint mt-1">
+                    默认地址：{AI_SERVICE_DEFAULTS[cfg.serviceProvider as Exclude<AIServiceProvider, 'none'>]?.baseUrl}
+                  </p>
                 </div>
                 <div>
-                  <label className="text-xs text-fg-muted">模型名称</label>
-                  <input
-                    value={cfg.model || 'deepseek-chat'}
-                    onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
-                    className="input"
-                    placeholder="deepseek-chat"
-                  />
-                  <p className="text-xs text-fg-faint mt-1">DeepSeek 常用：deepseek-chat / deepseek-reasoner</p>
+                  <label className="text-xs text-fg-muted">默认模型</label>
+                  {cfg.serviceProvider === 'ollama' ? (
+                    <input
+                      value={cfg.model || ''}
+                      onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
+                      className="input"
+                      placeholder="qwen2.5:7b"
+                    />
+                  ) : (
+                    <select
+                      value={cfg.model || ''}
+                      onChange={(e) => setCfg({ ...cfg, model: e.target.value })}
+                      className="input"
+                    >
+                      {AI_SERVICE_MODELS[cfg.serviceProvider as Exclude<AIServiceProvider, 'none'>].map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label} {m.desc ? `— ${m.desc}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-fg-muted">API Key</label>
