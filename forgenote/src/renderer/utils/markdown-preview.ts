@@ -49,15 +49,23 @@ export function renderMarkdownPreview(md: string, kbId: string, currentPath: str
       out.push(`<pre><code class="language-${lang}">${escapeHtml(buf.join('\n'))}</code></pre>`);
       continue;
     }
-    // 标题
-    const h = /^(#{1,6})\s+(.+)$/.exec(line);
-    if (h) {
-      const level = h[1].length;
-      const raw = h[2].trim();
-      const anchor = 'h-' + i; // 行号锚点，便于大纲跳转
-      out.push(
-        `<h${level} id="${anchor}" data-line="${i + 1}">${inline(escapeHtml(raw))}</h${level}>`
-      );
+    // 标题：以 1~6 个 # 开头；后面需至少一个空格与标题文本才作为标题渲染。
+    // 注意：仅输入 "# " 或 "## "（有 # 有空格但还没写标题文本）时，
+    // 标题正则不匹配，必须仍消费该行并推进 i，否则会落入下方段落分支的
+    // "以 #{1,6}\s 开头则跳过"规则形成死循环（编辑中敲 # 后空格即卡死）。
+    if (/^#{1,6}\s/.test(line)) {
+      const h = /^(#{1,6})\s+(.+)$/.exec(line);
+      if (h) {
+        const level = h[1].length;
+        const raw = h[2].trim();
+        const anchor = 'h-' + i; // 行号锚点，便于大纲跳转
+        out.push(
+          `<h${level} id="${anchor}" data-line="${i + 1}">${inline(escapeHtml(raw))}</h${level}>`
+        );
+      } else {
+        // 仅有 "# " 无标题文本：按普通文本渲染，避免死循环
+        out.push(`<p>${inline(escapeHtml(line))}</p>`);
+      }
       i++;
       continue;
     }

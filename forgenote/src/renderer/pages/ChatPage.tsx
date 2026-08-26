@@ -114,33 +114,44 @@ export default function ChatPage() {
     setInput('');
   };
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || !activeKb) return;
+  // 新对话引导区的快捷提问（点击即可直接发送）
+  const QUICK_PROMPTS = [
+    '帮我总结一下今天的笔记',
+    '总结一下本周的笔记要点',
+    '我最近在关注哪些主题？帮我梳理一下',
+    '帮我把今天的笔记整理成待办清单'
+  ];
+
+  const useQuickPrompt = (text: string) => {
+    setInput(text);
+    // 等待受控输入框更新后再发送，确保发送的是该快捷提问
+    requestAnimationFrame(() => {
+      (async () => {
+        await sendWithText(text);
+      })();
+    });
+  };
+
+  const sendWithText = async (text: string) => {
+    const t = text.trim();
+    if (!t || !activeKb) return;
 
     let convId = activeId;
     if (!convId) {
-      // 创建新对话
-      convId = createConversation({ firstUserText: text, kbId: activeKb.id });
+      convId = createConversation({ firstUserText: t, kbId: activeKb.id });
     } else {
-      // 追加用户消息
-      appendMessage(convId, { role: 'user', text, ts: Date.now() });
+      appendMessage(convId, { role: 'user', text: t, ts: Date.now() });
     }
     setInput('');
     setLoading(true);
 
     try {
-      // 自愈：确保主进程使用渲染层最新的 AI 配置
-      // （防止主进程 configCache 未刷新导致的「无模型可用」）
       const remote = await window.forge.ai.getConfig();
-      const localEnabled =
-        aiConfig.provider !== 'none' && !!aiConfig.model;
+      const localEnabled = aiConfig.provider !== 'none' && !!aiConfig.model;
       if ((!remote || remote.provider === 'none' || !remote.model) && localEnabled) {
         await window.forge.ai.setConfig(aiConfig);
       }
-
-      // 调用主进程 RAG 问答（基于当前知识库 + AI 模型）
-      const ans = await window.forge.ai.ask(activeKb.id, text);
+      const ans = await window.forge.ai.ask(activeKb.id, t);
       appendMessage(convId!, {
         role: 'assistant',
         text: ans || '（AI 未返回内容）',
@@ -156,6 +167,8 @@ export default function ChatPage() {
       setLoading(false);
     }
   };
+
+  const send = () => sendWithText(input);
 
   return (
     <div className="flex-1 flex bg-content overflow-hidden">
@@ -305,6 +318,18 @@ export default function ChatPage() {
               <p className="text-xs text-fg-muted mb-5 max-w-xs leading-relaxed">
                 在下方输入框输入问题，AI 将基于当前知识库为你作答
               </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 max-w-sm mb-5">
+                {QUICK_PROMPTS.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => useQuickPrompt(p)}
+                    disabled={loading}
+                    className="px-3 py-1.5 text-[11px] text-fg-secondary bg-hover-bg hover:bg-brand-soft hover:text-brand rounded-full border border-border-soft transition-colors disabled:opacity-50"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
               <div className="flex items-center gap-2 text-[11px] text-fg-faint">
                 <span className="px-2 py-1 rounded-md bg-hover-bg">Enter 发送</span>
                 <span className="px-2 py-1 rounded-md bg-hover-bg">Shift+Enter 换行</span>
