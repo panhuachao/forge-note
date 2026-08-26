@@ -6,7 +6,7 @@
 
 - **版本号**：1.0.0
 - **构建工具**：electron-vite + electron-builder
-- **发布通道**：GitHub Releases（私有仓库 `forgenote/forgenote`）
+- **发布通道**：GitHub Releases（私有仓库 `panhuachao/forge-note`）
 - **支持平台**：macOS（dmg / zip）、Windows（nsis）
 
 ## 二、v1.0.0 主要更新
@@ -54,7 +54,7 @@ npm run build
 产物输出至 `release/` 目录。
 
 ### 发布到 GitHub
-`package.json` 已配置 `publish` 指向 `forgenote/forgenote`（私有仓库）。打包时可附加 `--publish=always` 自动上传：
+`package.json` 已配置 `publish` 指向 `panhuachao/forge-note`（私有仓库）。打包时可附加 `--publish=always` 自动上传：
 
 ```bash
 npm run package:mac -- --publish=always
