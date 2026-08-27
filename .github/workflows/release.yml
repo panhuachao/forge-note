@@ -18,8 +18,11 @@ env:
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
 
 jobs:
-  # ---------- macOS arm64：在 Apple Silicon runner 上原生打包 ----------
-  release-mac-arm64:
+  # ---------- macOS：在 Apple Silicon runner 上一次产出 arm64 + x64 两个包 ----------
+  # 说明：你本地已在 arm 机器上验证 `npm run package:mac`(--x64 --arm64) 可正常出两个可用包，
+  # 故无需单独 Intel runner（macos-13 资源紧张、排队久）。electron-builder 会为每个目标架构
+  # 重建原生模块（better-sqlite3），且主进程已确保即使 store 初始化失败窗口仍显示。
+  release-mac:
     runs-on: macos-latest
     defaults:
       run:
@@ -58,61 +61,12 @@ jobs:
       - name: Rebuild native modules for Electron
         run: npm run rebuild:native
 
-      # npm run package:mac:arm64 通过 dotenv -e .env 加载环境变量，CI 无 .env 文件
+      # npm run package:mac 通过 dotenv -e .env 加载环境变量，CI 无 .env 文件
       - name: Write .env for dotenv
         run: echo "GH_TOKEN=${{ secrets.GH_TOKEN }}" > .env
 
-      - name: Build & publish macOS arm64
-        run: npm run package:mac:arm64 -- --publish=always
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-  # ---------- macOS x64：在 Intel runner 上原生打包（避免交叉编译导致的渲染空白） ----------
-  release-mac-x64:
-    runs-on: macos-13
-    defaults:
-      run:
-        working-directory: forgenote
-    steps:
-      - name: Checkout（含 tag）
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: forgenote/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      # 导入 Developer ID 证书到钥匙串（用于签名 + 公证）
-      - name: Import Apple codesign cert
-        run: |
-          echo "${{ secrets.APPLE_CERT_BASE64 }}" | base64 --decode > /tmp/devid.p12
-          security create-keychain -p "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
-          security import /tmp/devid.p12 -k build.keychain -P "${{ secrets.APPLE_CERT_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/security -f pkcs12
-          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
-          rm -f /tmp/devid.p12
-        env:
-          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
-
-      - name: Rebuild native modules for Electron
-        run: npm run rebuild:native
-
-      - name: Write .env for dotenv
-        run: echo "GH_TOKEN=${{ secrets.GH_TOKEN }}" > .env
-
-      - name: Build & publish macOS x64
-        run: npm run package:mac:x64 -- --publish=always
+      - name: Build & publish macOS (arm64 + x64)
+        run: npm run package:mac -- --publish=always
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}

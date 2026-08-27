@@ -80,7 +80,7 @@
       "category": "public.app-category.productivity",
       "artifactName": "ForgeNote-${version}-${arch}.${ext}",
       "gatekeeperAssess": false,
-      "identity": "cn.com.tinyapp.forgenote.app",
+      "identity": "Developer ID Application",
       "notarize": true
     },
     "win": {

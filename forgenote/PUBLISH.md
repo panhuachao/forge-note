@@ -162,10 +162,10 @@ rm -f /tmp/devid.p12
 ```
 
 ### CI 自动签名 + 公证流程
-`.github/workflows/release.yml` 的两个 macOS job（`release-mac-arm64` / `release-mac-x64`）已包含：
+`.github/workflows/release.yml` 的 `release-mac` job（`macos-latest` 上运行 `npm run package:mac`，即 `--x64 --arm64` 一次产出两个包）包含：
 1. **导入证书**：将 `APPLE_CERT_BASE64` 解码为 p12 并导入到临时钥匙串（`build.keychain`），供 `codesign` 使用。
 2. **签名**：`package.json` 的 `mac.identity` 设为 `"Developer ID Application"`，electron-builder 打包时对 `.app` 做 Developer ID 签名。
-3. **公证**：`mac.notarize` 读取 `APPLE_ID` / `APPLE_APP_PASSWORD` / `APPLE_TEAM_ID` 环境变量，将产物提交 Apple 公证；通过后把 ticket stapled 到 dmg。
+3. **公证**：`mac.notarize: true` 读取 `APPLE_ID` / `APPLE_APP_PASSWORD` / `APPLE_TEAM_ID` 环境变量，将产物提交 Apple 公证；通过后把 ticket stapled 到 dmg。
 4. **发布**：`--publish=always` 上传已公证的 dmg/zip 到同一 Release。
 
 > 公证通常需要 1–5 分钟，CI 会等待结果，属正常现象。
