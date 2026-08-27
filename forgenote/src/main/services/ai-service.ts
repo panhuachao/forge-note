@@ -4,10 +4,12 @@ import { join } from 'path';
 import { getKB, getConfig, setConfig, saveAIPreset, getAIPresets } from './store';
 import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult, AIPrompts } from '@shared/types';
 import { DEFAULT_AI_PROMPTS, normalizeAIModelConfig } from '@shared/types/ai';
+import type { AIRefHit } from '@shared/types/ai';
 import { extractWikiLinks, previewLine } from '../utils/markdown';
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
 import { KB_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
+import { listExternalTools, executeExternalTool } from './mcp-client';
 
 const BASE_SYSTEM = `你是「锦囊笔记 ForgeNote」内置的本地 AI 知识管家，遵循以下铁律：
 1. 所有回答必须基于用户提供的笔记内容与知识库上下文，不编造信息。
@@ -19,6 +21,14 @@ class AIService {
   private configCache: AIModelConfig | null = null;
 
   async getConfig(): Promise<AIModelConfig> {
+    if (this.configCache) return this.configCache;
+    const raw = getConfig<AIModelConfig>('ai:config', { provider: 'none' });
+    this.configCache = normalizeAIModelConfig(raw || { provider: 'none' });
+    return this.configCache;
+  }
+
+  /** 同步读取 AI 配置（优先缓存）。外部 MCP 适配层（mcp-client.ts）需在不 await 的上下文取配置时用。 */
+  getConfigSync(): AIModelConfig {
     if (this.configCache) return this.configCache;
     const raw = getConfig<AIModelConfig>('ai:config', { provider: 'none' });
     this.configCache = normalizeAIModelConfig(raw || { provider: 'none' });
@@ -76,6 +86,139 @@ class AIService {
       return this.callOpenAI(c, sysPrompt, prompt);
     }
     return this.localFallback(prompt, sysPrompt);
+  }
+
+  /** 用量统计（成本可观测，方案 §三.3） */
+  async recordUsage(skill: string, usage: { promptTokens: number; completionTokens: number; ms: number }): Promise<void> {
+    const cur = getConfig<Record<string, { calls: number; tokens: number; ms: number }>>('ai:usage', {}) ?? {};
+    const e = cur[skill] ?? { calls: 0, tokens: 0, ms: 0 };
+    e.calls += 1;
+    e.tokens += usage.promptTokens + usage.completionTokens;
+    e.ms += usage.ms;
+    cur[skill] = e;
+    setConfig('ai:usage', cur);
+  }
+
+  getUsage(): Record<string, { calls: number; tokens: number; ms: number }> {
+    return getConfig<Record<string, { calls: number; tokens: number; ms: number }>>('ai:usage', {}) ?? {};
+  }
+
+  resetUsage(): void {
+    setConfig('ai:usage', {});
+  }
+
+  /**
+   * 流式对话（SSE/逐 token 渲染，方案 §三.1）。
+   * 返回 AsyncGenerator：每收到一段即 yield { delta }；结束时可能附带 usage（仅 openai/ollama 能在响应里得到）。
+   * 本地降级（无模型）会一次性 yield 完整文本。
+   */
+  async *streamChat(
+    prompt: string,
+    sysPrompt: string,
+    opts?: { signal?: AbortSignal }
+  ): AsyncGenerator<{ delta: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
+    const cfg = await this.getConfig();
+    const start = Date.now();
+    const t0 = start;
+    if (!this.isEnabled(cfg)) {
+      yield { delta: await this.localFallback(prompt, sysPrompt) };
+      return;
+    }
+    try {
+      if (cfg.provider === 'ollama') {
+        const base = cfg.baseUrl || 'http://127.0.0.1:11434';
+        const r = await fetch(`${base}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: cfg.model || 'qwen2.5:7b',
+            stream: true,
+            messages: [
+              { role: 'system', content: sysPrompt },
+              { role: 'user', content: prompt }
+            ]
+          }),
+          signal: opts?.signal
+        });
+        if (!r.ok) throw new Error(`Ollama 调用失败: ${r.status}`);
+        const reader = r.body!.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i: number;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 1);
+            if (!line) continue;
+            try {
+              const j = JSON.parse(line);
+              if (j.message?.content) yield { delta: j.message.content };
+              if (j.done) {
+                const u = j.prompt_eval_count ?? j.prompt_eval_count;
+                if (typeof j.prompt_eval_count === 'number' && typeof j.eval_count === 'number') {
+                  yield { delta: '', usage: { promptTokens: j.prompt_eval_count, completionTokens: j.eval_count, totalTokens: j.prompt_eval_count + j.eval_count } };
+                }
+              }
+            } catch {
+              /* 跳过非 JSON 行 */
+            }
+          }
+        }
+        return;
+      }
+      if (cfg.provider === 'openai') {
+        const base = cfg.baseUrl || 'https://api.deepseek.com/v1';
+        const r = await fetch(`${base}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey || ''}` },
+          body: JSON.stringify({
+            model: cfg.model || 'deepseek-chat',
+            stream: true,
+            messages: [
+              { role: 'system', content: sysPrompt },
+              { role: 'user', content: prompt }
+            ]
+          }),
+          signal: opts?.signal
+        });
+        if (!r.ok) throw new Error(`OpenAI 调用失败: ${r.status} ${await r.text()}`);
+        const reader = r.body!.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i: number;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 1);
+            if (!line || !line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (payload === '[DONE]') continue;
+            try {
+              const j = JSON.parse(payload);
+              const delta = j.choices?.[0]?.delta?.content;
+              if (delta) yield { delta };
+              const u = j.usage;
+              if (u) usage = { promptTokens: u.prompt_tokens, completionTokens: u.completion_tokens, totalTokens: u.total_tokens };
+            } catch {
+              /* 跳过非 JSON 行 */
+            }
+          }
+        }
+        if (usage) yield { delta: '', usage };
+        return;
+      }
+    } catch (e) {
+      yield { delta: `AI 调用失败: ${String(e)}` };
+      return;
+    }
+    void t0;
   }
 
   private async callOllama(cfg: AIModelConfig, sys: string, user: string): Promise<string> {
@@ -184,7 +327,7 @@ class AIService {
     history: { role: 'user' | 'assistant'; text: string }[],
     question: string,
     opts?: { templateDirIds?: string[] }
-  ): Promise<string> {
+  ): Promise<{ text: string; refs: AIRefHit[] }> {
     const historyBlock = history.length
       ? `\n\n# 此前的对话历史（请基于上文继续，不要重复已给建议）\n${history
           .map((t) => `${t.role === 'user' ? '用户' : '助手'}：${t.text}`)
@@ -192,18 +335,59 @@ class AIService {
       : '';
     if (!kbId) {
       // 无知识库上下文时，仅做纯多轮对话
-      return this.chat(question + historyBlock, BASE_SYSTEM);
+      return { text: await this.chat(question + historyBlock, BASE_SYSTEM), refs: [] };
     }
     const kb = getKB(kbId);
-    if (!kb) return this.chat(question + historyBlock, BASE_SYSTEM);
+    if (!kb) return { text: await this.chat(question + historyBlock, BASE_SYSTEM), refs: [] };
     const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
+    const refs: AIRefHit[] = hits.map((h) => ({ path: h.notePath, name: h.noteName, snippet: h.snippet }));
     const hitContext = hits
       .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
       .join('\n\n');
     const dirTree = await this.buildDirOverview(kb.rootPath, kbId);
     const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
     const sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 基于【目录结构 + 检索片段 + 此前后文】回答，引用具体笔记用 [[笔记名]]\n- 若用户是在确认/采纳上一轮建议，请直接基于前文执行，不要重新罗列建议${historyBlock}`;
-    return this.chat(question, sys);
+    return { text: await this.chat(question, sys), refs };
+  }
+
+  /**
+   * 流式多轮问答（方案 §三.1）：检索上下文一次性得到，正文逐 token 流式返回。
+   * yield 首片即附带 refs（引用溯源），末片可能附带 usage。
+   */
+  async *askStream(
+    kbId: string | undefined,
+    history: { role: 'user' | 'assistant'; text: string }[],
+    question: string,
+    opts?: { templateDirIds?: string[]; signal?: AbortSignal }
+  ): AsyncGenerator<{ delta: string; refs?: AIRefHit[]; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
+    const historyBlock = history.length
+      ? `\n\n# 此前的对话历史（请基于上文继续，不要重复已给建议）\n${history
+          .map((t) => `${t.role === 'user' ? '用户' : '助手'}：${t.text}`)
+          .join('\n')}`
+      : '';
+    let refs: AIRefHit[] = [];
+    let sys = BASE_SYSTEM + historyBlock;
+    if (kbId) {
+      const kb = getKB(kbId);
+      if (kb) {
+        const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
+        refs = hits.map((h) => ({ path: h.notePath, name: h.noteName, snippet: h.snippet }));
+        const hitContext = hits
+          .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
+          .join('\n\n');
+        const dirTree = await this.buildDirOverview(kb.rootPath, kbId);
+        const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
+        sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 基于【目录结构 + 检索片段 + 此前后文】回答，引用具体笔记用 [[笔记名]]\n- 若用户是在确认/采纳上一轮建议，请直接基于前文执行，不要重新罗列建议${historyBlock}`;
+      }
+    }
+    let first = true;
+    let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
+    for await (const chunk of this.streamChat(question, sys, { signal: opts?.signal })) {
+      if (chunk.usage) usage = chunk.usage;
+      yield { delta: chunk.delta, refs: first ? refs : undefined };
+      first = false;
+    }
+    if (usage) yield { delta: '', usage };
   }
 
   /**
@@ -776,6 +960,13 @@ class AIService {
       return '当前未配置 AI 模型，无法启用智能体工具调用。';
     }
     const tools = KB_TOOLS.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+    // 合并外部 MCP server 暴露的工具（方案 §6.4）：默认禁用，设置开启后才出现，实现跨域能力扩展。
+    try {
+      const ext = await listExternalTools();
+      for (const e of ext) tools.push({ type: 'function', function: { name: e.name, description: e.description, parameters: e.input_schema } });
+    } catch {
+      /* 外部 MCP 不可用不影响本地能力 */
+    }
     const messages: any[] = [{ role: 'system', content: sys }];
     for (const h of opts?.history || []) messages.push({ role: h.role, content: h.text });
     messages.push({ role: 'user', content: user });
@@ -793,8 +984,12 @@ class AIService {
       // 执行工具并回灌
       for (const tc of toolCalls) {
         const args = safeParseArgs(tc.function?.arguments);
-        const result = await executeTool({ name: tc.function?.name, args }, { kbId: kbId || '' });
-        const activity: ToolActivity = { name: tc.function?.name, args, result };
+        const name = tc.function?.name || '';
+        // 外部 MCP 工具（含 '.'，如 calendar.list）走 mcp-client，本地 kb_ 工具走 tool-runtime
+        const result = name.includes('.')
+          ? await executeExternalTool(name, args)
+          : await executeTool({ name, args }, { kbId: kbId || '' });
+        const activity: ToolActivity = { name, args, result };
         opts?.onActivity?.(activity);
         messages.push({ role: 'assistant', content: content || '', tool_calls: [tc] });
         messages.push({ role: 'tool', tool_call_id: tc.id, content: result });

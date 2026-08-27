@@ -1,0 +1,248 @@
+// Skill 注册表（方案 §5）
+// 每个 AISkill = 一段声明式能力单元；新增一个 AI 能力只需在此注册，无需改主进程 / IPC / 渲染骨架。
+// AIHub 按 skill.id 路由到对应 handler，并由 SessionStore 自动挂载多轮上下文（stateful Skill）。
+import { aiService } from './ai-service';
+import { KB_TOOLS, executeTool, type ToolActivity } from './tool-runtime';
+import type { AIResponse, AITurn, AIRefHit, AIUsage } from '@shared/types/ai';
+
+/** Skill 运行上下文（由 AIHub 注入） */
+export interface AISkillCtx {
+  kbId?: string;
+  input: { text: string; question?: string; dirId?: string };
+  /** 已注入的多轮历史（stateful Skill 才有） */
+  history: AITurn[];
+  /** 会话草稿（awaitConfirm Skill 确认后回传） */
+  pendingDraft?: unknown;
+  onActivity?: (a: ToolActivity) => void;
+}
+
+/** 统一 Skill 声明（本地类型，避免与 shared/types/ai.ts 的 Skill 冲突） */
+export interface AISkill {
+  id: string;
+  title: string;
+  description: string;
+  /** 模型能力偏好（预留 ModelRouter） */
+  capability?: ('reasoning' | 'long-context' | 'cheap')[];
+  /** 需要跨轮上下文（AIHub 自动挂载 SessionStore） */
+  stateful?: boolean;
+  /** 首轮只产出 draft，确认后才执行写工具（方案 §4.2 / §5.4） */
+  awaitConfirm?: boolean;
+  /** 需要调用的 MCP 工具 id（见 tool-runtime.ts / mcp-client.ts） */
+  useTools?: string[];
+  /** 无模型时的本地降级 */
+  localFallback?: (ctx: AISkillCtx) => AIResponse | Promise<AIResponse>;
+  /** 实际执行 */
+  run: (ctx: AISkillCtx) => Promise<AIResponse & { refs?: AIRefHit[]; usage?: AIUsage }>;
+}
+
+function txt(text: string): AIResponse {
+  return { kind: 'text', text };
+}
+function structured(data: unknown): AIResponse {
+  return { kind: 'structured', data };
+}
+
+/**
+ * 检测时间维度问题，返回 { sinceDays, label } 或 null。
+ * 例如「今天」「昨天」「本周」「最近 7 天」「近三天」「这周」→ 走按时间筛笔记的总结路径。
+ */
+export function parseTimeRange(q: string): { sinceDays: number; label: string } | null {
+  const text = q || '';
+  // 显式数字 + 天/日
+  const m1 = text.match(/最近\s*(\d{1,2})\s*(天|日)/);
+  const m2 = text.match(/近\s*(\d{1,2})\s*(天|日)/);
+  if (m1 || m2) {
+    const d = parseInt((m1?.[1] ?? m2![1]) as string, 10);
+    if (Number.isFinite(d) && d > 0 && d <= 90) return { sinceDays: d, label: `最近 ${d} 天` };
+  }
+  if (/今天|今日|当天/.test(text)) return { sinceDays: 1, label: '今天' };
+  if (/昨天|昨日/.test(text)) return { sinceDays: 2, label: '昨天' };
+  if (/本周|这周|这礼拜/.test(text)) return { sinceDays: 7, label: '本周' };
+  if (/上周|上礼拜/.test(text)) return { sinceDays: 14, label: '上周（取近 14 天）' };
+  if (/本月|这个月|这月/.test(text)) return { sinceDays: 30, label: '本月' };
+  if (/最近一周|近一周|过去一周/.test(text)) return { sinceDays: 7, label: '最近一周' };
+  return null;
+}
+
+/** 把 AITurn 历史裁剪为 askWithHistory 需要的 {role,text} 形态（去掉 tool 轮、超长截断） */
+function toChatHistory(turns: AITurn[]): { role: 'user' | 'assistant'; text: string }[] {
+  const pairs = turns
+    .filter((t) => (t.role === 'user' || t.role === 'assistant') && t.text)
+    .map((t) => ({ role: t.role as 'user' | 'assistant', text: t.text! }));
+  // 截断到最近 20 轮，避免超长
+  return pairs.slice(-20);
+}
+
+/**
+ * 内置 Skill 注册表。迁移自 ai-service.ts 的 ~8 个业务方法（方案 §5.2）。
+ * 新增能力 = 在此追加一项，AIHub.run 自动支持。
+ */
+/**
+ * 时间维度总结（「今天/昨天/本周/最近 N 天」）：按 mtime 筛笔记 → 读正文 → 让模型总结。
+ * 抽出来供 skill.run（非流式）与 ai-hub 流式分支共用，避免两套实现漂移。
+ * 返回 null 表示不是时间维度问题（调用方应走标准 RAG）。
+ */
+export async function runTimeSummary(
+  kbId: string,
+  question: string,
+  history: AITurn[]
+): Promise<{ text: string; refs: AIRefHit[] } | null> {
+  const tr = parseTimeRange(question);
+  if (!tr || !kbId) return null;
+  const listText = await executeTool({ name: 'kb_list_notes', args: { sinceDays: tr.sinceDays, limit: 200 } }, { kbId });
+  const paths = [...listText.matchAll(/^- (.+)$/gm)].map((m) => m[1].trim()).filter(Boolean);
+  if (paths.length === 0) {
+    return { text: `${tr.label} 没有新增或编辑的笔记。`, refs: [] };
+  }
+  // 读取每篇正文并拼接（限制总长，避免超 token）
+  const PER = 2000;
+  const MAX_TOTAL = 24000;
+  const parts: string[] = [];
+  let total = 0;
+  for (const p of paths.slice(0, 30)) {
+    const body = await executeTool({ name: 'kb_read_note', args: { notePath: p } }, { kbId });
+    const trimmed = body.length > PER ? body.slice(0, PER) + '\n…(截断)' : body;
+    parts.push(`### [[${p.replace(/\.md$/i, '').split('/').pop()}]]\n路径: ${p}\n${trimmed}`);
+    total += trimmed.length;
+    if (total >= MAX_TOTAL) break;
+  }
+  const historyBlock = history.length
+    ? `\n\n# 多轮上下文\n${history
+        .filter((t) => (t.role === 'user' || t.role === 'assistant') && t.text)
+        .map((t) => `${t.role === 'user' ? '用户' : '助手'}：${t.text}`)
+        .join('\n')}`
+    : '';
+  const sys = `你是锦囊笔记的总结助手。用户的问题是按时间维度（${tr.label}）总结知识库笔记。
+下方已为你筛选出该时间窗口内【${parts.length} 篇】笔记的正文，请基于内容做结构化总结：
+- 提炼出该时间段的核心主题/灵感/行动项
+- 若用户要求"今天/本周"汇总，用日期顺序或主题聚类组织
+- 引用具体笔记用 [[笔记名]]
+- 若内容不足以回答，明确说明并建议
+${historyBlock}
+
+# ${tr.label}的笔记（共 ${parts.length} 篇）
+${parts.join('\n\n')}`;
+  const text = await aiService.chat(question, sys);
+  const refs: AIRefHit[] = paths.map((p) => ({ path: p, name: p.replace(/\.md$/i, '').split('/').pop() || p }));
+  return { text, refs };
+}
+
+export const SKILLS: Record<string, AISkill> = {
+  ask: {
+    id: 'ask',
+    title: '知识库问答',
+    description: '基于知识库检索 + 多轮上下文的问答；自动处理「今天/本周」等时间维度问题。',
+    capability: ['long-context'],
+    stateful: true,
+    useTools: ['kb_search', 'kb_read_note', 'kb_list_notes'],
+    run: async ({ kbId, input, history }) => {
+      // 时间维度问题（如「帮我总结今天的笔记」）走专门路径：按 mtime 筛笔记 → 读正文 → 让模型总结。
+      // 否则走标准 RAG 检索 + 多轮上下文。
+      const ts = await runTimeSummary(kbId!, input.text, history);
+      if (ts) return { ...txt(ts.text), refs: ts.refs };
+      const { text, refs } = await aiService.askWithHistory(kbId, toChatHistory(history), input.text);
+      return { ...txt(text), refs };
+    }
+  },
+
+  agent: {
+    id: 'agent',
+    title: '智能体（主动工具调用）',
+    description: '让模型在推理中自主检索/读写知识库，支持多轮工具循环（ReAct）。',
+    capability: ['reasoning'],
+    stateful: true,
+    awaitConfirm: true,
+    useTools: KB_TOOLS.map((t) => t.name),
+    run: async ({ kbId, input, history, onActivity }) => {
+      const sys = `你是锦囊笔记的智能体。可以调用知识库工具（检索/读/写/诊断）来完成用户请求。
+原则：先检索再下结论；写操作以「建议」形式给出，确认后才执行；引用笔记用 [[笔记名]]。`;
+      const answer = await aiService.agentChat(kbId, sys, input.text, { history: toChatHistory(history), onActivity });
+      return txt(answer);
+    }
+  },
+
+  'quick-note': {
+    id: 'quick-note',
+    title: '快速笔记',
+    description: '自动生成摘要、标签、双链、归属目录。',
+    useTools: ['kb_suggest_dir', 'kb_search'],
+    run: async ({ kbId, input }) => {
+      const r = await aiService.quickNote(kbId!, input.text, input.dirId ? { dirId: input.dirId } : undefined);
+      return structured(r);
+    },
+    localFallback: ({ input }) =>
+      structured({ title: input.text.slice(0, 40), summary: input.text, tags: [] as string[], links: [] as string[], dirId: '' })
+  },
+
+  'suggest-dir': {
+    id: 'suggest-dir',
+    title: '归档推荐',
+    description: '为某篇笔记推荐最合适的归属目录。',
+    useTools: ['kb_suggest_dir'],
+    run: async ({ kbId, input }) => {
+      const list = await aiService.suggestDir(kbId!, input.text);
+      return structured(list);
+    }
+  },
+
+  'suggest-links': {
+    id: 'suggest-links',
+    title: '双链推荐',
+    description: '推荐与某篇笔记应建立双向链接的笔记。',
+    useTools: ['kb_link_graph', 'kb_search'],
+    run: async ({ kbId, input }) => {
+      const list = await aiService.suggestLinks(kbId!, input.text);
+      return structured(list);
+    }
+  },
+
+  'forge-card': {
+    id: 'forge-card',
+    title: '知识卡片锻造',
+    description: '将笔记提炼为四铁律知识卡片。',
+    run: async ({ kbId, input }) => {
+      const card = await aiService.forgeCard(kbId!, input.text);
+      return structured(card);
+    }
+  },
+
+  'summarize-tags': {
+    id: 'summarize-tags',
+    title: '摘要与标签',
+    description: '生成纯文本摘要 + 标签。',
+    run: async ({ kbId, input }) => {
+      const [summary, tags] = await Promise.all([
+        aiService.summarize(kbId!, input.text),
+        aiService.generateTags(kbId!, input.text)
+      ]);
+      return structured({ summary, tags });
+    }
+  },
+
+  diagnose: {
+    id: 'diagnose',
+    title: '知识库诊断',
+    description: '诊断失效链接、空目录、重复标题等健康问题。',
+    useTools: ['kb_diagnose'],
+    run: async ({ kbId }) => {
+      const report = await executeTool({ name: 'kb_diagnose', args: {} }, { kbId: kbId || '' });
+      return txt(report);
+    }
+  },
+
+  'daily-insight': {
+    id: 'daily-insight',
+    title: '每日灵感一现',
+    description: '基于知识库生成今日灵感。',
+    run: async ({ kbId, input }) => {
+      const prompt = input.text || '今天有什么值得记录的灵感？';
+      const sys = '你是锦囊笔记的灵感引擎，基于用户的知识库给出醍醐灌顶、可执行的认知。';
+      return txt(await aiService.chat(prompt, sys));
+    }
+  }
+};
+
+/** 按 id 取 Skill；未知 skill 由 AIHub 处理降级 */
+export function getSkill(id: string): AISkill | undefined {
+  return SKILLS[id];
+}

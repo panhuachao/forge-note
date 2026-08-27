@@ -27,6 +27,23 @@ export interface AIModelConfig {
   baseUrl?: string;
   model?: string;
   apiKey?: string;
+  /** 外部 MCP Server 配置（方案 §6.4）。默认空数组 = 不启用外部 MCP。 */
+  mcpServers?: MCPServerConfig[];
+}
+
+/** 外部 MCP Server 配置（stdio / SSE）。见 doc/AI调用重构技术方案.md §6.4 */
+export interface MCPServerConfig {
+  name: string;
+  /** 'stdio'：通过命令行启动本地进程；'sse'：连接远程 MCP 端点 */
+  transport: 'stdio' | 'sse';
+  /** stdio 模式：启动命令，如 'npx' */
+  command?: string;
+  /** stdio 模式：启动参数 */
+  args?: string[];
+  /** sse 模式：远程端点 URL */
+  url?: string;
+  /** 是否启用（外部 MCP 默认需显式开启） */
+  enabled?: boolean;
 }
 
 /** 灵感方向（灵感工坊固定提示词条目） */
@@ -171,7 +188,7 @@ export function inferServiceProvider(cfg: AIModelConfig): AIServiceProvider {
 
 /** 保证配置同时包含 provider（协议）和 serviceProvider（服务商），缺失则补齐默认值 */
 export function normalizeAIModelConfig(cfg: Partial<AIModelConfig>): AIModelConfig {
-  const serviceProvider = inferServiceProvider(cfg as AIModelConfig) || 'deepseek';
+  const serviceProvider = (inferServiceProvider(cfg as AIModelConfig) || 'deepseek') as Exclude<AIServiceProvider, 'none'>;
   const def = AI_SERVICE_DEFAULTS[serviceProvider];
   const provider = def ? def.protocol : (cfg.provider || 'openai');
   return {
@@ -227,6 +244,21 @@ export interface QuickNoteResult {
 
 // ===================== AI 调用重构：统一层 / 会话 / Skill =====================
 // 见 doc/AI调用重构技术方案.md
+
+/** 引用溯源：AI 回答命中到的知识库笔记 */
+export interface AIRefHit {
+  path: string; // 笔记相对路径（含 .md）
+  name: string; // 笔记名（不含 .md）
+  snippet?: string; // 命中片段
+}
+
+/** Token 用量（成本可观测，方案 §三.3） */
+export interface AIUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  ms: number;
+}
 
 /** 单次会话轮次 */
 export interface AITurn {

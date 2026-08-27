@@ -14,6 +14,7 @@ import {
   normalizeAIModelConfig
 } from '@shared/types/ai';
 import { Icon } from '../components/Icon';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
 import {
   handleTitleBarDoubleClick,
@@ -37,6 +38,7 @@ export default function ChatPage() {
   const setAIConfig = useKBStore((s) => s.setAIConfig);
 
   const setMainView = useLayoutStore((s) => s.setMainView);
+  const openTab = useLayoutStore((s) => s.openTab);
 
   const activeConv = useMemo(
     () => conversations.find((c) => c.id === activeId) || null,
@@ -58,9 +60,57 @@ export default function ChatPage() {
     }
   };
 
+  /** 把 [[笔记名]] 解析为笔记路径（遍历目录树，方案 §三.2） */
+  const resolveWikiLink = async (name: string): Promise<string | null> => {
+    if (!activeKb) return null;
+    try {
+      const tree = await window.forge.fs.listTree(activeKb.id);
+      let hit: string | null = null;
+      const walk = (nodes: any[]) => {
+        for (const n of nodes) {
+          if (hit) return;
+          if (n.type === 'file' && n.name.replace(/\.md$/i, '') === name) {
+            hit = n.path;
+            return;
+          }
+          if (n.children) walk(n.children);
+        }
+      };
+      walk(tree?.children ?? []);
+      return hit;
+    } catch {
+      return null;
+    }
+  };
+
+  /** 点击引用卡片 / 回答内 [[笔记名]] 链接，跳转到对应笔记 */
+  const openWikiLink = async (name: string) => {
+    const path = await resolveWikiLink(name);
+    if (path) {
+      openTab(path);
+      setMainView('note');
+    } else {
+      // 未找到则退化为全局搜索
+      window.dispatchEvent(new CustomEvent('forgenote:search', { detail: { q: name } }));
+    }
+  };
+
+  /** 拦截 markdown 内的 wiki-link 点击 */
+  const onWikiLinkClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const a = target.closest('a.wiki-link') as HTMLAnchorElement | null;
+    if (a) {
+      e.preventDefault();
+      const name = decodeURIComponent((a.getAttribute('href') || '').replace(/^#wiki=/, ''));
+      if (name) openWikiLink(name);
+    }
+  };
+
   // 输入
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  // 流式输出缓冲：正在生成中的 assistant 文本，逐 token 累积（方案 §三.1）
+  const [streaming, setStreaming] = useState<{ text: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +154,8 @@ export default function ChatPage() {
   const convSessionMap = useRef<Record<string, string>>({});
   // 智能体模式：开启后 AI 可主动调用知识库 MCP 工具
   const [agentMode, setAgentMode] = useState(false);
+  // 待删除的对话 id（null 时不显示确认弹窗）
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   const startNewConversation = () => {
     setActive(null);
@@ -148,23 +200,46 @@ export default function ChatPage() {
       // 统一 AIHub：携带该对话的 sessionId，实现多轮上下文（建议→确认→执行）
       // 智能体模式下走 agent skill，AI 可主动调用知识库 MCP 工具（检索/读/写/诊断）
       const skill = agentMode ? 'agent' : 'ask';
-      const res = (await window.forge.ai.hubRun({
+      const existingSession = convSessionMap.current[convId!];
+      // 若本对话尚未建立 AI session（如刚打开已持久化的旧对话），用已存的消息历史作为种子，
+      // 让多轮上下文在刷新/重开后依然连续（方案 §4.2）。
+      const seedHistory: { role: 'user' | 'assistant'; text: string }[] = existingSession
+        ? []
+        : conversations
+            .find((c) => c.id === convId)
+            ?.messages.filter((m) => m.role !== 'user' || m.text !== t)
+            .map((m) => ({ role: m.role, text: m.text })) ?? [];
+      const streamId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      // 流式渲染：本地累积 token，最后再落盘完整消息（方案 §三.1）
+      let acc = '';
+      const off = window.forge.ai.onAIStream((chunk) => {
+        if (chunk.streamId !== streamId) return;
+        acc += chunk.delta;
+        setStreaming((s) => ({ ...s, text: acc }));
+      });
+      const res = (await window.forge.ai.hubRunStream({
         skill,
         input: { question: t, text: t },
         kbId: activeKb.id,
-        sessionId: convSessionMap.current[convId!]
+        sessionId: existingSession,
+        history: seedHistory,
+        streamId
       } as any)) as any;
+      off();
       if (res?.sessionId) convSessionMap.current[convId!] = res.sessionId;
       const ans =
         res?.kind === 'text'
           ? res.text
           : res?.kind === 'structured'
             ? JSON.stringify(res.data)
-            : '（AI 未返回内容）';
+            : acc || '（AI 未返回内容）';
+      setStreaming(null);
       appendMessage(convId!, {
         role: 'assistant',
-        text: ans || '（AI 未返回内容）',
+        text: ans || acc || '（AI 未返回内容）',
         ts: Date.now(),
+        refs: res?.refs,
+        usage: res?.usage
       });
     } catch (err) {
       appendMessage(convId!, {
@@ -267,7 +342,7 @@ export default function ChatPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm('删除该对话？')) deleteConversation(c.id);
+                        setConfirmingDeleteId(c.id);
                       }}
                       className="w-6 h-6 flex items-center justify-center rounded-lg text-fg-faint hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
                       title="删除"
@@ -363,6 +438,7 @@ export default function ChatPage() {
                     ) : (
                       <div
                         className="markdown-preview chat-md leading-relaxed"
+                        onClick={onWikiLinkClick}
                         dangerouslySetInnerHTML={{
                           __html: renderMarkdownPreview(m.text, activeKb?.id || '', '')
                         }}
@@ -370,25 +446,66 @@ export default function ChatPage() {
                     )}
                   </div>
                   {m.role === 'assistant' && (
-                    <button
-                      onClick={() =>
-                        window.dispatchEvent(
-                          new CustomEvent('forgenote:open-quicknote', { detail: { content: m.text } })
-                        )
-                      }
-                      className="mt-1.5 flex items-center gap-1 px-2 py-1 text-[11px] text-fg-muted hover:text-brand hover:bg-hover-bg rounded-lg transition-colors"
-                      title="将这段回答整理为笔记"
-                    >
-                      <Icon name="document-plus" className="w-3.5 h-3.5" />
-                      添加笔记
-                    </button>
+                    <>
+                      {/* 引用溯源卡片（方案 §三.2）：点击跳转到对应笔记 */}
+                      {m.refs && m.refs.length > 0 && (
+                        <div className="mt-1.5 flex flex-col gap-1 w-full max-w-[80%]">
+                          <span className="text-[10px] text-fg-faint px-1">引用来源</span>
+                          {m.refs.map((r, ri) => (
+                            <button
+                              key={ri}
+                              onClick={() => openWikiLink(r.name)}
+                              className="text-left px-2.5 py-1.5 rounded-lg bg-panel border border-border-soft hover:border-brand hover:bg-hover-bg transition-colors"
+                              title={r.path}
+                            >
+                              <div className="flex items-center gap-1 text-xs text-brand font-medium">
+                                <Icon name="link" className="w-3 h-3" />
+                                {r.name}
+                              </div>
+                              {r.snippet && (
+                                <div className="text-[11px] text-fg-secondary mt-0.5 line-clamp-2">{r.snippet}</div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            window.dispatchEvent(
+                              new CustomEvent('forgenote:open-quicknote', { detail: { content: m.text } })
+                            )
+                          }
+                          className="flex items-center gap-1 px-2 py-1 text-[11px] text-fg-muted hover:text-brand hover:bg-hover-bg rounded-lg transition-colors"
+                          title="将这段回答整理为笔记"
+                        >
+                          <Icon name="document-plus" className="w-3.5 h-3.5" />
+                          添加笔记
+                        </button>
+                        {m.usage && m.usage.totalTokens > 0 && (
+                          <span
+                            className="px-2 py-1 text-[10px] text-fg-faint bg-hover-bg rounded-lg"
+                            title={`${m.usage.promptTokens} prompt + ${m.usage.completionTokens} 生成 · ${m.usage.ms}ms`}
+                          >
+                            ~{m.usage.totalTokens} tokens
+                          </span>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-content border border-border-soft rounded-xl px-3 py-2 text-sm text-fg-muted">
-                    思考中…
+                  <div className="bg-content border border-border-soft rounded-xl px-3 py-2 text-sm text-fg markdown-preview chat-md leading-relaxed">
+                    {streaming ? (
+                      <>
+                        {streaming.text}
+                        <span className="inline-block w-1.5 h-4 align-middle bg-brand animate-pulse ml-0.5" />
+                      </>
+                    ) : (
+                      <span className="text-fg-muted">思考中…</span>
+                    )}
                   </div>
                 </div>
               )}
@@ -513,6 +630,19 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmingDeleteId !== null}
+        title="删除该对话？"
+        message="删除后将无法恢复，对话内的消息记录会一并清除。"
+        confirmText="删除"
+        cancelText="取消"
+        danger
+        onClose={() => setConfirmingDeleteId(null)}
+        onConfirm={() => {
+          if (confirmingDeleteId) deleteConversation(confirmingDeleteId);
+          setConfirmingDeleteId(null);
+        }}
+      />
     </div>
   );
 }

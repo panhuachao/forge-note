@@ -52,12 +52,13 @@ export const KB_TOOLS: MCPTool[] = [
   },
   {
     name: 'kb_list_notes',
-    description: '列出知识库笔记（可按目录过滤）。用于了解有哪些笔记。',
+    description: '列出知识库笔记。可按目录过滤，或按时间窗口（sinceDays）筛近 N 天修改过的笔记，返回路径与 mtime，便于按"今天/本周"等时间维度筛选。',
     input_schema: {
       type: 'object',
       properties: {
         dirPath: { type: 'string', description: '目录相对路径，留空列全部' },
-        limit: { type: 'number', description: '返回条数，默认 50' }
+        limit: { type: 'number', description: '返回条数，默认 50' },
+        sinceDays: { type: 'number', description: '仅返回近 N 天修改过的笔记（按 mtime 过滤）。常用于"今天/本周"类时间维度问题。' }
       }
     }
   },
@@ -118,6 +119,41 @@ function walkNotes(root: string, dir: string, out: string[], limit: number): voi
   }
 }
 
+/** 递归收集近 N 天新增/修改过的 .md 笔记（含 mtime），按时间倒序 */
+function walkRecentNotes(
+  root: string,
+  dir: string,
+  out: Array<{ path: string; mtime: number }>,
+  limit: number,
+  sinceTs: number
+): void {
+  if (out.length >= limit) return;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith('.')) continue;
+    const rel = dir ? `${dir}/${e.name}` : e.name;
+    const abs = path.join(root, rel);
+    if (e.isDirectory()) {
+      walkRecentNotes(root, rel, out, limit, sinceTs);
+    } else if (e.isFile() && e.name.endsWith('.md')) {
+      try {
+        const st = fs.statSync(abs);
+        if (st.mtimeMs >= sinceTs) {
+          out.push({ path: rel, mtime: st.mtimeMs });
+        }
+      } catch {
+        /* 跳过无法 stat 的文件 */
+      }
+      if (out.length >= limit) return;
+    }
+  }
+}
+
 /** 执行一个工具调用，返回面向模型的文本结果 */
 export async function executeTool(call: ToolCall, ctx: ToolCtx): Promise<string> {
   const kbId = ctx.kbId;
@@ -140,8 +176,41 @@ export async function executeTool(call: ToolCall, ctx: ToolCtx): Promise<string>
       case 'kb_list_notes': {
         const kb = getKB(kbId);
         if (!kb) return '知识库不存在';
+        const limit = Number(call.args.limit) || 50;
+        const sinceDays = Number(call.args.sinceDays);
+        if (Number.isFinite(sinceDays) && sinceDays > 0) {
+          // 时间窗口：返回近 N 天修改过的笔记（含 mtime）。
+          // 锚点策略：sinceDays===1 时按"本地时区今日 0 点"截断（避免 24h 滚动边界在凌晨踩坑），
+          //           其他情况按 N×24h 滚动窗口。
+          const out: Array<{ path: string; mtime: number }> = [];
+          let sinceTs: number;
+          let anchorLabel: string;
+          if (sinceDays === 1) {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            sinceTs = d.getTime();
+            anchorLabel = `今日 0 点（${d.toLocaleString()}）`;
+          } else {
+            sinceTs = Date.now() - sinceDays * 86400_000;
+            anchorLabel = `近 ${sinceDays} 天`;
+          }
+          // 调试日志：方便确认"时间路由"分支是否真正命中（开发期可关）
+          try {
+            // eslint-disable-next-line no-console
+            console.debug(`[kb_list_notes] sinceDays=${sinceDays} anchor=${anchorLabel} sinceTs=${new Date(sinceTs).toISOString()}`);
+          } catch { /* noop */ }
+          walkRecentNotes(kb.rootPath, String(call.args.dirPath || ''), out, limit, sinceTs);
+          // 按时间倒序
+          out.sort((a, b) => b.mtime - a.mtime);
+          if (out.length === 0) {
+            return `（${anchorLabel} 以来无新增/修改的笔记）`;
+          }
+          return out
+            .map((n) => `- ${n.path}\n  mtime: ${new Date(n.mtime).toLocaleString()}`)
+            .join('\n');
+        }
         const out: string[] = [];
-        walkNotes(kb.rootPath, String(call.args.dirPath || ''), out, Number(call.args.limit) || 50);
+        walkNotes(kb.rootPath, String(call.args.dirPath || ''), out, limit);
         return out.length ? out.map((p) => `- ${p}`).join('\n') : '（无笔记）';
       }
       case 'kb_write_note': {

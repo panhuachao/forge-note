@@ -5,10 +5,10 @@ import { AISession, AITurn } from '@shared/types/ai';
 class SessionStore {
   private sessions = new Map<string, AISession>();
 
-  create(skill: string, kbId?: string): AISession {
+  create(skill: string, kbId?: string, seed?: AITurn[]): AISession {
     const now = Date.now();
     const id = `sess_${now}_${Math.random().toString(36).slice(2, 8)}`;
-    const s: AISession = { id, skill, kbId, turns: [], createdAt: now, updatedAt: now };
+    const s: AISession = { id, skill, kbId, turns: seed ? seed.map((t) => ({ ...t })) : [], createdAt: now, updatedAt: now };
     this.sessions.set(id, s);
     return s;
   }

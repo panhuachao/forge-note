@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { TemplateMeta, AppliedTemplate, NoteTemplateInfo } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
 import { PageHeader } from '../components/PageHeader';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 export function TemplatePage() {
   const { activeKb, applied, setApplied, pushToast } = useKBStore();
@@ -13,6 +14,8 @@ export function TemplatePage() {
   // 笔记模板编辑
   const [noteTemplateEdit, setNoteTemplateEdit] = useState<NoteTemplateInfo | null>(null);
   const [noteTemplateDraft, setNoteTemplateDraft] = useState('');
+  // 移除模板确认弹窗
+  const [confirmRemoveTemplate, setConfirmRemoveTemplate] = useState(false);
 
   useEffect(() => {
     if (!activeKb) return;
@@ -69,12 +72,15 @@ export function TemplatePage() {
     }
   }
 
-  async function removeTemplate() {
+  async function performRemoveTemplate() {
     if (!activeKb) return;
-    if (!confirm('确定移除模板标识？目录文件不会被删除。')) return;
     await window.forge.template.remove(activeKb.id);
     setApplied(null);
     pushToast({ level: 'success', text: '已移除模板标识' });
+  }
+
+  function removeTemplate() {
+    setConfirmRemoveTemplate(true);
   }
 
   return (
@@ -314,6 +320,19 @@ export function TemplatePage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmRemoveTemplate}
+        title="移除模板标识？"
+        message="仅清除模板绑定记录，目录文件不会被删除。如需彻底清理，可手动删除 .template 标记文件。"
+        confirmText="移除"
+        cancelText="取消"
+        danger
+        onClose={() => setConfirmRemoveTemplate(false)}
+        onConfirm={() => {
+          performRemoveTemplate();
+          setConfirmRemoveTemplate(false);
+        }}
+      />
     </div>
   );
 }

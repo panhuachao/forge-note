@@ -48,6 +48,10 @@ export const IPC = {
   AI_REFINE_NOTE: 'ai:refineNote',
   AI_QUICK_NOTE: 'ai:quickNote',
   AI_HUB_RUN: 'ai:hubRun',
+  AI_HUB_STREAM: 'ai:hubStream',
+  AI_STREAM_CHUNK: 'ai:streamChunk',
+  AI_GET_USAGE: 'ai:getUsage',
+  AI_RESET_USAGE: 'ai:resetUsage',
 
   // Template
   TPL_LIST: 'tpl:list',

@@ -121,6 +121,18 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   );
   // 统一 AI 调用入口（Skill 路由 + 会话上下文）
   ipcMain.handle(IPC.AI_HUB_RUN, async (_e, req: import('@shared/types/ai').AIRequest) => aiHub.run(req));
+  // 流式 AI 调用（逐 token 推送，方案 §三.1）：每片通过 AI_STREAM_CHUNK 事件回传 {streamId, delta}
+  ipcMain.handle(IPC.AI_HUB_STREAM, async (event, req: import('@shared/types/ai').AIRequest) => {
+    const streamId = (req as any).streamId as string | undefined;
+    return aiHub.runStream(req, (delta: string) => {
+      if (streamId && event.sender && !event.sender.isDestroyed()) {
+        event.sender.send(IPC.AI_STREAM_CHUNK, { streamId, delta });
+      }
+    });
+  });
+  // 成本可观测：用量查询 / 重置（方案 §三.3）
+  ipcMain.handle(IPC.AI_GET_USAGE, async () => aiService.getUsage());
+  ipcMain.handle(IPC.AI_RESET_USAGE, async () => aiService.resetUsage());
   ipcMain.handle(IPC.AI_INSERT_LINKS, async (_e, kbId: string, p: string, targets: string[]) => {
     await aiService.insertLinks(kbId, p, targets);
     auditService.record(kbId, 'insertLink', { notePath: p, targets });

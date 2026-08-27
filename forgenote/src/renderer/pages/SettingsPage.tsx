@@ -24,6 +24,9 @@ export function SettingsPage() {
   const [autoCheck, setAutoCheck] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
+  // 成本可观测：AI 调用用量（方案 §三.3）
+  const [usage, setUsage] = useState<Record<string, { calls: number; tokens: number; ms: number }>>({});
+
   useEffect(() => {
     const app = window.forge.app;
     if (!app) return;
@@ -35,6 +38,18 @@ export function SettingsPage() {
     });
     return off;
   }, []);
+
+  // 加载 AI 用量
+  const loadUsage = () => {
+    try {
+      window.forge.ai.getUsage().then(setUsage).catch(() => setUsage({}));
+    } catch {
+      setUsage({});
+    }
+  };
+  useEffect(() => {
+    if (tab === 'advanced') loadUsage();
+  }, [tab]);
 
   function handleCheck() {
     const app = window.forge.app;
@@ -378,6 +393,54 @@ export function SettingsPage() {
           </div>
         </section>
         </>
+        )}
+
+        {tab === 'advanced' && (
+          <section className="bg-content rounded-xl border border-border-soft p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">AI 用量（成本可观测）</h2>
+              <button
+                onClick={() => {
+                  try {
+                    window.forge.ai.resetUsage().then(loadUsage).catch(() => {});
+                  } catch {
+                    /* noop */
+                  }
+                }}
+                className="btn text-xs"
+              >
+                清空统计
+              </button>
+            </div>
+            {Object.keys(usage).length === 0 ? (
+              <p className="text-xs text-fg-muted">暂无调用记录。每次 AI 调用都会累计 token 消耗与耗时，避免无感烧钱。</p>
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-border-soft">
+                <table className="w-full text-xs">
+                  <thead className="bg-hover-bg text-fg-muted">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">技能</th>
+                      <th className="text-right px-3 py-2 font-medium">次数</th>
+                      <th className="text-right px-3 py-2 font-medium">Tokens</th>
+                      <th className="text-right px-3 py-2 font-medium">耗时</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(usage).map(([skill, u]) => (
+                      <tr key={skill} className="border-t border-border-soft">
+                        <td className="px-3 py-2 text-fg">{skill}</td>
+                        <td className="px-3 py-2 text-right text-fg-muted">{u.calls}</td>
+                        <td className="px-3 py-2 text-right text-fg-muted">{u.tokens.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right text-fg-muted">
+                          {(u.ms / 1000).toFixed(1)}s
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         )}
 
         {tab === 'advanced' && (

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { Icon } from './Icon';
+import { ConfirmDialog } from './ConfirmDialog';
 import type { KBSummary } from '@shared/types';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 export function KbManagerModal({ open, onClose }: Props) {
   const { activeKb, kbs, setKBs, setActiveKb, setTree, setApplied, pushToast } = useKBStore();
   const [loading, setLoading] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState<KBSummary | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -53,14 +55,7 @@ export function KbManagerModal({ open, onClose }: Props) {
     setApplied(a);
   }
 
-  async function handleRemove(kb: KBSummary) {
-    if (
-      !window.confirm(
-        `确定要移除知识库「${kb.name}」吗？\n\n仅删除客户端显示记录，不会删除原目录中的文件。如需彻底清理，请自行删除文件夹：\n${kb.rootPath}`
-      )
-    ) {
-      return;
-    }
+  async function performRemove(kb: KBSummary) {
     await window.forge.kb.remove(kb.id);
     await refresh();
     if (activeKb?.id === kb.id) {
@@ -74,6 +69,10 @@ export function KbManagerModal({ open, onClose }: Props) {
       }
     }
     pushToast({ level: 'success', text: `已移除知识库「${kb.name}」` });
+  }
+
+  function handleRemove(kb: KBSummary) {
+    setPendingRemove(kb);
   }
 
   return (
@@ -151,6 +150,19 @@ export function KbManagerModal({ open, onClose }: Props) {
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        title={`移除知识库「${pendingRemove?.name ?? ''}」？`}
+        message={`仅删除客户端显示记录，不会删除原目录中的文件。如需彻底清理，请自行删除文件夹：\n${pendingRemove?.rootPath ?? ''}`}
+        confirmText="移除"
+        cancelText="取消"
+        danger
+        onClose={() => setPendingRemove(null)}
+        onConfirm={() => {
+          if (pendingRemove) performRemove(pendingRemove);
+          setPendingRemove(null);
+        }}
+      />
     </div>
   );
 }

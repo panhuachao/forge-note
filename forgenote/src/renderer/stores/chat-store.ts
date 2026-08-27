@@ -13,6 +13,8 @@ export interface ChatMessage {
   text: string;
   // AI 回答时引用的笔记命中
   refs?: Array<{ path: string; name: string; snippet?: string }>;
+  // 本次调用的 token 用量（成本可观测，方案 §三.3）
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number; ms: number };
   ts: number;
 }
 
