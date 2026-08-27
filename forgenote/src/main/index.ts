@@ -5,8 +5,7 @@ import { initStore, listKBs, getConfig } from './services/store';
 import { registerIpcHandlers } from './ipc';
 import { startWatching, stopAll, bootstrapIndex } from './services/watcher';
 import { kbService } from './services/kb-service';
-import { initAutoUpdater, checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
-import { IPC } from '../shared/ipc-channels';
+import { initAutoUpdater } from './services/updater';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -157,22 +156,6 @@ app.whenReady().then(async () => {
 
   // 监听 activeKb 变化
   ipcMain.handle('debug:activeKb', () => getConfig('activeKb'));
-
-  // 自动更新相关 IPC
-  ipcMain.handle(IPC.APP_VERSION, () => app.getVersion());
-  ipcMain.handle(IPC.APP_UPDATE_CHECK, () => {
-    checkForUpdates();
-    return true;
-  });
-  ipcMain.handle(IPC.APP_UPDATE_INSTALL, () => {
-    // 先下载（若尚未下载），下载完成后由 update-downloaded 事件提示安装
-    downloadAndInstall();
-    return true;
-  });
-  ipcMain.handle(IPC.APP_UPDATE_ENABLE_AUTO, (_e, enabled: boolean) => {
-    setAutoCheckEnabled(enabled);
-    return true;
-  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

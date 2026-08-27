@@ -1,5 +1,5 @@
 // IPC 处理器 - 注册所有 ipcMain.handle
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { ipcMain, BrowserWindow, dialog, app } from 'electron';
 import { nanoid } from 'nanoid';
 import { promises as fs } from 'fs';
 import { IPC } from '@shared/ipc-channels';
@@ -12,6 +12,7 @@ import { templateService } from './services/template-service';
 import { aiService } from './services/ai-service';
 import { searchService } from './services/search-service';
 import { auditService } from './services/audit-service';
+import { checkForUpdates, downloadAndInstall, setAutoCheckEnabled } from './services/updater';
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // Window control（标题栏双击最大化 / 最小化 / 关闭）
@@ -172,5 +173,20 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     if (win && !win.isDestroyed()) {
       win.webContents.send(IPC.EV_FS_CHANGE, payload);
     }
+  });
+
+  // App 更新相关 IPC（统一在 createWindow 前注册，避免渲染进程早于 handler 注册而报 No handler）
+  ipcMain.handle(IPC.APP_VERSION, () => app.getVersion());
+  ipcMain.handle(IPC.APP_UPDATE_CHECK, () => {
+    checkForUpdates();
+    return true;
+  });
+  ipcMain.handle(IPC.APP_UPDATE_INSTALL, () => {
+    downloadAndInstall();
+    return true;
+  });
+  ipcMain.handle(IPC.APP_UPDATE_ENABLE_AUTO, (_e, enabled: boolean) => {
+    setAutoCheckEnabled(enabled);
+    return true;
   });
 }

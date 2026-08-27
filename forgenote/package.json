@@ -14,7 +14,7 @@
     "package:win": "electron-vite build && electron-builder --win",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --ext .ts,.tsx",
-    "postinstall": "node scripts/fix-electron-quarantine.js"
+    "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/fix-electron-quarantine.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -37,9 +37,7 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.28.4",
     "@electron/rebuild": "^4.2.0",
-    "@esbuild/darwin-arm64": "^0.28.2",
     "@resvg/resvg-js": "^2.6.2",
-    "@rollup/rollup-darwin-arm64": "^4.63.0",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.14.10",
     "@types/react": "^18.3.3",
