@@ -8,6 +8,7 @@ import { persist } from 'zustand/middleware';
 export type ChatRole = 'user' | 'assistant';
 
 export interface ChatMessage {
+  id: string;
   role: ChatRole;
   text: string;
   // AI 回答时引用的笔记命中
@@ -60,7 +61,7 @@ export const useChatStore = create<ChatState>()(
           id,
           title: deriveTitle(firstUserText) || '新对话',
           kbId,
-          messages: [{ role: 'user', text: firstUserText, ts: now }],
+          messages: [{ id: genId(), role: 'user', text: firstUserText, ts: now }],
           createdAt: now,
           updatedAt: now,
         };
@@ -72,10 +73,13 @@ export const useChatStore = create<ChatState>()(
       },
 
       appendMessage: (convId, msg) => {
+        const safeMsg: ChatMessage = 'id' in msg && (msg as ChatMessage).id
+          ? (msg as ChatMessage)
+          : { ...(msg as ChatMessage), id: genId() };
         set((s) => ({
           conversations: s.conversations.map((c) =>
             c.id === convId
-              ? { ...c, messages: [...c.messages, msg], updatedAt: Date.now() }
+              ? { ...c, messages: [...c.messages, safeMsg], updatedAt: Date.now() }
               : c
           ),
         }));

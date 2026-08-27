@@ -7,6 +7,7 @@ import { DEFAULT_AI_PROMPTS, normalizeAIModelConfig } from '@shared/types/ai';
 import { extractWikiLinks, previewLine } from '../utils/markdown';
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
+import { KB_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
 
 const BASE_SYSTEM = `你是「锦囊笔记 ForgeNote」内置的本地 AI 知识管家，遵循以下铁律：
 1. 所有回答必须基于用户提供的笔记内容与知识库上下文，不编造信息。
@@ -171,6 +172,37 @@ class AIService {
     const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
 
     const sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 若问题涉及"归纳/总结/进展/整体情况"，请基于【目录结构 + 目录整体内容】做归纳，引用具体笔记用 [[笔记名]]\n- 若问题涉及"如何使用某目录/目录是否合理"，请基于目录说明（README）和已有笔记分布给出建议\n- 引用时优先用 [[笔记名]] 形式标注`;
+    return this.chat(question, sys);
+  }
+
+  /**
+   * 多轮问答：在 ask 的检索上下文基础上，把历史 turns 作为对话上下文拼接，
+   * 支撑「建议→确认→执行」等需要延续前文的多轮场景（见 doc/AI调用重构技术方案.md §4.2）。
+   */
+  async askWithHistory(
+    kbId: string | undefined,
+    history: { role: 'user' | 'assistant'; text: string }[],
+    question: string,
+    opts?: { templateDirIds?: string[] }
+  ): Promise<string> {
+    const historyBlock = history.length
+      ? `\n\n# 此前的对话历史（请基于上文继续，不要重复已给建议）\n${history
+          .map((t) => `${t.role === 'user' ? '用户' : '助手'}：${t.text}`)
+          .join('\n')}`
+      : '';
+    if (!kbId) {
+      // 无知识库上下文时，仅做纯多轮对话
+      return this.chat(question + historyBlock, BASE_SYSTEM);
+    }
+    const kb = getKB(kbId);
+    if (!kb) return this.chat(question + historyBlock, BASE_SYSTEM);
+    const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
+    const hitContext = hits
+      .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
+      .join('\n\n');
+    const dirTree = await this.buildDirOverview(kb.rootPath, kbId);
+    const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
+    const sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 基于【目录结构 + 检索片段 + 此前后文】回答，引用具体笔记用 [[笔记名]]\n- 若用户是在确认/采纳上一轮建议，请直接基于前文执行，不要重新罗列建议${historyBlock}`;
     return this.chat(question, sys);
   }
 
@@ -507,7 +539,8 @@ class AIService {
         fetched.map((f) => `## 链接：${f.url}\n${f.text.slice(0, 4000)}`).join('\n\n');
     }
     const raw = await this.chat(user, sys);
-    return this.parseQuickNote(raw, dirInfo, forcedDirId, urls, fetched);
+    const candidateNames = new Set(candidates.map((c) => c.noteName.replace(/\.md$/i, '')));
+    return this.parseQuickNote(raw, dirInfo, forcedDirId, urls, fetched, candidateNames);
   }
 
   /** 从文本中提取 http(s) 链接 */
@@ -556,7 +589,8 @@ class AIService {
     dirInfo: { id: string; name: string; realDir: string }[],
     forcedDirId?: string,
     sourceUrls: string[] = [],
-    sourceTexts: { url: string; text: string }[] = []
+    sourceTexts: { url: string; text: string }[] = [],
+    candidateNames: Set<string> = new Set()
   ): QuickNoteResult {
     const m = /```json\s*([\s\S]+?)\s*```/.exec(raw) || /(\{[\s\S]+\})/s.exec(raw);
     const fallback: QuickNoteResult = {
@@ -579,7 +613,14 @@ class AIService {
         dirId: dir?.id || fallback.dirId,
         dirName: dir?.realDir || obj.dirName || fallback.dirName,
         tags: Array.isArray(obj.tags) ? obj.tags.map(String).slice(0, 8) : [],
-        links: Array.isArray(obj.links) ? obj.links.map(String).slice(0, 6) : [],
+        // 双向链接仅保留知识库中真实存在的笔记名，过滤 AI 幻觉产生的断链
+        links: (() => {
+          const raw: unknown[] = Array.isArray(obj.links) ? (obj.links as unknown[]) : [];
+          return raw
+            .map((x) => String(x))
+            .filter((l: string) => candidateNames.has(l.replace(/\.md$/i, '')))
+            .slice(0, 6);
+        })(),
         sourceUrls,
         sourceTexts
       };
@@ -717,6 +758,89 @@ class AIService {
       .replace(/\n?```\s*$/, '')
       .trim();
     return cleaned;
+  }
+
+  /**
+   * 智能体对话：模型可主动调用知识库 MCP 工具（检索/读写/诊断）。
+   * 实现 ReAct 循环：模型生成 tool_calls → 执行 → 结果回灌 → 再次推理，直到无 tool_calls。
+   * 见 doc/AI调用重构技术方案.md §6。
+   */
+  async agentChat(
+    kbId: string | undefined,
+    sys: string,
+    user: string,
+    opts?: { history?: { role: 'user' | 'assistant'; text: string }[]; onActivity?: (a: ToolActivity) => void }
+  ): Promise<string> {
+    const cfg = await this.getConfig();
+    if (!this.isEnabled(cfg)) {
+      return '当前未配置 AI 模型，无法启用智能体工具调用。';
+    }
+    const tools = KB_TOOLS.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+    const messages: any[] = [{ role: 'system', content: sys }];
+    for (const h of opts?.history || []) messages.push({ role: h.role, content: h.text });
+    messages.push({ role: 'user', content: user });
+
+    const provider = cfg.provider === 'ollama' ? 'ollama' : 'openai';
+    const maxRounds = 6;
+    for (let round = 0; round < maxRounds; round++) {
+      const { content, toolCalls } =
+        provider === 'ollama'
+          ? await this.callOllamaTools(cfg, messages, tools)
+          : await this.callOpenAITools(cfg, messages, tools);
+      if (toolCalls.length === 0) {
+        return content || '（无返回）';
+      }
+      // 执行工具并回灌
+      for (const tc of toolCalls) {
+        const args = safeParseArgs(tc.function?.arguments);
+        const result = await executeTool({ name: tc.function?.name, args }, { kbId: kbId || '' });
+        const activity: ToolActivity = { name: tc.function?.name, args, result };
+        opts?.onActivity?.(activity);
+        messages.push({ role: 'assistant', content: content || '', tool_calls: [tc] });
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+      }
+    }
+    return '（已达到最大工具调用轮次）';
+  }
+
+  private async callOpenAITools(cfg: AIModelConfig, messages: any[], tools: any[]): Promise<{ content: string; toolCalls: any[] }> {
+    const base = cfg.baseUrl || 'https://api.openai.com/v1';
+    const r = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey || ''}` },
+      body: JSON.stringify({ model: cfg.model, messages, tools, temperature: 0.3 })
+    });
+    if (!r.ok) throw new Error(`OpenAI 调用失败: ${r.status} ${await r.text()}`);
+    const data = (await r.json()) as any;
+    const msg = data.choices?.[0]?.message || {};
+    return { content: msg.content || '', toolCalls: msg.tool_calls || [] };
+  }
+
+  private async callOllamaTools(cfg: AIModelConfig, messages: any[], tools: any[]): Promise<{ content: string; toolCalls: any[] }> {
+    const base = cfg.baseUrl || 'http://127.0.0.1:11434';
+    const r = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: cfg.model, stream: false, messages, tools })
+    });
+    if (!r.ok) throw new Error(`Ollama 调用失败: ${r.status} ${await r.text()}`);
+    const data = (await r.json()) as any;
+    const msg = data.message || {};
+    const toolCalls = (msg.tool_calls || []).map((tc: any, i: number) => ({
+      id: `call_${i}`,
+      type: 'function',
+      function: { name: tc.function?.name, arguments: JSON.stringify(tc.function?.arguments || {}) }
+    }));
+    return { content: msg.content || '', toolCalls };
+  }
+}
+
+function safeParseArgs(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return {};
   }
 }
 

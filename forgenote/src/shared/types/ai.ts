@@ -224,3 +224,79 @@ export interface QuickNoteResult {
   sourceUrls: string[]; // 原始外部链接（内容含链接时提取，用于记录出处并归入外部资源）
   sourceTexts: { url: string; text: string }[]; // 抓取到的外部链接完整正文（用于落盘，保留整篇）
 }
+
+// ===================== AI 调用重构：统一层 / 会话 / Skill =====================
+// 见 doc/AI调用重构技术方案.md
+
+/** 单次会话轮次 */
+export interface AITurn {
+  role: 'user' | 'assistant' | 'tool';
+  text?: string; // user / assistant 文本
+  toolCalls?: unknown[]; // assistant 发起的工具调用（MCP 占位）
+  toolResults?: unknown[]; // 工具返回
+  skill?: string;
+  ts: number;
+}
+
+/** 多轮会话（承载上下文，支持「建议→确认→执行」） */
+export interface AISession {
+  id: string;
+  kbId?: string;
+  skill: string;
+  turns: AITurn[]; // 完整多轮历史
+  draft?: unknown; // 待确认的「建议草稿」
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** AI 请求（统一入口 AIHub.run 的参数） */
+export interface AIRequest {
+  skill: string; // 'ask' | 'quick-note' | 'forge-card' | ...
+  input: Record<string, unknown>; // 结构化入参（由 Skill 约束）
+  kbId?: string;
+  stream?: boolean;
+  signal?: AbortSignal;
+  modelOverride?: string;
+  sessionId?: string; // 携带则续接历史；缺省新建一次性会话
+  history?: AITurn[]; // 或由 AIHub 从 SessionStore 自动载入
+  confirm?: boolean; // 确认上一轮 draft（多轮确认执行）
+}
+
+/** AI 统一响应 */
+export type AIResponse =
+  | { kind: 'text'; text: string }
+  | { kind: 'structured'; data: unknown; pending?: boolean } // pending=true 表示待确认草稿
+  | { kind: 'stream'; text: string }
+  | { kind: 'tool'; steps: unknown[] };
+
+/** Skill 声明（能力单元） */
+export interface Skill {
+  id: string;
+  title: string;
+  description: string;
+  capability?: ('reasoning' | 'long-context' | 'cheap')[];
+  stateful?: boolean; // 是否需要跨轮上下文
+  awaitConfirm?: boolean; // 首轮只出 draft，确认后才执行写操作
+  run: (ctx: SkillRunCtx) => Promise<AIResponse> | AIResponse;
+}
+
+/** Skill 执行上下文 */
+export interface SkillRunCtx {
+  input: Record<string, unknown>;
+  kbId?: string;
+  session?: AISession; // 已载入的历史会话
+  confirm?: boolean; // 是否确认上一轮 draft
+  ai: AIServiceLike; // 底层 AI 调用能力
+}
+
+/** 底层 AI 调用协议接口（AIHub 注入，解耦具体实现） */
+export interface AIServiceLike {
+  askWithHistory: (
+    kbId: string | undefined,
+    history: { role: 'user' | 'assistant'; text: string }[],
+    question: string,
+    opts?: { templateDirIds?: string[] }
+  ) => Promise<string>;
+  getConfig: () => AIModelConfig;
+  isReady: () => boolean;
+}

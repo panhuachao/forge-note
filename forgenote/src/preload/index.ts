@@ -20,7 +20,9 @@ import type {
   FSChangeEvent,
   NoteTemplateInfo,
   TagInfo,
-  TagNote
+  TagNote,
+  AIRequest,
+  AIResponse
 } from '@shared/types';
 
 const api = {
@@ -91,7 +93,8 @@ const api = {
     insertLinks: (kbId: string, p: string, targets: string[]) => ipcRenderer.invoke(IPC.AI_INSERT_LINKS, kbId, p, targets) as Promise<void>,
     askAboutNote: (kbId: string, p: string, q: string) => ipcRenderer.invoke(IPC.AI_ASK_NOTE, kbId, p, q) as Promise<string>,
     refineNote: (kbId: string, p: string, reply: string, content?: string) =>
-      ipcRenderer.invoke(IPC.AI_REFINE_NOTE, kbId, p, reply, content) as Promise<string>
+      ipcRenderer.invoke(IPC.AI_REFINE_NOTE, kbId, p, reply, content) as Promise<string>,
+    hubRun: (req: AIRequest) => ipcRenderer.invoke(IPC.AI_HUB_RUN, req) as Promise<AIResponse & { sessionId?: string }>
   },
   template: {
     list: () => ipcRenderer.invoke(IPC.TPL_LIST) as Promise<TemplateMeta[]>,

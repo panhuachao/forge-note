@@ -171,11 +171,21 @@ app.whenReady().then(async () => {
   buildMenu();
   createWindow();
 
-  // store 初始化失败不应阻断窗口显示，仅记录错误
+  // store 初始化失败不应阻断窗口显示，但必须显式暴露根因（而非静默），
+  // 否则后续所有依赖数据库的 IPC 都会刷屏 "Store not initialized" 且无从排查。
   try {
     initStore();
   } catch (err) {
-    console.error('[main] initStore failed:', err);
+    console.error('[main] initStore 失败：', err);
+    const msg = String(err && (err as Error).message ? (err as Error).message : err);
+    const hint =
+      /NODE_MODULE_VERSION|better-sqlite3|Module.*was compiled|Cannot find module/.test(msg)
+        ? '很可能是 better-sqlite3 原生模块与当前 Electron/Node 版本不兼容。请在本项目根目录执行 `npm rebuild better-sqlite3` 后重启；若仍失败，删除 node_modules 与 package-lock.json 后重新 `npm install`。'
+        : '请查看上方堆栈定位原因。';
+    const html = `data:text/html;charset=utf-8,${encodeURIComponent(
+      `<div style="font-family:-apple-system,'PingFang SC',sans-serif;padding:32px;color:#b91c1c"><h2>配置数据库初始化失败</h2><pre style="white-space:pre-wrap">${msg}</pre><p style="color:#334155">${hint}</p></div>`
+    )}`;
+    mainWindow?.loadURL(html);
   }
 
   // 自动更新：启动后自动检查（仅在打包环境生效）

@@ -47,6 +47,7 @@ export const IPC = {
   AI_ASK_NOTE: 'ai:askNote',
   AI_REFINE_NOTE: 'ai:refineNote',
   AI_QUICK_NOTE: 'ai:quickNote',
+  AI_HUB_RUN: 'ai:hubRun',
 
   // Template
   TPL_LIST: 'tpl:list',

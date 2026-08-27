@@ -120,8 +120,14 @@ export const useKBStore = create<KBState>((set) => ({
             .map((s) => `### ${s.url}\n\n${s.text}`)
             .join('\n\n')
         : '';
-      const tagsBlock = tags.length ? `\n#标签: ${tags.map((t) => `#${t}`).join(' ')}\n` : '';
-      const body = `# ${plan.title}\n\n> ${plan.summary || ''}\n\n${content.trim()}${textsBlock}${linksBlock}${sourceBlock}${tagsBlock}`;
+      // 摘要与标签写入 frontmatter，与全局检索 / 图谱 / 标签视图约定一致；正文保留引用摘要与 #标签 行作为冗余展示
+      const safeSummary = (plan.summary || '').replace(/"/g, "'");
+      const tagsYaml = tags.length
+        ? tags.map((t) => `  - ${t.replace(/"/g, "'")}`).join('\n')
+        : '  []';
+      const frontmatter = `---\nsummary: "${safeSummary}"\ntags:\n${tagsYaml}\n---\n`;
+      const tagsInline = tags.length ? `\n#标签: ${tags.map((t) => `#${t}`).join(' ')}\n` : '';
+      const body = `${frontmatter}# ${plan.title}\n\n> ${plan.summary || ''}\n\n${content.trim()}${textsBlock}${linksBlock}${sourceBlock}${tagsInline}`;
       await window.forge.fs.writeNote(kb.id, note.path, body);
 
       // 4) 刷新树 + 打开笔记

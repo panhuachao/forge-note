@@ -10,6 +10,7 @@ import { eventBus } from './utils/event-bus';
 import { linkIndex } from './services/link-index';
 import { templateService } from './services/template-service';
 import { aiService } from './services/ai-service';
+import { aiHub } from './services/ai-hub';
 import { searchService } from './services/search-service';
 import { auditService } from './services/audit-service';
 import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
@@ -118,6 +119,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.AI_QUICK_NOTE, async (_e, kbId: string, content: string, opts?: { dirId?: string }) =>
     aiService.quickNote(kbId, content, opts)
   );
+  // 统一 AI 调用入口（Skill 路由 + 会话上下文）
+  ipcMain.handle(IPC.AI_HUB_RUN, async (_e, req: import('@shared/types/ai').AIRequest) => aiHub.run(req));
   ipcMain.handle(IPC.AI_INSERT_LINKS, async (_e, kbId: string, p: string, targets: string[]) => {
     await aiService.insertLinks(kbId, p, targets);
     auditService.record(kbId, 'insertLink', { notePath: p, targets });

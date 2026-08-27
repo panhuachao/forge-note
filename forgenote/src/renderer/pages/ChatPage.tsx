@@ -100,6 +100,10 @@ export default function ChatPage() {
   // 重命名（inline）
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  // 会话级 AI session 映射（每轮对话独立多轮上下文，见 doc/AI调用重构技术方案.md §4.2）
+  const convSessionMap = useRef<Record<string, string>>({});
+  // 智能体模式：开启后 AI 可主动调用知识库 MCP 工具
+  const [agentMode, setAgentMode] = useState(false);
 
   const startNewConversation = () => {
     setActive(null);
@@ -141,7 +145,22 @@ export default function ChatPage() {
       if ((!remote || remote.provider === 'none' || !remote.model) && localEnabled) {
         await window.forge.ai.setConfig(aiConfig);
       }
-      const ans = await window.forge.ai.ask(activeKb.id, t);
+      // 统一 AIHub：携带该对话的 sessionId，实现多轮上下文（建议→确认→执行）
+      // 智能体模式下走 agent skill，AI 可主动调用知识库 MCP 工具（检索/读/写/诊断）
+      const skill = agentMode ? 'agent' : 'ask';
+      const res = (await window.forge.ai.hubRun({
+        skill,
+        input: { question: t, text: t },
+        kbId: activeKb.id,
+        sessionId: convSessionMap.current[convId!]
+      } as any)) as any;
+      if (res?.sessionId) convSessionMap.current[convId!] = res.sessionId;
+      const ans =
+        res?.kind === 'text'
+          ? res.text
+          : res?.kind === 'structured'
+            ? JSON.stringify(res.data)
+            : '（AI 未返回内容）';
       appendMessage(convId!, {
         role: 'assistant',
         text: ans || '（AI 未返回内容）',
@@ -327,9 +346,9 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="max-w-2xl mx-auto space-y-3">
-              {activeConv.messages.map((m, i) => (
+              {activeConv.messages.map((m) => (
                 <div
-                  key={i}
+                  key={m.id}
                   className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
                   <div
@@ -455,6 +474,16 @@ export default function ChatPage() {
                 </div>
               </div>
               <div className="border-t border-border-soft px-4 py-2 flex items-center gap-2 text-[11px]">
+                <button
+                  onClick={() => setAgentMode((v) => !v)}
+                  title="智能体模式：AI 可主动调用知识库工具（检索/读/写/诊断）"
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-xl ${
+                    agentMode ? 'bg-brand-soft/60 text-brand' : 'bg-hover-bg text-fg-secondary hover:bg-active-bg'
+                  }`}
+                >
+                  <Icon name="cpu" className="w-3 h-3" />
+                  <span>智能体{agentMode ? '·开' : ''}</span>
+                </button>
                 <div className="relative group">
                   <button className="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-hover-bg text-fg-secondary hover:bg-active-bg">
                     <Icon name="folder" className="w-3 h-3" />
