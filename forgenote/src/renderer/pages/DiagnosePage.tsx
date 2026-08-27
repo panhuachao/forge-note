@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { PageHeader } from '../components/PageHeader';
 import { Icon } from '../components/Icon';
+import type { TreeNode } from '@shared/types';
 
 type DiagType =
   | 'missing_link' // 缺少双链
@@ -54,8 +55,31 @@ function dirOf(p: string) {
   return i >= 0 ? p.slice(0, i) : '';
 }
 
+// 把 AI 推荐的目录路径解析为知识库中真实存在的目录；若推荐子目录不存在，回退到最近存在的父目录（至少一级目录），不会创建新目录。
+function resolveTargetDir(tree: TreeNode, target: string): string | null {
+  const clean = target
+    .replace(/\.md$/i, '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '');
+  if (!clean) return null;
+  const parts = clean.split('/').filter(Boolean);
+  if (parts.length === 0) return null;
+
+  let current = tree;
+  let matched = 0;
+  for (const part of parts) {
+    const child = current.children?.find((c) => c.kind === 'dir' && c.name === part);
+    if (!child) break;
+    current = child;
+    matched++;
+  }
+
+  if (matched === 0) return null;
+  return parts.slice(0, matched).join('/');
+}
+
 export function DiagnosePage() {
-  const { activeKb, pushToast, setTree } = useKBStore();
+  const { activeKb, pushToast, setTree, tree } = useKBStore();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<DiagItem[]>([]);
   const [progress, setProgress] = useState('');
@@ -122,10 +146,12 @@ export function DiagnosePage() {
       if (it.type === 'missing_link' && it.note && it.target) {
         await window.forge.ai.insertLinks(activeKb.id, it.note, [it.target]);
       } else if (it.type === 'wrong_dir' && it.note && it.target) {
-        const dest = it.target.endsWith('.md')
-          ? it.target.replace(/\.md$/, '') + '/' + basename(it.note)
-          : it.target + '/' + basename(it.note);
-        await window.forge.fs.moveNote(activeKb.id, it.note, dest);
+        const currentTree = tree || (await window.forge.fs.listTree(activeKb.id));
+        const dest = resolveTargetDir(currentTree, it.target);
+        if (!dest) {
+          throw new Error(`AI 推荐目录不存在：${it.target}（请先在知识库创建该目录）`);
+        }
+        await window.forge.fs.moveNote(activeKb.id, it.note, dest, { autoCreateDir: false });
       } else if (it.type === 'missing_dir' && it.dirName) {
         await window.forge.fs.createDir(activeKb.id, '', it.dirName);
       } else {
@@ -338,7 +364,7 @@ function buildPrompt(notes: { path: string; dir: string; title: string; outlinks
 
 诊断维度：
 1. missing_link（缺双链）：某笔记内容明显应引用另一篇笔记，但缺少 [[另一篇标题]] 双链。
-2. wrong_dir（归属存疑）：某笔记主题与其所在目录不符，应归属到更合适的已有目录（target 写目标目录路径，如 "00 灵感库"）。
+2. wrong_dir（归属存疑）：某笔记主题与其所在目录不符，应归属到更合适的已有目录（target 写目标目录路径，如 "00 灵感库" 或 "03 外部资源/展会"；必须是知识库中真实存在的目录，优先精准子目录，子目录不存在时回退到已有的一级目录，禁止建议不存在的目录，禁止返回文件路径或带 .md 的路径）。
 3. missing_dir（缺目录）：知识库缺少某个明显应有的分类目录（dirName 写新目录名，如 "读书笔记"）。
 4. orphan（孤立笔记）：没有任何入链/出链、且与其他笔记主题无关联的孤立笔记。
 5. duplicate（可能重复）：两篇笔记主题高度重复、可合并。
@@ -346,6 +372,7 @@ function buildPrompt(notes: { path: string; dir: string; title: string; outlinks
 要求：
 - 仅输出 JSON 数组，元素字段：type(上述枚举)、severity("high"|"medium"|"low")、title(简短中文标题)、detail(具体说明)、note(受影响笔记路径，orphan/duplicate 时给主笔记路径)、target(双链目标路径或目标目录路径，缺失可不填)、dirName(新建目录名，仅 missing_dir 填)、action(建议的修正动作描述)。
 - target 中的双链目标必须是清单中真实存在的笔记路径（用 [[标题]] 形式），不要编造不存在的笔记。
+- target 中的目录路径必须是知识库中真实存在的目录（可含子目录），不要编造不存在的目录，不要返回文件路径或带 .md 后缀的路径。
 - 每条建议都要具体、可操作，避免空泛。最多 30 条。
 
 笔记清单：

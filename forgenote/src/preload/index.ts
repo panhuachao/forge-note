@@ -45,7 +45,8 @@ const api = {
     createNote: (kbId: string, dirPath: string, opts?: { useTemplate?: boolean; name?: string }) =>
       ipcRenderer.invoke(IPC.FS_CREATE_NOTE, kbId, dirPath, opts) as Promise<NoteInfo>,
     deleteNote: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_DELETE_NOTE, kbId, p) as Promise<void>,
-    moveNote: (kbId: string, from: string, to: string) => ipcRenderer.invoke(IPC.FS_MOVE_NOTE, kbId, from, to) as Promise<string>,
+    moveNote: (kbId: string, from: string, to: string, opts?: { autoCreateDir?: boolean }) =>
+      ipcRenderer.invoke(IPC.FS_MOVE_NOTE, kbId, from, to, opts) as Promise<string>,
     renameNote: (kbId: string, old: string, name: string) => ipcRenderer.invoke(IPC.FS_RENAME_NOTE, kbId, old, name) as Promise<string>,
     createDir: (kbId: string, parent: string, name: string) => ipcRenderer.invoke(IPC.FS_CREATE_DIR, kbId, parent, name) as Promise<string>,
     deleteDir: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_DELETE_DIR, kbId, p) as Promise<void>,

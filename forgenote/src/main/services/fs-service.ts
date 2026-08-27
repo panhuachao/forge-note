@@ -202,7 +202,7 @@ class FSService {
     eventBus.emit('fsChange', { type: 'unlink', path: notePath, isDir: false });
   }
 
-  async moveNote(kbId: string, fromPath: string, toDirPath: string): Promise<string> {
+  async moveNote(kbId: string, fromPath: string, toDirPath: string, opts?: { autoCreateDir?: boolean }): Promise<string> {
     const root = this.rootOf(kbId);
     const fromAbs = safeJoin(root, fromPath);
     const name = basename(fromPath);
@@ -216,7 +216,9 @@ class FSService {
       toAbs = safeJoin(root, toPath);
       i++;
     }
-    await fs.mkdir(dirname(toAbs), { recursive: true });
+    if (opts?.autoCreateDir) {
+      await fs.mkdir(dirname(toAbs), { recursive: true });
+    }
     await fs.rename(fromAbs, toAbs);
     linkIndex.renameNote(kbId, fromPath, toPath);
     kbService.invalidateMeta(root);

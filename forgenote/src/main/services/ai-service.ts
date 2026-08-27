@@ -156,7 +156,7 @@ class AIService {
     if (!kb) return '';
     // 诊断：确认主进程实际读到的 AI 配置
     const diag = await this.getConfig();
-    console.log('[ai.ask] kbId=', kbId, 'provider=', diag.provider, 'model=', diag.model, 'baseUrl=', diag.baseUrl);
+    console.log('[ai.ask] kbId=', kbId, 'service=', diag.serviceProvider, 'protocol=', diag.provider, 'model=', diag.model, 'baseUrl=', diag.baseUrl);
 
     // 1) 关键词检索（局部精确命中）
     const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
