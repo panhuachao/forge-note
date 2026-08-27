@@ -1,7 +1,7 @@
 // 统一 AI 调用入口（方案 §4 · 防腐层 + 会话上下文 + Skill 路由）
 // 渲染层 / IPC 一律只调 aiHub.run(req)，由它：按 skill 路由 → 挂载多轮 SessionStore → 调用 Skill。
 // 流式场景调用 aiHub.runStream(req, onToken)（方案 §三.1）。旧 window.forge.ai.* 业务方法保留兼容。
-import { getSkill, SKILLS, runTimeSummary, routeSkill, type AISkillCtx } from './skill-engine';
+import { getSkill, SKILLS, runTimeSummary, routeSkill, compressHistory, type AISkillCtx } from './skill-engine';
 import { sessionStore } from './session-store';
 import { aiService } from './ai-service';
 import type { AIRequest, AIResponse, AITurn, AIRefHit, AIUsage, ToolActivity } from '@shared/types/ai';
@@ -97,7 +97,7 @@ class AIHub {
         usage = ts.usage;
       } else {
         // 流式问答
-        for await (const chunk of aiService.askStream(req.kbId, this.toChatHistory(history), input.text)) {
+        for await (const chunk of aiService.askStream(req.kbId, this.toChatHistory(history), String(input.text ?? ''))) {
           if (chunk.refs) refs = chunk.refs;
           if (chunk.usage) usage = { ...chunk.usage, ms: Date.now() - t0 };
           if (chunk.delta) {
@@ -142,10 +142,11 @@ class AIHub {
   }
 
   private toChatHistory(turns: AITurn[]): { role: 'user' | 'assistant'; text: string }[] {
-    return turns
+    const pairs = turns
       .filter((t) => (t.role === 'user' || t.role === 'assistant') && t.text)
-      .map((t) => ({ role: t.role as 'user' | 'assistant', text: t.text! }))
-      .slice(-20);
+      .map((t) => ({ role: t.role as 'user' | 'assistant', text: t.text! }));
+    // #5 历史压缩：与 skill-engine 一致，超长历史只保留最近 8 轮原文
+    return compressHistory(pairs, 8);
   }
 
   /** 落盘助手回合 + 记录 token 用量（成本可观测，方案 §三.3） */

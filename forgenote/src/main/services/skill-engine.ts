@@ -69,8 +69,26 @@ function toChatHistory(turns: AITurn[]): { role: 'user' | 'assistant'; text: str
   const pairs = turns
     .filter((t) => (t.role === 'user' || t.role === 'assistant') && t.text)
     .map((t) => ({ role: t.role as 'user' | 'assistant', text: t.text! }));
-  // 截断到最近 20 轮，避免超长
-  return pairs.slice(-20);
+  // #5 历史压缩：仅保留最近 KEEP 轮原文，更早的轮次抽取首句压缩为单行摘要，避免 context 膨胀
+  return compressHistory(pairs, 8);
+}
+
+/**
+ * 历史压缩（#5）：低成本本地摘要。
+ * 保留最近 keep 轮原文；超出部分用「每轮首句截断」拼成一行（前文摘要），
+ * 不调用 LLM，既控制 token 又保留跨轮意图连续性。
+ */
+export function compressHistory(
+  pairs: { role: 'user' | 'assistant'; text: string }[],
+  keep = 8
+): { role: 'user' | 'assistant'; text: string }[] {
+  if (pairs.length <= keep) return pairs;
+  const recent = pairs.slice(-keep);
+  const older = pairs.slice(0, pairs.length - keep);
+  const digest = older
+    .map((t) => `${t.role === 'user' ? '用户' : '助手'}：${t.text.replace(/\s+/g, ' ').slice(0, 40)}`)
+    .join('；');
+  return [{ role: 'assistant', text: `（前文摘要）${digest}…` }, ...recent];
 }
 
 /**
@@ -83,7 +101,7 @@ function toChatHistory(turns: AITurn[]): { role: 'user' | 'assistant'; text: str
  * 返回 null 表示不是时间维度问题（调用方应走标准 RAG）。
  */
 export async function runTimeSummary(
-  kbId: string,
+  kbId: string | undefined,
   question: string,
   history: AITurn[],
   onToken?: (delta: string) => void,
@@ -144,15 +162,38 @@ ${parts.join('\n\n')}`;
 }
 
 /**
- * 模型自路由（#1）：根据用户输入从已注册能力中挑选最合适的一项。
+ * 规则优先路由（#9）：用关键词/正则先判定意图，命中则直接返回 skill id，
+ * 省去一次路由 LLM 调用（低成本、低延迟、零幻觉）。
+ * 仅当无法判定时才回落到模型自路由（routeSkill）。
+ */
+const RULE_ROUTES: { id: string; test: (t: string) => boolean }[] = [
+  { id: 'agent', test: (t) => /(帮我|请|自动|智能地|去|执行|操作|创建笔记|写入|整理到|归类到|诊断).*(知识库|笔记)|智能体|agent/.test(t) },
+  { id: 'quick-note', test: (t) => /(快速笔记|速记|随手记|记一下|帮我记|保存这段)/.test(t) },
+  { id: 'suggest-dir', test: (t) => /(推荐?目录|归到?哪个|放在哪|归属目录|该放哪)/.test(t) },
+  { id: 'diagnose', test: (t) => /(诊断|健康检查|失效链接|重复标题|空目录|知识库体检)/.test(t) },
+  // 时间维度总结（与 parseTimeRange 对齐）：命中直接走 ask（ask 内部会分流到 runTimeSummary）
+  { id: 'ask', test: (t) => /(总结|汇总|回顾|整理了?|写了?什么|进展|日报|周报)/.test(t) || !!parseTimeRange(t) }
+];
+
+export function ruleRoute(text: string): string | null {
+  const t = text || '';
+  for (const r of RULE_ROUTES) if (r.test(t)) return getSkill(r.id) ? r.id : null;
+  return null;
+}
+
+/**
+ * 模型自路由（#1）：规则无法判定时，由模型从已注册能力中挑选最合适的一项。
  * 让新增 Skill 零侵入地参与路由，ai-hub 不再硬编码 skill 列表。
  */
 export async function routeSkill(text: string): Promise<string> {
+  // #9 规则优先：命中即返回，不花一次 LLM 调用
+  const rule = ruleRoute(text);
+  if (rule) return rule;
   const catalog = Object.values(SKILLS)
     .map((s) => `- ${s.id}: ${s.title} —— ${s.description}`)
     .join('\n');
   const sys = `你是锦囊笔记的能力路由。下面是可用能力清单：\n${catalog}\n\n只回复一个能力 id（不要解释），若都不合适回复 ask。`;
-  const pick = (await aiService.chat(text, sys)).text.trim().toLowerCase();
+  const pick = (await aiService.chat(text, sys)).trim().toLowerCase();
   return getSkill(pick) ? pick : 'ask';
 }
 

@@ -5,6 +5,7 @@ import { getKB, getConfig, setConfig, saveAIPreset, getAIPresets } from './store
 import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult, AIPrompts } from '@shared/types';
 import { DEFAULT_AI_PROMPTS, normalizeAIModelConfig } from '@shared/types/ai';
 import type { AIRefHit } from '@shared/types/ai';
+import type { SearchResult } from '@shared/types';
 import { extractWikiLinks, previewLine } from '../utils/markdown';
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
@@ -293,6 +294,28 @@ class AIService {
   }
 
   /**
+   * 检索重排（#1）：在向量/关键词召回的基础上，用查询词重叠度 + 标题/匹配类型加权
+   * 重新打分并截断到 top-N，剔除低信号片段，让进 context 的引用更聚焦、更省 token。
+   * 纯本地计算，不额外调用 LLM。
+   */
+  private rerankHits(query: string, hits: SearchResult[], topN = 8): SearchResult[] {
+    const q = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+    const norm = (s: string) => s.toLowerCase();
+    const scored = hits.map((h) => {
+      const title = norm(h.noteName);
+      const body = norm(h.snippet);
+      let s = h.score;
+      if (q.some((w) => title.includes(w))) s += 0.35; // 标题命中强信号
+      const overlap = q.filter((w) => body.includes(w)).length; // 查询词与片段词面重叠
+      s += (overlap / Math.max(q.length, 1)) * 0.5;
+      if (h.matchType === 'title' || h.matchType === 'path') s += 0.2; // 路径/标题匹配优先
+      return { h, s };
+    });
+    scored.sort((a, b) => b.s - a.s);
+    return scored.filter((x) => x.s > 0.15).slice(0, topN).map((x) => x.h);
+  }
+
+  /**
    * RAG 问答
    */
   async ask(kbId: string, question: string, opts?: { templateDirIds?: string[] }): Promise<string> {
@@ -302,8 +325,8 @@ class AIService {
     const diag = await this.getConfig();
     console.log('[ai.ask] kbId=', kbId, 'service=', diag.serviceProvider, 'protocol=', diag.provider, 'model=', diag.model, 'baseUrl=', diag.baseUrl);
 
-    // 1) 关键词检索（局部精确命中）
-    const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
+    // 1) 关键词检索（局部精确命中）+ 检索重排（#1）
+    const hits = this.rerankHits(question, await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 12 }));
     const hitContext = hits
       .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
       .join('\n\n');
@@ -339,7 +362,7 @@ class AIService {
     }
     const kb = getKB(kbId);
     if (!kb) return { text: await this.chat(question + historyBlock, BASE_SYSTEM), refs: [] };
-    const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
+    const hits = this.rerankHits(question, await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 12 }));
     const refs: AIRefHit[] = hits.map((h) => ({ path: h.notePath, name: h.noteName, snippet: h.snippet }));
     const hitContext = hits
       .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
@@ -370,7 +393,7 @@ class AIService {
     if (kbId) {
       const kb = getKB(kbId);
       if (kb) {
-        const hits = await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 8 });
+        const hits = this.rerankHits(question, await searchService.query(kbId, question, { templateDirIds: opts?.templateDirIds, limit: 12 }));
         refs = hits.map((h) => ({ path: h.notePath, name: h.noteName, snippet: h.snippet }));
         const hitContext = hits
           .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
