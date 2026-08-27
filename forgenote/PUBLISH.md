@@ -140,7 +140,7 @@ macOS 上未经签名与公证的 Electron 应用，用户从网络下载安装�
 | Secret 名 | 说明 |
 |---|---|
 | `APPLE_ID` | 你的 Apple ID 邮箱 |
-| `APPLE_APP_PASSWORD` | 上述 app-specific password |
+| `APPLE_APP_SPECIFIC_PASSWORD` | 上述 app-specific password |
 | `APPLE_TEAM_ID` | Membership 页的 Team ID |
 | `APPLE_CERT_BASE64` | Developer ID Application 证书导出的 `.p12` 经 base64 编码后的字符串 |
 | `APPLE_CERT_PASSWORD` | 导出 `.p12` 时设置的密码 |
@@ -165,7 +165,7 @@ rm -f /tmp/devid.p12
 `.github/workflows/release.yml` 的 `release-mac` job（`macos-latest` 上运行 `npm run package:mac`，即 `--x64 --arm64` 一次产出两个包）包含：
 1. **导入证书**：将 `APPLE_CERT_BASE64` 解码为 p12 并导入到临时钥匙串（`build.keychain`），供 `codesign` 使用。
 2. **签名**：`package.json` 的 `mac.identity` 设为 `"Developer ID Application"`，electron-builder 打包时对 `.app` 做 Developer ID 签名。
-3. **公证**：`mac.notarize: true` 读取 `APPLE_ID` / `APPLE_APP_PASSWORD` / `APPLE_TEAM_ID` 环境变量，将产物提交 Apple 公证；通过后把 ticket stapled 到 dmg。
+3. **公证**：`mac.notarize: true` 读取 `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` 环境变量（CI 中由 workflow 把 secret `APPLE_APP_PASSWORD` 注入为该变量名），将产物提交 Apple 公证；通过后把 ticket stapled 到 dmg。
 4. **发布**：`--publish=always` 上传已公证的 dmg/zip 到同一 Release。
 
 > 公证通常需要 1–5 分钟，CI 会等待结果，属正常现象。
@@ -174,7 +174,7 @@ rm -f /tmp/devid.p12
 若想在本机直接产出已公证的包（需本机钥匙串已含 Developer ID 证书）：
 ```bash
 export APPLE_ID="你的邮箱"
-export APPLE_APP_PASSWORD="app-specific-password"
+export APPLE_APP_SPECIFIC_PASSWORD="app-specific-password"
 export APPLE_TEAM_ID="你的TeamID"
 npm run package:mac:arm64 -- --publish=always
 npm run package:mac:x64 -- --publish=always
