@@ -85,14 +85,17 @@ function toChatHistory(turns: AITurn[]): { role: 'user' | 'assistant'; text: str
 export async function runTimeSummary(
   kbId: string,
   question: string,
-  history: AITurn[]
-): Promise<{ text: string; refs: AIRefHit[] } | null> {
+  history: AITurn[],
+  onToken?: (delta: string) => void,
+  onActivity?: (a: ToolActivity) => void
+): Promise<{ text: string; refs: AIRefHit[]; usage: AIUsage } | null> {
   const tr = parseTimeRange(question);
   if (!tr || !kbId) return null;
   const listText = await executeTool({ name: 'kb_list_notes', args: { sinceDays: tr.sinceDays, limit: 200 } }, { kbId });
+  onActivity?.({ name: 'kb_list_notes', args: { sinceDays: tr.sinceDays }, result: `筛出 ${[...listText.matchAll(/^- (.+)$/gm)].length} 篇` });
   const paths = [...listText.matchAll(/^- (.+)$/gm)].map((m) => m[1].trim()).filter(Boolean);
   if (paths.length === 0) {
-    return { text: `${tr.label} 没有新增或编辑的笔记。`, refs: [] };
+    return { text: `${tr.label} 没有新增或编辑的笔记。`, refs: [], usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 } };
   }
   // 读取每篇正文并拼接（限制总长，避免超 token）
   const PER = 2000;
@@ -101,6 +104,7 @@ export async function runTimeSummary(
   let total = 0;
   for (const p of paths.slice(0, 30)) {
     const body = await executeTool({ name: 'kb_read_note', args: { notePath: p } }, { kbId });
+    onActivity?.({ name: 'kb_read_note', args: { notePath: p }, result: `${body.length} 字` });
     const trimmed = body.length > PER ? body.slice(0, PER) + '\n…(截断)' : body;
     parts.push(`### [[${p.replace(/\.md$/i, '').split('/').pop()}]]\n路径: ${p}\n${trimmed}`);
     total += trimmed.length;
@@ -122,9 +126,34 @@ ${historyBlock}
 
 # ${tr.label}的笔记（共 ${parts.length} 篇）
 ${parts.join('\n\n')}`;
-  const text = await aiService.chat(question, sys);
+  // 真流式 #11：逐 token 渲染，降低"思考中"等待焦虑
+  let text = '';
+  let usage: AIUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 };
+  if (onToken) {
+    for await (const chunk of aiService.streamChat(question, sys)) {
+      const d = chunk.delta || '';
+      text += d;
+      onToken(d);
+      if (chunk.usage) usage = { ...usage, promptTokens: chunk.usage.promptTokens, completionTokens: chunk.usage.completionTokens, totalTokens: chunk.usage.totalTokens, ms: usage.ms };
+    }
+    return { text, refs: paths.map((p) => ({ path: p, name: p.replace(/\.md$/i, '').split('/').pop() || p })), usage };
+  }
+  const r = await aiService.chat(question, sys);
   const refs: AIRefHit[] = paths.map((p) => ({ path: p, name: p.replace(/\.md$/i, '').split('/').pop() || p }));
-  return { text, refs };
+  return { text: r, refs, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 } };
+}
+
+/**
+ * 模型自路由（#1）：根据用户输入从已注册能力中挑选最合适的一项。
+ * 让新增 Skill 零侵入地参与路由，ai-hub 不再硬编码 skill 列表。
+ */
+export async function routeSkill(text: string): Promise<string> {
+  const catalog = Object.values(SKILLS)
+    .map((s) => `- ${s.id}: ${s.title} —— ${s.description}`)
+    .join('\n');
+  const sys = `你是锦囊笔记的能力路由。下面是可用能力清单：\n${catalog}\n\n只回复一个能力 id（不要解释），若都不合适回复 ask。`;
+  const pick = (await aiService.chat(text, sys)).text.trim().toLowerCase();
+  return getSkill(pick) ? pick : 'ask';
 }
 
 export const SKILLS: Record<string, AISkill> = {

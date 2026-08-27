@@ -445,6 +445,135 @@ export function SettingsPage() {
 
         {tab === 'advanced' && (
           <section className="bg-content rounded-xl border border-border-soft p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">外部 MCP 服务（能力扩展）</h2>
+              <button
+                onClick={() => {
+                  const next = [
+                    ...(cfg.mcpServers || []),
+                    { name: '新服务', transport: 'stdio' as const, command: '', args: [] as string[], env: {} as Record<string, string>, url: '', enabled: true }
+                  ];
+                  setCfg({ ...cfg, mcpServers: next });
+                }}
+                className="btn btn-primary text-xs"
+              >
+                + 新增服务
+              </button>
+            </div>
+            <p className="text-xs text-fg-muted mb-4">
+              配置外部 MCP Server 后，AI 智能体可调用其提供的工具，无需改动核心代码（方案 §六）。
+              保存后将在下次调用时自动连接。
+            </p>
+
+            <div className="space-y-3">
+              {(cfg.mcpServers || []).length === 0 && (
+                <p className="text-xs text-fg-faint">尚未配置任何外部 MCP 服务。</p>
+              )}
+              {(cfg.mcpServers || []).map((s, i) => (
+                <div key={i} className="rounded-xl border border-border-soft p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={s.name}
+                      onChange={(e) => {
+                        const next = [...(cfg.mcpServers || [])];
+                        next[i] = { ...next[i], name: e.target.value };
+                        setCfg({ ...cfg, mcpServers: next });
+                      }}
+                      className="input flex-1"
+                      placeholder="服务名"
+                    />
+                    <select
+                      value={s.transport}
+                      onChange={(e) => {
+                        const next = [...(cfg.mcpServers || [])];
+                        next[i] = { ...next[i], transport: e.target.value as 'stdio' | 'sse' };
+                        setCfg({ ...cfg, mcpServers: next });
+                      }}
+                      className="input w-28"
+                    >
+                      <option value="stdio">stdio</option>
+                      <option value="sse">sse</option>
+                    </select>
+                    <label className="flex items-center gap-1 text-xs text-fg-muted">
+                      <input
+                        type="checkbox"
+                        checked={s.enabled !== false}
+                        onChange={(e) => {
+                          const next = [...(cfg.mcpServers || [])];
+                          next[i] = { ...next[i], enabled: e.target.checked };
+                          setCfg({ ...cfg, mcpServers: next });
+                        }}
+                      />
+                      启用
+                    </label>
+                    <button
+                      onClick={() => {
+                        const next = (cfg.mcpServers || []).filter((_, j) => j !== i);
+                        setCfg({ ...cfg, mcpServers: next });
+                      }}
+                      className="btn text-xs text-red-500"
+                    >
+                      删除
+                    </button>
+                  </div>
+                  {s.transport === 'stdio' ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      <input
+                        value={s.command || ''}
+                        onChange={(e) => {
+                          const next = [...(cfg.mcpServers || [])];
+                          next[i] = { ...next[i], command: e.target.value };
+                          setCfg({ ...cfg, mcpServers: next });
+                        }}
+                        className="input"
+                        placeholder="命令，如 npx -y @modelcontextprotocol/server-filesystem"
+                      />
+                      <input
+                        value={(s.args || []).join(' ')}
+                        onChange={(e) => {
+                          const next = [...(cfg.mcpServers || [])];
+                          next[i] = { ...next[i], args: e.target.value.split(/\s+/).filter(Boolean) };
+                          setCfg({ ...cfg, mcpServers: next });
+                        }}
+                        className="input"
+                        placeholder="参数（空格分隔，可选）"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      value={s.url || ''}
+                      onChange={(e) => {
+                        const next = [...(cfg.mcpServers || [])];
+                        next[i] = { ...next[i], url: e.target.value };
+                        setCfg({ ...cfg, mcpServers: next });
+                      }}
+                      className="input"
+                      placeholder="SSE 地址，如 http://localhost:3000/sse"
+                    />
+                  )}
+                  <input
+                    value={Object.entries(s.env || {}).map(([k, v]) => `${k}=${v}`).join('\n')}
+                    onChange={(e) => {
+                      const env: Record<string, string> = {};
+                      e.target.value.split('\n').forEach((line) => {
+                        const idx = line.indexOf('=');
+                        if (idx > 0) env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+                      });
+                      const next = [...(cfg.mcpServers || [])];
+                      next[i] = { ...next[i], env };
+                      setCfg({ ...cfg, mcpServers: next });
+                    }}
+                    className="input"
+                    placeholder="环境变量（可选，KEY=VALUE 每行一条）"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === 'advanced' && (
+          <section className="bg-content rounded-xl border border-border-soft p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="font-semibold">提示词配置</h2>
               <button onClick={resetPrompts} className="btn text-xs">恢复默认</button>

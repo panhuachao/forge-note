@@ -15,6 +15,8 @@ export interface ChatMessage {
   refs?: Array<{ path: string; name: string; snippet?: string }>;
   // 本次调用的 token 用量（成本可观测，方案 §三.3）
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number; ms: number };
+  // 工具调用活动（agent / 时间路由过程中 AI 调用的工具，#4）
+  toolActivity?: Array<{ name: string; args: Record<string, unknown>; result: string }>;
   ts: number;
 }
 

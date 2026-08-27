@@ -42,6 +42,8 @@ export interface MCPServerConfig {
   args?: string[];
   /** sse 模式：远程端点 URL */
   url?: string;
+  /** 环境变量（可选，KEY=VALUE），用于 stdio 子进程启动 */
+  env?: Record<string, string>;
   /** 是否启用（外部 MCP 默认需显式开启） */
   enabled?: boolean;
 }
@@ -292,6 +294,8 @@ export interface AIRequest {
   sessionId?: string; // 携带则续接历史；缺省新建一次性会话
   history?: AITurn[]; // 或由 AIHub 从 SessionStore 自动载入
   confirm?: boolean; // 确认上一轮 draft（多轮确认执行）
+  draft?: unknown; // 待确认的草稿（confirm=true 时）
+  onActivity?: (a: ToolActivity) => void; // 工具调用活动回调（agent / 时间路由，#4）
 }
 
 /** AI 统一响应 */
@@ -300,6 +304,13 @@ export type AIResponse =
   | { kind: 'structured'; data: unknown; pending?: boolean } // pending=true 表示待确认草稿
   | { kind: 'stream'; text: string }
   | { kind: 'tool'; steps: unknown[] };
+
+/** 工具调用活动（agent / 时间路由过程中 AI 调用工具的可观测记录，#4） */
+export interface ToolActivity {
+  name: string; // 工具名（如 kb_search / kb_read_note）
+  args: Record<string, unknown>;
+  result: string;
+}
 
 /** Skill 声明（能力单元） */
 export interface Skill {

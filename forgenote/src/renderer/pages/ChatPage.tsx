@@ -109,8 +109,11 @@ export default function ChatPage() {
   // 输入
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  // 流式输出缓冲：正在生成中的 assistant 文本，逐 token 累积（方案 §三.1）
-  const [streaming, setStreaming] = useState<{ text: string } | null>(null);
+  // 流式输出缓冲：正在生成中的 assistant 文本，逐 token 累积（方案 §三.1）；toolActivity 为工具调用气泡（#4）
+  const [streaming, setStreaming] = useState<{
+    text: string;
+    toolActivity?: { name: string; args: Record<string, unknown>; result: string }[];
+  } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -154,6 +157,8 @@ export default function ChatPage() {
   const convSessionMap = useRef<Record<string, string>>({});
   // 智能体模式：开启后 AI 可主动调用知识库 MCP 工具
   const [agentMode, setAgentMode] = useState(false);
+  // 自动路由模式：开启后由模型从已注册能力中挑选最合适的 skill（#1）
+  const [routeMode, setRouteMode] = useState(false);
   // 待删除的对话 id（null 时不显示确认弹窗）
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
@@ -199,7 +204,8 @@ export default function ChatPage() {
       }
       // 统一 AIHub：携带该对话的 sessionId，实现多轮上下文（建议→确认→执行）
       // 智能体模式下走 agent skill，AI 可主动调用知识库 MCP 工具（检索/读/写/诊断）
-      const skill = agentMode ? 'agent' : 'ask';
+      // auto 模式由模型从已注册能力中自路由（#1）
+      const skill = agentMode ? 'agent' : routeMode ? 'auto' : 'ask';
       const existingSession = convSessionMap.current[convId!];
       // 若本对话尚未建立 AI session（如刚打开已持久化的旧对话），用已存的消息历史作为种子，
       // 让多轮上下文在刷新/重开后依然连续（方案 §4.2）。
@@ -211,11 +217,18 @@ export default function ChatPage() {
             .map((m) => ({ role: m.role, text: m.text })) ?? [];
       const streamId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       // 流式渲染：本地累积 token，最后再落盘完整消息（方案 §三.1）
+      // 同时累积工具调用活动（agent / 时间路由），渲染为「工具调用气泡」（#4）
       let acc = '';
+      const toolActs: { name: string; args: Record<string, unknown>; result: string }[] = [];
       const off = window.forge.ai.onAIStream((chunk) => {
         if (chunk.streamId !== streamId) return;
         acc += chunk.delta;
         setStreaming((s) => ({ ...s, text: acc }));
+      });
+      const offAct = window.forge.ai.onToolActivity?.((chunk: { streamId: string; activity: any }) => {
+        if (chunk.streamId !== streamId) return;
+        toolActs.push(chunk.activity);
+        setStreaming((s) => ({ ...s, text: acc, toolActivity: [...toolActs] }));
       });
       const res = (await window.forge.ai.hubRunStream({
         skill,
@@ -226,6 +239,7 @@ export default function ChatPage() {
         streamId
       } as any)) as any;
       off();
+      offAct?.();
       if (res?.sessionId) convSessionMap.current[convId!] = res.sessionId;
       const ans =
         res?.kind === 'text'
@@ -239,7 +253,8 @@ export default function ChatPage() {
         text: ans || acc || '（AI 未返回内容）',
         ts: Date.now(),
         refs: res?.refs,
-        usage: res?.usage
+        usage: res?.usage,
+        toolActivity: toolActs.length ? toolActs : undefined
       });
     } catch (err) {
       appendMessage(convId!, {
@@ -447,6 +462,27 @@ export default function ChatPage() {
                   </div>
                   {m.role === 'assistant' && (
                     <>
+                      {/* 工具调用气泡（#4）：agent / 时间路由过程中调用的工具，点击可见参数与结果 */}
+                      {m.toolActivity && m.toolActivity.length > 0 && (
+                        <div className="mt-1.5 flex flex-col gap-1 w-full max-w-[80%]">
+                          <span className="text-[10px] text-fg-faint px-1">工具调用</span>
+                          {m.toolActivity.map((a, ai) => (
+                            <details
+                              key={ai}
+                              className="px-2.5 py-1 rounded-lg bg-hover-bg border border-border-soft"
+                            >
+                              <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-fg-secondary">
+                                <Icon name="cpu" className="w-3 h-3 text-brand" />
+                                <span className="font-mono text-brand">{a.name}</span>
+                                <span className="text-fg-faint">{String(a.result || '').slice(0, 40)}</span>
+                              </summary>
+                              <pre className="mt-1 text-[10px] text-fg-secondary whitespace-pre-wrap break-all">
+                                {JSON.stringify(a.args, null, 2)}
+                              </pre>
+                            </details>
+                          ))}
+                        </div>
+                      )}
                       {/* 引用溯源卡片（方案 §三.2）：点击跳转到对应笔记 */}
                       {m.refs && m.refs.length > 0 && (
                         <div className="mt-1.5 flex flex-col gap-1 w-full max-w-[80%]">
@@ -496,7 +532,21 @@ export default function ChatPage() {
                 </div>
               ))}
               {loading && (
-                <div className="flex justify-start">
+                <div className="flex flex-col items-start">
+                  {streaming?.toolActivity && streaming.toolActivity.length > 0 && (
+                    <div className="mb-1 flex flex-col gap-1 w-full max-w-[80%]">
+                      {streaming.toolActivity.map((a, ai) => (
+                        <div
+                          key={ai}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-hover-bg border border-border-soft text-[11px] text-fg-secondary"
+                        >
+                          <Icon name="cpu" className="w-3 h-3 text-brand" />
+                          <span className="font-mono text-brand">{a.name}</span>
+                          <span className="text-fg-faint">{String(a.result || '').slice(0, 40)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="bg-content border border-border-soft rounded-xl px-3 py-2 text-sm text-fg markdown-preview chat-md leading-relaxed">
                     {streaming ? (
                       <>
@@ -516,7 +566,7 @@ export default function ChatPage() {
         {/* 底部输入区（与 HomePage 类似） */}
         <div className="border-t border-border-soft bg-toolbar px-6 py-3">
           <div className="max-w-2xl mx-auto">
-            <div className="rounded-2xl border border-border-soft bg-content shadow-sm overflow-hidden">
+            <div className="rounded-2xl border border-border-soft bg-content shadow-sm">
               <div className="px-4 pt-3 pb-2">
                 <textarea
                   ref={textareaRef}
@@ -591,16 +641,46 @@ export default function ChatPage() {
                 </div>
               </div>
               <div className="border-t border-border-soft px-4 py-2 flex items-center gap-2 text-[11px]">
-                <button
-                  onClick={() => setAgentMode((v) => !v)}
-                  title="智能体模式：AI 可主动调用知识库工具（检索/读/写/诊断）"
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-xl ${
-                    agentMode ? 'bg-brand-soft/60 text-brand' : 'bg-hover-bg text-fg-secondary hover:bg-active-bg'
-                  }`}
-                >
-                  <Icon name="cpu" className="w-3 h-3" />
-                  <span>智能体{agentMode ? '·开' : ''}</span>
-                </button>
+                <span className="relative group">
+                  <button
+                    onClick={() => {
+                      setAgentMode((prev) => {
+                        const next = !prev;
+                        if (next) setRouteMode(false);
+                        return next;
+                      });
+                    }}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-xl ${
+                      agentMode ? 'bg-brand-soft/60 text-brand' : 'bg-hover-bg text-fg-secondary hover:bg-active-bg'
+                    }`}
+                  >
+                    <Icon name="cpu" className="w-3 h-3" />
+                    <span>智能体{agentMode ? '·开' : ''}</span>
+                  </button>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 px-2.5 py-1.5 rounded-lg bg-canvas text-fg border border-border-soft text-[11px] leading-snug whitespace-normal text-left opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-sm">
+                    智能体模式：AI 可主动调用知识库工具（检索 / 读 / 写 / 诊断），自主完成多步任务，适合需要操作笔记的场景。
+                  </span>
+                </span>
+                <span className="relative group">
+                  <button
+                    onClick={() => {
+                      setRouteMode((prev) => {
+                        const next = !prev;
+                        if (next) setAgentMode(false);
+                        return next;
+                      });
+                    }}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-xl ${
+                      routeMode ? 'bg-brand-soft/60 text-brand' : 'bg-hover-bg text-fg-secondary hover:bg-active-bg'
+                    }`}
+                  >
+                    <Icon name="sparkles" className="w-3 h-3" />
+                    <span>自动{routeMode ? '·开' : ''}</span>
+                  </button>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 px-2.5 py-1.5 rounded-lg bg-canvas text-fg border border-border-soft text-[11px] leading-snug whitespace-normal text-left opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-sm">
+                    自动路由：由模型根据问题，从已注册的技能（总结 / 检索 / 智能体等）中自动挑选最合适的一项，无需手动切换。
+                  </span>
+                </span>
                 <div className="relative group">
                   <button className="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-hover-bg text-fg-secondary hover:bg-active-bg">
                     <Icon name="folder" className="w-3 h-3" />

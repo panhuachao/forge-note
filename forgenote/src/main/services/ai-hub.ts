@@ -1,10 +1,10 @@
 // 统一 AI 调用入口（方案 §4 · 防腐层 + 会话上下文 + Skill 路由）
 // 渲染层 / IPC 一律只调 aiHub.run(req)，由它：按 skill 路由 → 挂载多轮 SessionStore → 调用 Skill。
 // 流式场景调用 aiHub.runStream(req, onToken)（方案 §三.1）。旧 window.forge.ai.* 业务方法保留兼容。
-import { getSkill, SKILLS, runTimeSummary, type AISkillCtx } from './skill-engine';
+import { getSkill, SKILLS, runTimeSummary, routeSkill, type AISkillCtx } from './skill-engine';
 import { sessionStore } from './session-store';
 import { aiService } from './ai-service';
-import type { AIRequest, AIResponse, AITurn, AIRefHit, AIUsage } from '@shared/types/ai';
+import type { AIRequest, AIResponse, AITurn, AIRefHit, AIUsage, ToolActivity } from '@shared/types/ai';
 
 /** 从统一 AIResponse 取出纯文本（用于会话落盘） */
 function textOf(r: AIResponse): string {
@@ -62,11 +62,17 @@ class AIHub {
    * - 其余技能：一次性 run 后把整段作为单 token 推送（同样记录用量）。
    * 返回最终完整结果（含 sessionId/refs/usage）。
    */
-  async runStream(req: AIRequest, onToken: (delta: string) => void): Promise<AIHubResult> {
-    const skill = getSkill(req.skill);
+  async runStream(
+    req: AIRequest,
+    onToken: (delta: string) => void,
+    onActivity?: (a: ToolActivity) => void
+  ): Promise<AIHubResult> {
+    // 模型自路由：skill === 'auto' 时由模型从已注册能力中挑选最合适的一项（#1）
+    const skillId = req.skill === 'auto' ? await routeSkill(String(req.input?.text ?? req.input?.question ?? '')) : req.skill;
+    const skill = getSkill(skillId);
     if (!skill) {
-      onToken(`未支持的技能: ${req.skill}`);
-      return { kind: 'text', text: `未支持的技能: ${req.skill}` };
+      onToken(`未支持的技能: ${skillId}`);
+      return { kind: 'text', text: `未支持的技能: ${skillId}` };
     }
 
     const input: AISkillCtx['input'] = {
@@ -82,14 +88,13 @@ class AIHub {
     let refs: AIRefHit[] | undefined;
     let usage: AIUsage | undefined;
 
-    if (req.skill === 'ask' && skill.stateful) {
+    if (skill.id === 'ask' && skill.stateful) {
       // 时间维度问题（「今天/本周/最近 N 天」）先走专门路径；命中则基于 mtime 筛出的笔记正文总结。
-      const ts = await runTimeSummary(req.kbId, input.text, history);
+      const ts = await runTimeSummary(req.kbId, String(input.text ?? ''), history, onToken, onActivity);
       if (ts) {
         full = ts.text;
         refs = ts.refs;
-        usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: Date.now() - t0 };
-        onToken(full);
+        usage = ts.usage;
       } else {
         // 流式问答
         for await (const chunk of aiService.askStream(req.kbId, this.toChatHistory(history), input.text)) {
@@ -103,7 +108,7 @@ class AIHub {
       }
     } else {
       // 非流式技能：一次性执行后推送整段
-      const ctx: AISkillCtx = { kbId: req.kbId, input, history, pendingDraft: req.confirm ? req.draft : undefined, onActivity: req.onActivity };
+      const ctx: AISkillCtx = { kbId: req.kbId, input, history, pendingDraft: req.confirm ? req.draft : undefined, onActivity: req.onActivity ?? onActivity };
       let r: AIResponse & { refs?: AIRefHit[]; usage?: AIUsage };
       try {
         r = await skill.run(ctx);
@@ -131,7 +136,7 @@ class AIHub {
       if (s) history = s.turns;
     } else {
       const seed = (req.history ?? []).map((t) => ({ ...t }));
-      sessionId = sessionStore.create(skill.id, req.kbId, seed);
+      sessionId = sessionStore.create(skill.id, req.kbId, seed) as unknown as string;
     }
     return { sessionId, history };
   }

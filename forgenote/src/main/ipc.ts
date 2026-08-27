@@ -124,11 +124,19 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // 流式 AI 调用（逐 token 推送，方案 §三.1）：每片通过 AI_STREAM_CHUNK 事件回传 {streamId, delta}
   ipcMain.handle(IPC.AI_HUB_STREAM, async (event, req: import('@shared/types/ai').AIRequest) => {
     const streamId = (req as any).streamId as string | undefined;
-    return aiHub.runStream(req, (delta: string) => {
-      if (streamId && event.sender && !event.sender.isDestroyed()) {
-        event.sender.send(IPC.AI_STREAM_CHUNK, { streamId, delta });
+    return aiHub.runStream(
+      req,
+      (delta: string) => {
+        if (streamId && event.sender && !event.sender.isDestroyed()) {
+          event.sender.send(IPC.AI_STREAM_CHUNK, { streamId, delta });
+        }
+      },
+      (activity) => {
+        if (streamId && event.sender && !event.sender.isDestroyed()) {
+          event.sender.send(IPC.AI_TOOL_ACTIVITY, { streamId, activity });
+        }
       }
-    });
+    );
   });
   // 成本可观测：用量查询 / 重置（方案 §三.3）
   ipcMain.handle(IPC.AI_GET_USAGE, async () => aiService.getUsage());

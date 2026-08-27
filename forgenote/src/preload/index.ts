@@ -104,6 +104,15 @@ const api = {
       ipcRenderer.on(IPC.AI_STREAM_CHUNK, listener);
       return () => ipcRenderer.removeListener(IPC.AI_STREAM_CHUNK, listener);
     },
+    // 工具调用活动（agent / 时间路由过程中）：主进程回传，渲染层累积为「工具调用气泡」（#4）
+    onToolActivity: (cb: (chunk: { streamId: string; activity: { name: string; args: Record<string, unknown>; result: string } }) => void) => {
+      const listener = (
+        _e: IpcRendererEvent,
+        chunk: { streamId: string; activity: { name: string; args: Record<string, unknown>; result: string } }
+      ) => cb(chunk);
+      ipcRenderer.on(IPC.AI_TOOL_ACTIVITY, listener);
+      return () => ipcRenderer.removeListener(IPC.AI_TOOL_ACTIVITY, listener);
+    },
     getUsage: () => ipcRenderer.invoke(IPC.AI_GET_USAGE) as Promise<Record<string, { calls: number; tokens: number; ms: number }>>,
     resetUsage: () => ipcRenderer.invoke(IPC.AI_RESET_USAGE) as Promise<void>
   },
