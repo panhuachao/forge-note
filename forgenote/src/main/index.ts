@@ -29,12 +29,45 @@ function createWindow() {
     backgroundColor: '#fafaf9',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 14 },
+    show: false, // 先隐藏，等 ready-to-show 再显示，避免白屏闪烁
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       sandbox: false, // 需要 chokidar / fs 在 main，不影响渲染层
       nodeIntegration: false
     }
+  });
+
+  // 渲染进程准备好后显示窗口，避免加载未完成时露出白屏
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
+  // 兜底：渲染加载完成后也显示（应对 ready-to-show 因渲染层错误而永远不触发的极端情况）
+  mainWindow.webContents.once('did-finish-load', () => {
+    mainWindow?.show();
+  });
+  // 终极兜底：3 秒内无论如何强制显示，避免窗口永久不可见
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      console.warn('[window] 兜底强制显示窗口（ready-to-show 超过 3 秒未触发）');
+      mainWindow.show();
+    }
+  }, 3000);
+
+  // 加载失败时记录到主进程控制台，并展示错误页（打包应用也能在 /Applications 启动日志中查看）
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error('[window] did-fail-load', code, desc, url);
+    const html = `data:text/html;charset=utf-8,${encodeURIComponent(
+      `<div style="font-family:-apple-system,'PingFang SC',sans-serif;padding:32px;color:#b91c1c"><h2>窗口加载失败</h2><pre style="white-space:pre-wrap">code=${code}\n${desc}\nurl=${url}</pre></div>`
+    )}`;
+    mainWindow?.loadURL(html);
+  });
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[window] render-process-gone', details);
+    const html = `data:text/html;charset=utf-8,${encodeURIComponent(
+      `<div style="font-family:-apple-system,'PingFang SC',sans-serif;padding:32px;color:#b91c1c"><h2>渲染进程崩溃</h2><pre style="white-space:pre-wrap">${JSON.stringify(details)}</pre></div>`
+    )}`;
+    mainWindow?.loadURL(html);
   });
 
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
