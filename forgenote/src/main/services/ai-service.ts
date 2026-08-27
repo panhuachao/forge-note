@@ -2,11 +2,14 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getKB, getConfig, setConfig, saveAIPreset, getAIPresets } from './store';
+import { safeJoin, atomicWrite } from '../utils/fs';
+import { eventBus } from '../utils/event-bus';
+import { fsService } from './fs-service';
 import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult, AIPrompts } from '@shared/types';
 import { DEFAULT_AI_PROMPTS, normalizeAIModelConfig } from '@shared/types/ai';
 import type { AIRefHit } from '@shared/types/ai';
 import type { SearchResult } from '@shared/types';
-import { extractWikiLinks, previewLine } from '../utils/markdown';
+import { extractWikiLinks, previewLine, writeFrontmatter } from '../utils/markdown';
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
 import { retrieve, rerankHits } from './rag-service';
@@ -649,6 +652,46 @@ class AIService {
     const user = `# 待归档笔记\n${content.slice(0, 2000)}`;
     const raw = await this.chat(user, sys);
     return this.parseDirSuggestions(raw, dirInfo);
+  }
+
+  /**
+   * 语音转写（ASR）。当前为占位实现：优先尝试接入本地/云端 STT，未配置时返回提示文本，
+   * 保证「录入→保存→转写→生成笔记」链路可跑通并可平滑扩展。
+   * 接入真实 ASR 时，只需在此处调用对应服务并 return 纯文本。
+   */
+  async transcribe(audioAbs: string): Promise<string> {
+    const stat = await fs.stat(audioAbs).catch(() => null);
+    const sizeKB = stat ? Math.round(stat.size / 1024) : 0;
+    // TODO: 接入真实 ASR（本地 Whisper / 云端 STT）。当前返回占位文本，便于流程验证。
+    return `（语音转写占位文本）\n音频文件：${audioAbs}\n大小：${sizeKB} KB\n\n说明：已在多媒体技术方案中规划 ASR 接入点，配置语音识别服务后此处返回真实转写内容。`;
+  }
+
+  /**
+   * 根据音频相对路径与转写文本，生成对应的文本笔记（同 hash 命名，便于一一对应）。
+   * 写入 KB 根 .assets/audio/<hash>.transcript.md，并自动入库（syncIndex）。
+   * Front Matter 遵循标准，且扩展 source 字段记录音频来源。
+   */
+  async generateTranscriptNote(kbId: string, audioRelPath: string, text: string): Promise<string> {
+    const kb = getKB(kbId);
+    if (!kb) throw new Error('KB 不存在: ' + kbId);
+    // audioRelPath 形如 .assets/audio/<hash>.m4a，取 hash 作为转写笔记名
+    const baseName = audioRelPath.split('/').pop() || '';
+    const hash = baseName.replace(/\.[^.]+$/, '');
+    const transcriptPath = `.assets/audio/${hash}.transcript.md`;
+    const abs = safeJoin(kb.rootPath, transcriptPath);
+    const now = new Date().toISOString().slice(0, 10);
+    const title = `语音转写 ${now}`;
+    const body = `# ${title}\n\n${text}\n`;
+    const withFm = writeFrontmatter(body, {
+      title,
+      summary: text.slice(0, 80).replace(/\n+/g, ' ').trim(),
+      tags: ['语音', '转写'],
+      extra: { source: `audio:${audioRelPath}` }
+    });
+    await atomicWrite(abs, withFm);
+    await fsService.syncIndex(kbId, transcriptPath);
+    eventBus.emit('fsChange', { type: 'change', path: transcriptPath });
+    return transcriptPath;
   }
 
   private parseDirSuggestions(raw: string, dirs: { id: string; name: string; realDir: string }[]): DirSuggestion[] {

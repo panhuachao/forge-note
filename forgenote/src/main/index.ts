@@ -1,13 +1,20 @@
 // Electron 主进程入口
-import { app, BrowserWindow, shell, Menu, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, Menu, ipcMain, protocol } from 'electron';
 import { join } from 'path';
-import { initStore, closeStore, listKBs, getConfig } from './services/store';
+import { promises as fs } from 'fs';
+import { initStore, closeStore, listKBs, getConfig, getKB } from './services/store';
+import { safeJoin } from './utils/fs';
 import { registerIpcHandlers } from './ipc';
 import { startWatching, stopAll, bootstrapIndex } from './services/watcher';
 import { kbService } from './services/kb-service';
 import { initAutoUpdater } from './services/updater';
 
 let mainWindow: BrowserWindow | null = null;
+
+// 必须在 app ready 之前注册自定义协议（Electron 硬性要求）
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'forgenote-asset', privileges: { supportFetchAPI: true, stream: true, bypassCSP: true, corsEnabled: true, standard: true } }
+]);
 
 const isDev = !app.isPackaged;
 
@@ -169,6 +176,42 @@ app.whenReady().then(async () => {
   // 先创建窗口，避免 initStore 等后续步骤抛错导致窗口永远不显示
   registerIpcHandlers(() => mainWindow);
   buildMenu();
+
+  // 注册 forgenote-asset:// 协议 handler（schemes 已在 app ready 前声明）
+  protocol.handle('forgenote-asset', async (req) => {
+    const url = new URL(req.url);
+    // URL 形如 forgenote-asset://asset/<kbId>/<rel>，kbId 放在 path 中避免被 host 规范化成小写
+    const segs = url.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
+    const kbId = decodeURIComponent(segs.shift() || '');
+    const rel = decodeURIComponent(segs.join('/'));
+    console.log('[forgenote-asset] request', { url: req.url, kbId, rel });
+    try {
+      if (!kbId || !rel) {
+        console.warn('[forgenote-asset] 缺少参数 kbId/rel');
+        return new Response('缺少参数', { status: 400 });
+      }
+      const kb = getKB(kbId);
+      if (!kb) {
+        console.warn('[forgenote-asset] KB 不存在', kbId);
+        return new Response('KB 不存在', { status: 404 });
+      }
+      const abs = safeJoin(kb.rootPath, rel);
+      console.log('[forgenote-asset] 解析绝对路径', abs);
+      const data = await fs.readFile(abs);
+      // 根据扩展名推断 MIME
+      const ext = abs.split('.').pop()?.toLowerCase() || '';
+      const mimeMap: Record<string, string> = {
+        png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+        webp: 'image/webp', svg: 'image/svg+xml', m4a: 'audio/mp4', mp3: 'audio/mpeg',
+        wav: 'audio/wav', webm: 'audio/webm', ogg: 'audio/ogg'
+      };
+      return new Response(data, { headers: { 'Content-Type': mimeMap[ext] || 'application/octet-stream' } });
+    } catch (e) {
+      console.error('[forgenote-asset] 读取资源失败', req.url, e);
+      return new Response('资源读取失败', { status: 500 });
+    }
+  });
+
   createWindow();
 
   // store 初始化失败不应阻断窗口显示，但必须显式暴露根因（而非静默），

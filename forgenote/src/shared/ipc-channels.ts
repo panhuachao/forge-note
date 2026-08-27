@@ -54,6 +54,12 @@ export const IPC = {
   AI_GET_USAGE: 'ai:getUsage',
   AI_RESET_USAGE: 'ai:resetUsage',
 
+  // Media（多媒体：图片/音频资源统一存于 KB 根 .assets/，按内容 hash 去重）
+  MEDIA_SAVE_IMAGE: 'media:saveImage',
+  MEDIA_SAVE_AUDIO: 'media:saveAudio',
+  MEDIA_TRANSCRIBE: 'media:transcribe',
+  MEDIA_GEN_TRANSCRIPT: 'media:genTranscript',
+
   // Template
   TPL_LIST: 'tpl:list',
   TPL_APPLIED: 'tpl:applied',

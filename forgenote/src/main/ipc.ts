@@ -116,6 +116,18 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.AI_SUGGEST_DIR, async (_e, kbId: string, p: string) => aiService.suggestDir(kbId, p));
   ipcMain.handle(IPC.AI_SUGGEST_LINKS, async (_e, kbId: string, p: string) => aiService.suggestLinks(kbId, p));
   ipcMain.handle(IPC.AI_FORGE_CARD, async (_e, kbId: string, p: string) => aiService.forgeCard(kbId, p));
+
+  // 多媒体：图片/音频资源落盘（统一 .assets + 内容 hash 去重）
+  ipcMain.handle(IPC.MEDIA_SAVE_IMAGE, async (_e, kbId: string, data: Uint8Array, ext: string) =>
+    fsService.saveAsset(kbId, 'image', data, ext)
+  );
+  ipcMain.handle(IPC.MEDIA_SAVE_AUDIO, async (_e, kbId: string, data: Uint8Array, ext: string) =>
+    fsService.saveAsset(kbId, 'audio', data, ext)
+  );
+  ipcMain.handle(IPC.MEDIA_TRANSCRIBE, async (_e, audioAbs: string) => aiService.transcribe(audioAbs));
+  ipcMain.handle(IPC.MEDIA_GEN_TRANSCRIPT, async (_e, kbId: string, audioRelPath: string, text: string) =>
+    aiService.generateTranscriptNote(kbId, audioRelPath, text)
+  );
   ipcMain.handle(IPC.AI_QUICK_NOTE, async (_e, kbId: string, content: string, opts?: { dirId?: string }) =>
     aiService.quickNote(kbId, content, opts)
   );

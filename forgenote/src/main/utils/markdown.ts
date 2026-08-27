@@ -117,7 +117,7 @@ export function readFrontmatter(raw: string): {
  */
 export function writeFrontmatter(
   raw: string,
-  patch: { title?: string; summary?: string; tags?: string[] }
+  patch: { title?: string; summary?: string; tags?: string[]; extra?: Record<string, unknown> }
 ): string {
   const { content, data } = parseFrontMatter(raw);
   const next: Record<string, unknown> = { ...data };
@@ -140,6 +140,10 @@ export function writeFrontmatter(
   if (tags) {
     const norm = Array.from(new Set(tags.map((t) => String(t).trim()).filter(Boolean)));
     if (norm.length) next['tags'] = norm;
+  }
+  // 扩展字段（如 source 来源），直接原样写入 FrontMatter
+  if (patch.extra) {
+    for (const [k, v] of Object.entries(patch.extra)) next[k] = v;
   }
 
   return matter.stringify(content, next);

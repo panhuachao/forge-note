@@ -19,6 +19,8 @@ export const EVT_JUMP_HEADING = 'forgenote:jump-heading'; // detail: 行号
 export const EVT_ACTIVE_HEADING = 'forgenote:active-heading'; // detail: 行号
 // AI 聊天面板「追加到该笔记」：用 AI 回复完善整篇笔记
 export const EVT_APPEND_NOTE = 'forgenote:append-note'; // detail: { text: string }
+// 在光标处插入文本（如语音转写链接）
+export const EVT_INSERT_TEXT = 'forgenote:insert-text'; // detail: string
 
 // Markdown 语法高亮：使用中性色，避免默认把 `>`(引用) 等染成红色。
 // 颜色走 CSS 变量，亮色/暗黑自动适配。
@@ -95,7 +97,23 @@ export function NotePane(props: Props) {
       }
     };
     window.addEventListener(EVT_APPEND_NOTE, handler);
-    return () => window.removeEventListener(EVT_APPEND_NOTE, handler);
+    // 光标处插入文本（语音转写链接等）
+    const insertHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail !== 'string' || !detail) return;
+      const view = viewRef.current;
+      if (!view) return;
+      const pos = view.state.selection.main.head;
+      view.dispatch({
+        changes: { from: pos, insert: detail },
+        selection: { anchor: pos + detail.length }
+      });
+    };
+    window.addEventListener(EVT_INSERT_TEXT, insertHandler);
+    return () => {
+      window.removeEventListener(EVT_APPEND_NOTE, handler);
+      window.removeEventListener(EVT_INSERT_TEXT, insertHandler);
+    };
   }, [pushToast, activeKb, props.notePath]);
 
   useEffect(() => {
@@ -148,6 +166,34 @@ export function NotePane(props: Props) {
         markdown(),
         syntaxHighlighting(markdownHighlight),
         EditorView.lineWrapping,
+        EditorView.domEventHandlers({
+          paste: (event, view) => {
+            const kb = activeKb;
+            const notePath = props.notePath;
+            if (!kb || !notePath) return false;
+            const dt = (event as ClipboardEvent).clipboardData;
+            const items = dt?.items ? (Array.from(dt.items) as DataTransferItem[]) : [];
+            const imgItem = items.find((it) => it.kind === 'file' && it.type.startsWith('image/'));
+            if (!imgItem) return false;
+            event.preventDefault();
+            const blob = imgItem.getAsFile();
+            if (!blob) return true;
+            void (async () => {
+              try {
+                const buf = new Uint8Array(await blob.arrayBuffer());
+                const ext = (imgItem.type.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '') || 'png';
+                const rel = await window.forge.media.saveImage(kb.id, buf, ext);
+                const insert = `![图片](${rel})\n`;
+                const pos = view.state.selection.main.head;
+                view.dispatch({ changes: { from: pos, insert }, selection: { anchor: pos + insert.length } });
+                pushToast({ level: 'success', text: '图片已保存到 .assets' });
+              } catch (e) {
+                pushToast({ level: 'error', text: '图片保存失败：' + String(e) });
+              }
+            })();
+            return true;
+          }
+        }),
         EditorView.updateListener.of((v) => {
           if (v.docChanged) {
             markTabDirty(props.notePath, true);

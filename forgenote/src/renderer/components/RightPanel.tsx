@@ -43,6 +43,11 @@ export function RightPanel() {
   const [linkSuggestions, setLinkSuggestions] = useState<LinkInfo[]>([]);
   const [dirSuggestions, setDirSuggestions] = useState<DirSuggestion[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [recordSec, setRecordSec] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordTimerRef = useRef<number | null>(null);
   // 标签编辑（本地镜像 + 写盘回写）
   const [localTags, setLocalTags] = useState<string[]>([]);
   const [tagSuggest, setTagSuggest] = useState<string[]>([]);
@@ -202,6 +207,53 @@ export function RightPanel() {
       setTagBusy(false);
     }
   }, [activeKb, notePath, localTags, persistTags]);
+
+  // 语音录入：录音 → 保存音频 → 转写 → 生成文本笔记 → 插入链接
+  const startRecording = useCallback(async () => {
+    if (!activeKb || !notePath) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      rec.ondataavailable = (e) => chunks.push(e.data);
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        const ext = (rec.mimeType.split('/')[1] || 'webm').replace(/[^a-z0-9]/gi, '') || 'webm';
+        setTranscribing(true);
+        try {
+          const audioRel = await window.forge.media.saveAudio(activeKb.id, buf, ext);
+          const abs = (activeKb.rootPath + '/' + audioRel).replace(/\\/g, '/');
+          const text = await window.forge.media.transcribe('file://' + abs);
+          const transcriptRel = await window.forge.media.generateTranscriptNote(activeKb.id, audioRel, text);
+          window.dispatchEvent(
+            new CustomEvent('forgenote:insert-text', { detail: `\n- 🔊 语音转写： [${transcriptRel}]( ${transcriptRel})\n` })
+          );
+        } catch (e) {
+          console.error('语音转写失败', e);
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      mediaRecorderRef.current = rec;
+      rec.start();
+      setRecording(true);
+      setRecordSec(0);
+      recordTimerRef.current = window.setInterval(() => setRecordSec((s) => s + 1), 1000);
+    } catch (e) {
+      console.error('无法访问麦克风', e);
+    }
+  }, [activeKb, notePath]);
+
+  const stopRecording = useCallback(() => {
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+    if (recordTimerRef.current) {
+      window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+  }, []);
 
   // 点击外部关闭更多菜单
   useEffect(() => {
@@ -574,6 +626,51 @@ export function RightPanel() {
             </ul>
           </PanelCard>
         )}
+
+        {/* 语音录入：录音 → 自动转写 → 生成文本笔记 */}
+        <PanelCard title="语音录入">
+          <div className="flex items-center gap-3">
+            {!recording ? (
+              <button
+                onClick={startRecording}
+                disabled={transcribing}
+                className="group relative flex-shrink-0 w-12 h-12 rounded-full bg-fg-secondary/10 text-fg-secondary hover:bg-brand hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
+                title={transcribing ? '转写中…' : '开始录音'}
+              >
+                {transcribing ? (
+                  <Icon name="bolt" className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Icon name="microphone" className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={stopRecording}
+                className="group relative flex-shrink-0 w-12 h-12 rounded-full bg-red-500 text-white shadow-lg shadow-red-500/30 flex items-center justify-center transition-all duration-200 hover:bg-red-600"
+                title="停止录音"
+              >
+                <span className="absolute inset-0 rounded-full bg-red-400/40 animate-ping" />
+                <Icon name="x-mark" className="w-5 h-5 relative z-10" />
+              </button>
+            )}
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-medium text-fg">
+                {recording
+                  ? `正在录音 ${String(Math.floor(recordSec / 60)).padStart(2, '0')}:${String(recordSec % 60).padStart(2, '0')}`
+                  : transcribing
+                  ? '转写中…'
+                  : '点击开始语音录入'}
+              </span>
+              <span className="text-[11px] text-fg-faint mt-0.5 leading-tight">
+                {recording
+                  ? '点击红色按钮结束录音'
+                  : transcribing
+                  ? '正在识别语音并生成转写笔记'
+                  : '录音结束后自动保存至 .assets/audio 并生成转写笔记'}
+              </span>
+            </div>
+          </div>
+        </PanelCard>
 
         {/* 双向链接 */}
         {info && (

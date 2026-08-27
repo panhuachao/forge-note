@@ -1,5 +1,7 @@
 // 简易 Markdown 渲染器 - 不引入第三方依赖
-// 支持：标题、粗体/斜体/删除、代码、代码块、列表、任务、引用、表格、链接、wiki 链接
+// 支持：标题、粗体/斜体/删除、代码、代码块、列表、任务、引用、表格、链接、wiki 链接、图片
+
+import { useKBStore } from '../stores/kb-store';
 
 function escapeHtml(s: string): string {
   return s
@@ -9,12 +11,49 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+// 当前渲染上下文（由 renderMarkdownPreview 设置），供 inline() 解析资源路径使用
+let _ctxKbId = '';
+let _ctxCurrentPath = '';
+
+/**
+ * 将图片/资源引用解析为可预览的绝对路径。
+ * - 仓库相对路径 .assets/... → file://<KB根>/.assets/...（统一资源仓库）
+ * - 其它相对路径按 currentPath 所在目录向上拼接（兼容嵌套目录的 .md）
+ * - 绝对路径 / http(s) 原样返回
+ */
+function resolveAsset(src: string): string {
+  if (/^(https?:|data:|file:|blob:|forgenote-asset:)/.test(src)) return src;
+  // 仓库统一资源 .assets/ 使用自定义协议，避免 Electron webSecurity 阻止 file:// 加载
+  if (src.startsWith('.assets/') || src.startsWith('/.assets/')) {
+    const kbId = _ctxKbId || useKBStore.getState().activeKb?.id;
+    if (!kbId) return src;
+    const rel = src.replace(/^\/+/, '');
+    // 注意：URL host 会被规范成小写，kbId 大小写敏感，故放在 path 中而非 host
+    return `forgenote-asset://asset/${kbId}/${rel.split('/').map(encodeURIComponent).join('/')}`;
+  }
+  // 其它相对路径：按笔记所在目录解析为 file://（若后续也有安全限制可统一迁移到 forgenote-asset）
+  const root =
+    useKBStore.getState().kbs.find((k) => k.id === _ctxKbId)?.rootPath ||
+    useKBStore.getState().activeKb?.rootPath;
+  if (!root) return src;
+  if (!_ctxCurrentPath) return `file://${root.replace(/\\/g, '/')}/${src}`;
+  const baseDir = _ctxCurrentPath.includes('/')
+    ? _ctxCurrentPath.slice(0, _ctxCurrentPath.lastIndexOf('/'))
+    : '';
+  return `file://${root.replace(/\\/g, '/')}/${baseDir}/${src}`.replace(/\/\.\//g, '/');
+}
+
 function inline(text: string): string {
   // wiki 链接
   text = text.replace(/\[\[([^\[\]|]+?)(?:\|([^\[\]]+?))?\]\]/g, (_, t: string, a?: string) => {
     const name = t.trim();
     const display = (a || name).trim();
     return `<a class="wiki-link" href="#wiki=${encodeURIComponent(name)}">${escapeHtml(display)}</a>`;
+  });
+  // 图片：![alt](src)
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt: string, src: string) => {
+    const url = resolveAsset(src.trim());
+    return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt || '')}" style="max-width:100%" />`;
   });
   // 普通链接
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
@@ -30,6 +69,8 @@ function inline(text: string): string {
 }
 
 export function renderMarkdownPreview(md: string, kbId: string, currentPath: string): string {
+  _ctxKbId = kbId;
+  _ctxCurrentPath = currentPath;
   const lines = md.split('\n');
   const out: string[] = [];
   let i = 0;

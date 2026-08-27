@@ -60,6 +60,15 @@ const api = {
     listTags: (kbId: string) => ipcRenderer.invoke(IPC.FS_LIST_TAGS, kbId) as Promise<TagInfo[]>,
     notesByTag: (kbId: string, tag: string) => ipcRenderer.invoke(IPC.FS_NOTES_BY_TAG, kbId, tag) as Promise<TagNote[]>
   },
+  media: {
+    saveImage: (kbId: string, data: Uint8Array, ext: string) =>
+      ipcRenderer.invoke(IPC.MEDIA_SAVE_IMAGE, kbId, data, ext) as Promise<string>,
+    saveAudio: (kbId: string, data: Uint8Array, ext: string) =>
+      ipcRenderer.invoke(IPC.MEDIA_SAVE_AUDIO, kbId, data, ext) as Promise<string>,
+    transcribe: (audioAbs: string) => ipcRenderer.invoke(IPC.MEDIA_TRANSCRIBE, audioAbs) as Promise<string>,
+    generateTranscriptNote: (kbId: string, audioRelPath: string, text: string) =>
+      ipcRenderer.invoke(IPC.MEDIA_GEN_TRANSCRIPT, kbId, audioRelPath, text) as Promise<string>
+  },
   links: {
     getBacklinks: (kbId: string, p: string) => ipcRenderer.invoke(IPC.LINKS_GET_BACKLINKS, kbId, p) as Promise<string[]>,
     getOutlinks: (kbId: string, p: string) => ipcRenderer.invoke(IPC.LINKS_GET_OUTLINKS, kbId, p) as Promise<string[]>,

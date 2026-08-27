@@ -1,6 +1,7 @@
 // 文件系统服务 - 笔记读写、目录操作、wiki 链接解析
 import { promises as fs } from 'fs';
 import * as fsSync from 'fs';
+import { createHash } from 'crypto';
 import { type Dirent } from 'fs';
 import { join, dirname, basename } from 'path';
 import { nanoid } from 'nanoid';
@@ -63,7 +64,7 @@ class FSService {
    * 单通道索引维护（S1 §4）：文件原子写成功后，同步更新链接索引与 RAG 分块索引。
    * 两步均在文件写成功之后执行，保证「文件为真源、索引为派生」的一致性。
    */
-  private async syncIndex(kbId: string, notePath: string): Promise<void> {
+  async syncIndex(kbId: string, notePath: string): Promise<void> {
     const abs = this.abs(kbId, notePath);
     try {
       const raw = await fs.readFile(abs, 'utf-8');
@@ -105,6 +106,35 @@ class FSService {
     await this.syncIndex(kbId, notePath);
     // 触发事件
     eventBus.emit('fsChange', { type: 'change', path: notePath });
+  }
+
+  /**
+   * 保存多媒体资源到 KB 根目录统一的 .assets/ 仓库，按类型分子目录，文件名取内容 hash。
+   * - 相同二进制内容（hash 一致）永远映射到同一文件，复制粘贴不冗余存储。
+   * - 返回相对于仓库根的引用路径（如 .assets/image/a1b2....png），便于 .md 引用与迁移。
+   */
+  async saveAsset(
+    kbId: string,
+    kind: 'image' | 'audio',
+    data: Uint8Array,
+    ext: string
+  ): Promise<string> {
+    const kb = getKB(kbId);
+    if (!kb) throw new Error('KB 不存在: ' + kbId);
+    const cleanExt = (ext || 'bin').replace(/^\./, '').toLowerCase();
+    // 内容 hash（sha256 截断 32 位），与具体笔记解耦
+    const hash = createHash('sha256').update(Buffer.from(data)).digest('hex').slice(0, 32);
+    const relDir = `.assets/${kind}`;
+    const fileName = `${hash}.${cleanExt}`;
+    const absDir = safeJoin(kb.rootPath, relDir);
+    const absFile = join(absDir, fileName);
+    await fs.mkdir(absDir, { recursive: true });
+    // 去重：已存在则直接复用
+    if (!fsSync.existsSync(absFile)) {
+      await atomicWrite(absFile, Buffer.from(data));
+    }
+    eventBus.emit('fsChange', { type: 'change', path: `${relDir}/${fileName}` });
+    return `${relDir}/${fileName}`;
   }
 
   /**
