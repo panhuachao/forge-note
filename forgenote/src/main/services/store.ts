@@ -45,6 +45,8 @@ export function initStore(): void {
       undone INTEGER NOT NULL DEFAULT 0
     );
     -- RAG 分块索引持久化（S1：替代纯内存索引，重启不丢、增量维护）
+    -- summary / tags 为从笔记 FrontMatter 派生的检索副本，
+    -- 笔记变动时由 syncIndex 重新提取写入（SQLite 永远以文件为真源）。
     CREATE TABLE IF NOT EXISTS note_meta (
       kb_id TEXT NOT NULL,
       note_path TEXT NOT NULL,
@@ -52,6 +54,8 @@ export function initStore(): void {
       size INTEGER NOT NULL,
       template_dir_id TEXT,
       hash TEXT,
+      summary TEXT,
+      tags TEXT,
       PRIMARY KEY (kb_id, note_path)
     );
     CREATE TABLE IF NOT EXISTS note_chunks (
@@ -66,9 +70,19 @@ export function initStore(): void {
     );
   `);
 
-  // 旧库补充 hash 列（新库 CREATE 已含），列已存在则忽略
+  // 旧库补充列（新库 CREATE 已含），列已存在则忽略
   try {
     db.exec('ALTER TABLE note_meta ADD COLUMN hash TEXT');
+  } catch {
+    /* 列已存在 */
+  }
+  try {
+    db.exec('ALTER TABLE note_meta ADD COLUMN summary TEXT');
+  } catch {
+    /* 列已存在 */
+  }
+  try {
+    db.exec('ALTER TABLE note_meta ADD COLUMN tags TEXT');
   } catch {
     /* 列已存在 */
   }
@@ -110,12 +124,36 @@ export interface NoteMetaRow {
   size: number;
   template_dir_id: string | null;
   hash: string | null;
+  /** 从笔记 FrontMatter 派生的摘要检索副本（文件为真源） */
+  summary: string | null;
+  /** 从笔记 FrontMatter 派生的标签检索副本（JSON 数组字符串，文件为真源） */
+  tags: string | null;
 }
 
-export function upsertNoteMeta(kbId: string, notePath: string, mtime: number, size: number, templateDirId?: string, hash?: string): void {
+export function upsertNoteMeta(
+  kbId: string,
+  notePath: string,
+  mtime: number,
+  size: number,
+  templateDirId?: string,
+  hash?: string,
+  summary?: string,
+  tags?: string[]
+): void {
   getDb()
-    .prepare('INSERT OR REPLACE INTO note_meta (kb_id, note_path, mtime, size, template_dir_id, hash) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(kbId, notePath, mtime, size, templateDirId ?? null, hash ?? null);
+    .prepare(
+      'INSERT OR REPLACE INTO note_meta (kb_id, note_path, mtime, size, template_dir_id, hash, summary, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    )
+    .run(
+      kbId,
+      notePath,
+      mtime,
+      size,
+      templateDirId ?? null,
+      hash ?? null,
+      summary ?? null,
+      tags && tags.length ? JSON.stringify(tags) : null
+    );
 }
 
 export function removeNoteMeta(kbId: string, notePath: string): void {
@@ -124,7 +162,7 @@ export function removeNoteMeta(kbId: string, notePath: string): void {
 
 export function getNoteMeta(kbId: string, notePath: string): NoteMetaRow | null {
   const row = getDb()
-    .prepare('SELECT mtime, size, template_dir_id, hash FROM note_meta WHERE kb_id = ? AND note_path = ?')
+    .prepare('SELECT mtime, size, template_dir_id, hash, summary, tags FROM note_meta WHERE kb_id = ? AND note_path = ?')
     .get(kbId, notePath) as NoteMetaRow | undefined;
   return row || null;
 }
@@ -138,9 +176,19 @@ export function loadChunks(kbId: string): { notePath: string; chunk: ChunkRow }[
 }
 
 export function loadAllMeta(kbId: string): Map<string, NoteMetaRow> {
-  const rows = getDb().prepare('SELECT note_path, mtime, size, template_dir_id, hash FROM note_meta WHERE kb_id = ?').all(kbId) as { note_path: string; mtime: number; size: number; template_dir_id: string | null; hash: string | null }[];
+  const rows = getDb()
+    .prepare('SELECT note_path, mtime, size, template_dir_id, hash, summary, tags FROM note_meta WHERE kb_id = ?')
+    .all(kbId) as { note_path: string; mtime: number; size: number; template_dir_id: string | null; hash: string | null; summary: string | null; tags: string | null }[];
   const m = new Map<string, NoteMetaRow>();
-  for (const r of rows) m.set(r.note_path, { mtime: r.mtime, size: r.size, template_dir_id: r.template_dir_id, hash: r.hash });
+  for (const r of rows)
+    m.set(r.note_path, {
+      mtime: r.mtime,
+      size: r.size,
+      template_dir_id: r.template_dir_id,
+      hash: r.hash,
+      summary: r.summary,
+      tags: r.tags
+    });
   return m;
 }
 

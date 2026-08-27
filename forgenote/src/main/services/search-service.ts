@@ -6,6 +6,7 @@ import { createHash } from 'crypto';
 import { join } from 'path';
 import { isMarkdown, isHidden } from '../utils/fs';
 import { getKB, upsertChunks, removeChunks, upsertNoteMeta, removeNoteMeta, loadChunks, loadAllMeta, type ChunkRow } from './store';
+import { readFrontmatter } from '../utils/markdown';
 
 interface Chunk extends ChunkRow {
   tokens: Set<string>;
@@ -17,6 +18,10 @@ interface MetaRow {
   size: number;
   templateDirId?: string;
   hash?: string;
+  /** 从笔记 FrontMatter 派生的摘要检索副本（文件为真源） */
+  summary?: string;
+  /** 从笔记 FrontMatter 派生的标签检索副本（文件为真源） */
+  tags?: string[];
 }
 interface KBIndex {
   chunks: Chunk[];
@@ -56,7 +61,14 @@ class SearchService {
       idx.chunks.push(this.newChunk(chunk, notePath));
     }
     for (const [notePath, m] of loadAllMeta(kbId)) {
-      idx.meta.set(notePath, { mtime: m.mtime, size: m.size, templateDirId: m.template_dir_id ?? undefined, hash: m.hash ?? undefined });
+      idx.meta.set(notePath, {
+        mtime: m.mtime,
+        size: m.size,
+        templateDirId: m.template_dir_id ?? undefined,
+        hash: m.hash ?? undefined,
+        summary: m.summary ?? undefined,
+        tags: m.tags ? JSON.parse(m.tags) : undefined
+      });
     }
     this.rebuildMtimeIndex(idx);
     this.indexes.set(kbId, idx);
@@ -138,7 +150,7 @@ class SearchService {
         const cut = text.length > 800 ? text.lastIndexOf('\n', 800) : -1;
         const piece = cut > 0 ? text.slice(0, cut) : text.slice(0, 800);
         const pieceLines = piece.split('\n').length;
-        chunks.push({ chunk_idx: idx++, chunk_text: piece, heading: curHeading || undefined, start_line: segStart, end_line: segStart + pieceLines - 1 });
+        chunks.push({ chunk_idx: idx++, chunk_text: piece, heading: curHeading || null, start_line: segStart, end_line: segStart + pieceLines - 1 });
         text = text.slice(piece.length);
         segStart += pieceLines;
       }
@@ -156,7 +168,7 @@ class SearchService {
       }
     }
     flush(buf, startLine);
-    if (chunks.length === 0) chunks.push({ chunk_idx: 0, chunk_text: content, heading: undefined, start_line: 1, end_line: lines.length });
+    if (chunks.length === 0) chunks.push({ chunk_idx: 0, chunk_text: content, heading: null, start_line: 1, end_line: lines.length });
     return chunks;
   }
 
@@ -167,14 +179,21 @@ class SearchService {
     const idx = await this.ensure(kbId);
     const hash = this.hashContent(content);
 
+    // 从 FrontMatter 派生 summary / tags（content 含文件头，syncIndex 传入 raw）
+    const fm = readFrontmatter(content);
+    const summary = fm.summary ?? '';
+    const tags = fm.tags;
+
     // #11 去重短路：内容 hash 未变（即使 mtime 被外部工具重置/保真复制）则跳过
-    // 昂贵的 tokenize + chunkNote + 全量分块写库，仅刷新 meta 的 mtime/size。
+    // 昂贵的 tokenize + chunkNote + 全量分块写库，仅刷新 meta 的 mtime/size/summary/tags。
     const prev = idx.meta.get(notePath);
     if (prev && prev.hash === hash) {
-      upsertNoteMeta(kbId, notePath, mtime, size, templateDirId, hash);
+      upsertNoteMeta(kbId, notePath, mtime, size, templateDirId, hash, summary, tags);
       prev.mtime = mtime;
       prev.size = size;
       prev.templateDirId = templateDirId;
+      prev.tags = tags;
+      prev.summary = summary;
       this.rebuildMtimeIndex(idx);
       idx.ts = Date.now();
       return;
@@ -182,10 +201,10 @@ class SearchService {
 
     const chunks = this.chunkNote(content);
     upsertChunks(kbId, notePath, chunks);
-    upsertNoteMeta(kbId, notePath, mtime, size, templateDirId, hash);
+    upsertNoteMeta(kbId, notePath, mtime, size, templateDirId, hash, summary, tags);
     idx.chunks = idx.chunks.filter((c) => c.notePath !== notePath);
     for (const c of chunks) idx.chunks.push(this.newChunk(c, notePath));
-    idx.meta.set(notePath, { mtime, size, templateDirId, hash });
+    idx.meta.set(notePath, { mtime, size, templateDirId, hash, tags, summary });
     this.rebuildMtimeIndex(idx);
     idx.ts = Date.now();
   }

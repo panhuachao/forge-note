@@ -6,7 +6,7 @@ import { join, dirname, basename } from 'path';
 import { nanoid } from 'nanoid';
 import type { NoteInfo, NoteContent, TagInfo, TagNote } from '@shared/types';
 import { atomicWrite, safeJoin } from '../utils/fs';
-import { extractWikiLinks, parseFrontMatter, extractTags } from '../utils/markdown';
+import { extractWikiLinks, parseFrontMatter, extractTags, writeFrontmatter, readFrontmatter } from '../utils/markdown';
 import { getKB } from './store';
 import { linkIndex } from './link-index';
 import matter from 'gray-matter';
@@ -78,11 +78,28 @@ class FSService {
 
   /**
    * 写入笔记（原子写）
+   * 正文写盘时，自动保留文件开头已有的 FrontMatter（title/summary/tags 等），
+   * 使「摘要、标签」等关键元数据持久化在笔记文件中，
+   * 即便更换电脑重新索引，也能从文件头恢复，且支持后续扩展（source 等）。
    */
   async writeNote(kbId: string, notePath: string, content: string): Promise<void> {
     const abs = this.abs(kbId, notePath);
-    const old = await this.readNote(kbId, notePath).catch(() => null);
-    await atomicWrite(abs, content);
+    let raw = content;
+    try {
+      const existing = await fs.readFile(abs, 'utf-8');
+      const oldFm = readFrontmatter(existing);
+      // 仅当磁盘上已有 frontmatter 时，将其拼回正文（content 为纯正文，不含头）
+      if (oldFm.data && Object.keys(oldFm.data).length > 0) {
+        raw = writeFrontmatter(content, {
+          title: oldFm.title,
+          summary: oldFm.summary,
+          tags: oldFm.tags
+        });
+      }
+    } catch {
+      // 文件尚不存在等情况：直接写入纯正文
+    }
+    await atomicWrite(abs, raw);
     const newOutlinks = extractWikiLinks(content);
     linkIndex.updateOutlinks(kbId, notePath, newOutlinks);
     await this.syncIndex(kbId, notePath);
@@ -97,7 +114,6 @@ class FSService {
   async updateTags(kbId: string, notePath: string, tags: string[]): Promise<void> {
     const abs = this.abs(kbId, notePath);
     const raw = await fs.readFile(abs, 'utf-8');
-    const { content, data } = parseFrontMatter(raw);
     const norm = Array.from(
       new Set(
         (tags || [])
@@ -105,8 +121,7 @@ class FSService {
           .filter((t) => t.length > 0 && t.length <= 30)
       )
     );
-    const nextData = { ...(data || {}), tags: norm };
-    const yaml = matter.stringify(content, nextData);
+    const yaml = writeFrontmatter(raw, { tags: norm });
     await atomicWrite(abs, yaml);
     await this.syncIndex(kbId, notePath);
     eventBus.emit('fsChange', { type: 'change', path: notePath });
@@ -118,9 +133,7 @@ class FSService {
   async updateSummary(kbId: string, notePath: string, summary: string): Promise<void> {
     const abs = this.abs(kbId, notePath);
     const raw = await fs.readFile(abs, 'utf-8');
-    const { content, data } = parseFrontMatter(raw);
-    const nextData = { ...(data || {}), summary: String(summary || '').trim() };
-    const yaml = matter.stringify(content, nextData);
+    const yaml = writeFrontmatter(raw, { summary: String(summary || '').trim() });
     await atomicWrite(abs, yaml);
     await this.syncIndex(kbId, notePath);
     eventBus.emit('fsChange', { type: 'change', path: notePath });
@@ -200,7 +213,11 @@ class FSService {
       break;
     }
     const finalAbs = safeJoin(root, finalPath);
-    await atomicWrite(finalAbs, content);
+    // 写入标准 FrontMatter 头（title/summary/tags），使关键元数据持久化于文件开头，
+    // 便于跨设备重新索引、查看摘要与标签，并支持后续扩展（source 等）。
+    const title = basename(fileName, '.md');
+    const withFm = writeFrontmatter(content, { title, summary: '', tags: [] });
+    await atomicWrite(finalAbs, withFm);
     linkIndex.updateOutlinks(kbId, finalPath, extractWikiLinks(content));
     const stat = await fs.stat(finalAbs);
     const templateDirId = await templateService.findDirIdByPath(kbId, dirPath);

@@ -1,188 +1,135 @@
-# Markdown 笔记重构方案（Front Matter 标准）
+# Markdown 笔记重构方案（实现版）
 
-> 目标：把笔记的**来源、标签、摘要**统一收敛到文件头部的标准 Front Matter 块中，作为笔记属性的**唯一事实源**，并重做「标签 / 摘要」的读写、聚合、检索实现方式，使其与用户在编辑器/AI 工作流中实际书写的格式保持一致。
-
----
-
-## 1. 现状与问题
-
-当前实现已具备 Front Matter 基础能力：
-
-- 解析：`parseFrontMatter(raw)` 基于 `gray-matter`，`readNote` 返回 `frontmatter: Record<string, unknown>`。
-- 摘要：`updateSummary` 可写 `summary` 字段；`RightPanel` 从 `frontmatter.summary` 恢复展示。
-- 标签：`updateTags` 可写 `tags`；`extractTags`（`utils/markdown.ts`）已能兼容「数组」与「逗号分隔字符串」两种写法。
-
-但存在 **3 个关键不一致 / 缺口**：
-
-| # | 问题 | 影响 |
-|---|------|------|
-| P1 | **标签格式需统一为 YAML 数组**：标准写法定为 `tags: [灵感, AI]`（YAML 数组）。当前 `updateTags` 写入已是数组格式，但存量笔记若按旧习惯写成逗号字符串 `tags: 灵感, AI`，`gray-matter` 会解析为整段字符串 `"灵感, AI"`（当 1 个标签），而 `getAllTags` / `listTags` / `notesByTag` 只认**数组**，导致这类笔记标签读不出来。 | 标签面板、按标签筛选、AI 标签建议对「逗号字符串写法」的存量笔记失效或产生「灵感, AI」假标签。 |
-| P2 | **`source` 字段无统一读写入口**：仅在灵感页快捷模板里硬写 `source: inspiration`，没有 `updateSource` / 读取 / 聚合逻辑；`createNote` 新建笔记时不写任何 Front Matter。 | 来源维度（如「灵感 / 对话 / 网页 / 读书」）无法统计、无法筛选。 |
-| P3 | **标签聚合逻辑绕开 `extractTags`**：`getAllTags` / `listTags` / `notesByTag` 直接 `Array.isArray(fm.tags)`，不兼容逗号字符串，也不复用正文 `#标签` 提取。 | 与 `extractTags` 行为漂移，读出的标签集合不一致。 |
+> 本文档同步更新至当前实现状态。核心原则：**笔记文件（Front Matter）是唯一真源，SQLite 仅作为检索加速副本，在笔记变动后自动从 Front Matter 重新派生。**
 
 ---
 
-## 2. 统一 Front Matter Schema（标准）
+## 1. 设计目标
 
-规定笔记头部标准块，**三个属性同级、顺序固定**：
+1. 摘要、标签等关键信息写入每篇笔记文件开头的 **Front Matter**，换电脑重新索引即可恢复，不依赖数据库。
+2. 属性面板的「生成摘要 / 生成标签」**实时写入笔记文件 Front Matter**；SQLite 在笔记发生变动时自动从 Front Matter 重新提取并更新，不单独写库。
+3. Front Matter 字段采用标准英文名 `title/summary/tags`，兼容中文回退名 `标题/概述/标签`，并保留未知扩展字段（如未来的 `source`）。
+4. 标签统一以 YAML 数组存储，避免逗号/空格歧义。
+
+---
+
+## 2. Front Matter 标准
+
+每篇笔记位于文件最前，用 `---` 包裹的 YAML：
 
 ```markdown
 ---
-source: inspiration
-tags: 灵感, AI
-summary: 笔记摘要
+title: 笔记标题
+summary: 一句话摘要，用于列表与检索预览
+tags: [灵感, AI, 产品]
 ---
 
 正文……
 ```
 
-### 字段语义
+### 字段约定
 
-| 字段 | 类型（落盘） | 取值约定 | 必填 |
-|------|------|---------|------|
-| `source` | 单行字符串 | 来源类别枚举：`inspiration`(灵感) / `chat`(对话) / `web`(网页) / `book`(读书) / `meeting`(会议) / `note`(默认笔记) | 否（缺省 `note`） |
-| `tags` | **YAML 数组**（兼容容错逗号字符串） | 中文/英文短标签，如 `[灵感, AI, 知识管理]` | 否 |
-| `summary` | 单行字符串 | ≤ 250 字纯文本摘要 | 否 |
+| 标准字段 | 中文回退 | 类型 | 说明 |
+| --- | --- | --- | --- |
+| `title` | `标题` | string | 笔记标题；创建时由文件名填入 |
+| `summary` | `概述` | string | 摘要；AI 生成或从正文提取，空则不写键 |
+| `tags` | `标签` | string[] | 标签数组；AI 生成或手动维护，空则不写键 |
+| （未来）`source` | — | string | 来源（如微信/网页/书籍）；当前未启用，写入时自动保留 |
 
-### 格式决策：tags 用「YAML 数组」作为标准格式
+### 约束
 
-- **标准写法**：`tags: [灵感, AI]`（YAML 数组），机器可读、无歧义，也是当前 `updateTags` 的写入格式。
-- **容错**：解析层（`parseTags` / `extractTags`）同时兼容「数组」与用户手写的「逗号分隔字符串」两种写法，保证存量笔记不丢标签；但**写入层统一序列化为 YAML 数组**，避免同一库里出现两种格式漂移。
-- `summary` / `source` 始终为单行字符串，无歧义。
+- `readFrontmatter` / `writeFrontmatter` 位于 `src/main/utils/markdown.ts`：
+  - 读取时优先标准字段，回退到中文名；标签兼容数组与「逗号/空格分隔字符串」。
+  - 写入时清理所有 `title/summary/tags` 相关旧键（中英），再按传入落地，避免中英并存。
+  - **未传入的字段保持原值**：仅更新 `tags` 不会冲掉 `summary`/`title`，反之亦然。
+  - 空字符串 `summary`、空数组 `tags` 不写键，保持 Front Matter 简洁。
+  - 非上述键（如未来的 `source`）一律保留，支持平滑扩展。
 
----
+### 创建笔记
 
-## 3. 标签 / 摘要实现方式重做
-
-### 3.1 统一解析函数（单一真源）
-
-新增 `utils/markdown.ts` 的 `parseTags(fm: Record<string, unknown>): string[]`，作为**所有标签读取的唯一入口**，替代各处的 `Array.isArray(fm.tags)` 内联判断：
-
-```ts
-export function parseTags(fm: Record<string, unknown> | undefined): string[] {
-  if (!fm) return [];
-  const raw = fm['tags'] ?? fm['标签'] ?? fm['Tag'] ?? fm['TAG'];
-  const set = new Set<string>();
-  if (Array.isArray(raw)) {
-    raw.forEach((t) => typeof t === 'string' && t.trim() && set.add(t.trim()));
-  } else if (typeof raw === 'string' && raw.trim()) {
-    raw.split(/[\s,，、]+/).map((s) => s.trim()).filter(Boolean).forEach((t) => set.add(t));
-  }
-  return [...set].filter((t) => t.length <= 30);
-}
-```
-
-> 注：`extractTags` 已含相同逻辑（含正文 `#标签`），可内部复用 `parseTags(fm)` 避免漂移。
-
-### 3.2 标签写入：`updateTags` 统一逗号格式
-
-```ts
-async updateTags(kbId, notePath, tags: string[]): Promise<void> {
-  const { content, data } = parseFrontMatter(raw);
-  const norm = [...new Set(tags.map(String).trim().filter(Boolean))].slice(0, 12);
-  const nextData = { ...data, tags: norm };   // 统一序列化为 YAML 数组 [灵感, AI]
-  await atomicWrite(abs, matter.stringify(content, nextData));
-  await syncIndex(kbId, notePath);
-  eventBus.emit('fsChange', { type: 'change', path: notePath });
-}
-```
-
-- 去重、去空、限长（≤ 12 个，单标签 ≤ 30 字）。
-- **序列化结果为 `tags: 灵感, AI`**，与用户标准一致。
-
-### 3.3 标签聚合：复用 `parseTags`
-
-`getAllTags` / `listTags` / `notesByTag` 改为调用 `parseTags(data)`，不再内联 `Array.isArray`：
-
-```ts
-const list = parseTags(data);   // 同时兼容数组 / 逗号字符串
-for (const t of list) counter.set(t, (counter.get(t) || 0) + 1);
-```
-
-### 3.4 来源 `source`：补齐读写入口
-
-- `updateSource(kbId, notePath, source)`：与 `updateTags` 同构，写 `source` 字段（校验枚举，未知值原样存但归一为小写）。
-- `getAllSources(kbId)`：遍历 frontmatter 聚合 `{ source, count }`，供「来源筛选」面板。
-- `notesBySource(kbId, source)`：按来源返回笔记列表。
-- `createNote`：新建笔记默认写入最小 Front Matter：
+`fs-service.createNote` 在落盘时用 `writeFrontmatter(content, { title })` 写入标准头；`summary`/`tags` 初始为空故不写键，得到：
 
 ```markdown
 ---
-source: note
-tags:
-summary:
----
-# 标题
-
-```
-
-（空 tags/summary 保持字段存在，便于用户/AI 后续填充；也可按模板决定是否预填。）
-
-### 3.5 摘要 `summary`：保持单一写入 + 读取
-
-- `updateSummary` 现状 OK，保留（写 `summary` 字段）。
-- `RightPanel` / `MultiNoteEditor` 已正确从 `frontmatter.summary` 恢复，无需改。
-- 新增约定：**AI 摘要一键应用**写入 frontmatter 后，`syncIndex` 用 `summary` 作为该笔记的「概述向量候选」（可选：把 summary 也纳入 RAG 召回的轻量描述，提升「总结本周」场景首屏命中质量）。
-
+title: 笔记标题
 ---
 
-## 4. 检索与索引联动
-
-- **RAG 分块**：`chunkNote` 已在分块前剥离 Front Matter（避免 `source/tags/summary` 污染正文向量），保持现状。
-- **标签/来源作为过滤维度**：`retrieve` 的 `templateDirIds` 过滤范式可外推为 `tagFilters` / `sourceFilters` 可选参数（未来增强），从 `parseTags` / `source` 读取，不改检索主链路。
-- **时间窗口总结**：`recentChunks` / `listRecentPaths` 不受影响（按 mtime），标签/来源仅作展示与可按需筛选。
-
----
-
-## 5. 兼容性迁移
-
-存量笔记可能已存在两种格式：
-
-1. **`tags: [灵感, AI]`（YAML 数组）** → 解析层 `parseTags` 已兼容，读出正常；**写入时自动归一成逗号字符串**（下次 `updateTags` 触发）。
-2. **`tags: 灵感, AI`（逗号字符串）** → 解析层兼容，读出正常。
-3. **无 Front Matter** → `createNote` 新笔记补最小块；存量无头笔记在首次 `updateTags`/`updateSummary` 时由 `matter.stringify` 自动加头。
-
-无需一次性批量迁移脚本；读写统一后自然收敛。若需主动归一，可加 `normalizeAllFrontmatter(kbId)` 工具（遍历重写），作为可选维护命令。
-
----
-
-## 6. 渲染层配套
-
-| 位置 | 改动 |
-|------|------|
-| `RightPanel.tsx` | 标签编辑调用 `updateTags`（已逗号兼容）；新增「来源」下拉调用 `updateSource`；摘要保持。 |
-| `MultiNoteEditor.tsx` | 同 RightPanel；`__forgeNoteActions` 暴露 `updateSource`。 |
-| 属性面板 | 展示 `source` 枚举徽标、`tags` 芯片、`summary` 预览。 |
-| 列表/树 | 支持按 `source` / `tags` 筛选（调用 `getAllSources` / `notesByTag`）。 |
-
----
-
-## 7. 落地步骤（建议顺序）
-
-1. `utils/markdown.ts`：新增 `parseTags(fm)`，让 `extractTags` 复用它。
-2. `fs-service.ts`：
-   - `updateTags` 改为逗号字符串序列化；
-   - `getAllTags` / `listTags` / `notesByTag` 改用 `parseTags`；
-   - 新增 `updateSource` / `getAllSources` / `notesBySource`；
-   - `createNote` 写最小 Front Matter（含 `source: note`）。
-3. `preload/index.ts` + `ipc-channels.ts`：补充 `FS_UPDATE_SOURCE` / `FS_ALL_SOURCES` / `FS_NOTES_BY_SOURCE` 通道。
-4. 渲染层：`RightPanel` / `MultiNoteEditor` 接入来源编辑与展示；属性面板/列表接筛选。
-5. （可选）`normalizeAllFrontmatter` 主动归一存量。
-
----
-
-## 8. 标准样例（最终形态）
-
-```markdown
----
-source: inspiration
-tags: [灵感, AI, 知识管理]
-summary: 从用户与 AI 对话中沉淀的灵感：用 Front Matter 统一来源/标签/摘要，作为笔记属性唯一事实源。
----
-
-# 标题
+# 笔记标题
 
 正文……
 ```
 
-> 该方案在不破坏现有 RAG / 链接索引的前提下，把「标签、摘要、来源」三类属性的实现统一到标准 Front Matter，并解决数组/逗号字符串格式不一致导致的标签丢失问题。
+---
+
+## 3. 数据流（核心）
+
+**原则：属性面板只更新到笔记文件，SQLite 在笔记变动后自动更新。**
+
+```mermaid
+flowchart TD
+  A[属性面板: AI 生成摘要/标签] --> B[renderer: window.forge.fs.updateSummary / updateTags]
+  B --> C[fs-service: 用 writeFrontmatter 改写文件 Front Matter]
+  C --> D[fs-service: syncIndex(kbId, notePath)]
+  D --> E[search-service.upsertNote(raw)]
+  E --> F[从 Front Matter 重提 summary / tags]
+  F --> G[upsertNoteMeta 写入 SQLite note_meta]
+  H[编辑器保存正文 writeNote] --> C
+```
+
+### 3.1 写入路径（面板 → 文件）
+
+- 「AI 生成摘要」：`runAction('summary')` → `window.forge.fs.updateSummary(kbId, path, summary)` → `fs-service.updateSummary` 用 `writeFrontmatter` 仅写 `summary` 键 → `atomicWrite` 落盘 → `syncIndex`。
+- 「AI 生成标签」：`handleAiTags` → `actions.updateTags` → `fs-service.updateTags` 用 `writeFrontmatter` 仅写 `tags` 键 → 落盘 → `syncIndex`。
+- 编辑器正文保存：`writeNote` 在用正文覆盖前，先用 `readFrontmatter` 取磁盘现有 Front Matter，再用 `writeFrontmatter` 把正文与旧 Front Matter 重新拼回，**编辑正文永不丢失摘要/标签**。
+
+> 落盘后 `readNote` 返回的 `frontmatter` 即从文件头解析，属性面板通过 `forgenote:note-data` 事件刷新展示，所见即文件真实内容。
+
+### 3.2 同步路径（文件变动 → SQLite）
+
+`fs-service` 任何写入（含 `updateTags`/`updateSummary`/`writeNote`/`createNote`）都会调用 `syncIndex` → `search-service.upsertNote(kbId, path, raw, ...)`，其中 `raw` 是含 Front Matter 的完整文件。
+
+`upsertNote` 内部：
+
+```ts
+const fm = readFrontmatter(content);          // content 含文件头
+const summary = fm.summary ?? '';
+const tags = fm.tags;
+upsertNoteMeta(kbId, notePath, mtime, size, templateDirId, hash, summary, tags);
+```
+
+- `note_meta` 表新增 `summary TEXT` 与 `tags TEXT`（JSON 数组字符串）两列，作为**检索副本**。
+- 即便正文内容 hash 未变（仅 Front Matter 的 summary/tags 变化），短路分支仍刷新这两列，保证 SQLite 与文件一致。
+- 旧库启动时通过 `ALTER TABLE` 补列，向后兼容。
+
+**结论**：SQLite 永远以文件 Front Matter 派生，不在生成摘要/标签时直接写库；换电脑迁移只需拷贝 `.md` 文件，重新索引即可重建全部摘要/标签检索。
+
+---
+
+## 4. 读路径（检索 / 展示）
+
+| 场景 | 来源 | 实现 |
+| --- | --- | --- |
+| 属性面板显示摘要/标签 | 文件 Front Matter | `readNote` → `frontmatter`，renderer 仅展示此值 |
+| 标签云 / 全部标签 | 文件 Front Matter（真源） | `fs-service.getAllTags` 遍历 `.md` 解析 `tags` 数组计数 |
+| 按标签筛选笔记 | 文件 Front Matter | `fs-service.notesByTag` |
+| 全文 / 语义检索 | SQLite `note_chunks` + `note_meta` | `search-service` 基于分块与 `summary/tags` 副本 |
+
+---
+
+## 5. 方案比对（原设计 vs 实现）
+
+| 维度 | 原方案设想 | 当前实现 |
+| --- | --- | --- |
+| 摘要/标签存储 | Front Matter | ✅ 同 |
+| 标签格式 | 文档曾写「逗号字符串」 | ⚠️ 已统一为 **YAML 数组** `[a, b]` |
+| `source` 字段 | 模板写入 `source: note` 等 | ⚠️ 暂未实现；Front Matter 已保留扩展能力，后续启用即可 |
+| SQLite 与文件关系 | 双向同步 | ✅ 文件为真源，SQLite 变动后自动派生 |
+| AI 生成入口 | 单一 `analyzeNote` | 拆分为「生成摘要」「生成标签」两个独立动作，分别写文件 Front Matter |
+
+---
+
+## 6. 后续可扩展
+
+1. **`source` 来源字段**：在 `writeFrontmatter` 已兼容保留，启用时只需在创建/编辑时填入 `source`，`upsertNote` 的 `readFrontmatter` 可一并提取同步到 `note_meta.source`。
+2. **手动编辑摘要/标签**：属性面板目前支持 AI 生成后实时落盘；后续可开放手动输入，同样经 `updateSummary`/`updateTags` 写文件。
+3. **批量回填**：对存量无 Front Matter 的旧笔记，提供一次性脚本用 `writeFrontmatter` 补标准头。

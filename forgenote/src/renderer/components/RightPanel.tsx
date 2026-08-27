@@ -101,7 +101,10 @@ export function RightPanel() {
       setInfo(data.currentInfo);
       setLinkSuggestions(data.linkSuggestions || []);
       setDirSuggestions(data.dirSuggestions || []);
-      setSummary(data.summary);
+      // 摘要统一从 FrontMatter 获取（文件为真源），不依赖瞬态 AI 摘要状态
+      const fm = data.currentInfo?.frontmatter || {};
+      const fmSummary = (fm['summary'] ?? fm['摘要'] ?? fm['Summary']) as unknown;
+      setSummary(typeof fmSummary === 'string' && fmSummary.trim() ? fmSummary.trim() : '');
     };
     read();
     read();
@@ -127,9 +130,7 @@ export function RightPanel() {
     setLocalTags(tags);
     // 从 frontmatter.summary 恢复摘要显示（重新打开笔记时同步）
     const fmSummary = (fm['summary'] ?? fm['摘要'] ?? fm['Summary']) as unknown;
-    if (typeof fmSummary === 'string' && fmSummary.trim()) {
-      setSummary(fmSummary.trim());
-    }
+    setSummary(typeof fmSummary === 'string' && fmSummary.trim() ? fmSummary.trim() : '');
   }, [info]);
 
   // 加载知识库已有标签作为下拉建议
@@ -226,9 +227,14 @@ export function RightPanel() {
   const runAction = useCallback(async (kind: 'summary' | 'links' | 'dir' | 'forge') => {
     setMoreOpen(false);
     const actions = (window as any).__forgeNoteActions as
-      | { summarize: (p: string) => Promise<string>; links: (p: string) => Promise<LinkInfo[]>; dir: (p: string) => Promise<DirSuggestion[]>; forge: (p: string) => Promise<void> }
+      | {
+          summarize: (p: string) => Promise<string>;
+          links: (p: string) => Promise<LinkInfo[]>;
+          dir: (p: string) => Promise<DirSuggestion[]>;
+          forge: (p: string) => Promise<void>;
+        }
       | undefined;
-    if (!actions || !notePath) return;
+    if (!actions || !notePath || !activeKb) return;
     try {
       if (kind === 'summary') {
         setSummaryLoading(true);
@@ -266,7 +272,7 @@ export function RightPanel() {
     } catch (e) {
       setSummaryLoading(false);
     }
-  }, [notePath]);
+  }, [notePath, activeKb?.id]);
 
   // 基本信息提取
   const basics = useMemo(() => {

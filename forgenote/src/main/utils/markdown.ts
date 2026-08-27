@@ -82,6 +82,70 @@ export function previewLine(md: string, max = 80): string {
 }
 
 /**
+ * 读取 FrontMatter（标准字段：title/summary/tags + 中文回退：标题/概述/标签）
+ * 返回标准化后的数据对象，正文与原始内容。
+ */
+export function readFrontmatter(raw: string): {
+  data: Record<string, unknown>;
+  content: string;
+  title?: string;
+  summary?: string;
+  tags: string[];
+} {
+  const { content, data } = parseFrontMatter(raw);
+  const title = (data['title'] ?? data['标题'] ?? data['Title'] ?? data['TITLE']) as unknown;
+  const summary = (data['summary'] ?? data['概述'] ?? data['Summary'] ?? data['SUMMARY']) as unknown;
+  const tagRaw = data['tags'] ?? data['标签'] ?? data['Tag'] ?? data['TAG'];
+  let tags: string[] = [];
+  if (Array.isArray(tagRaw)) tags = tagRaw.map(String);
+  else if (typeof tagRaw === 'string' && tagRaw.trim()) tags = tagRaw.split(/[\s,，]+/).filter(Boolean);
+  return {
+    data,
+    content,
+    title: typeof title === 'string' ? title : undefined,
+    summary: typeof summary === 'string' ? summary : undefined,
+    tags
+  };
+}
+
+/**
+ * 写入/更新 FrontMatter（标准字段：title/summary/tags + 中文回退：标题/概述/标签）
+ * - 仅传入的字段会被更新；未传入字段保持原值。
+ * - 标题/概述：优先标准英文字段，其次中文回退字段。
+ * - 标签：统一写入标准 tags 字段（数组）。
+ * 返回写回后的完整 Markdown 文本。
+ */
+export function writeFrontmatter(
+  raw: string,
+  patch: { title?: string; summary?: string; tags?: string[] }
+): string {
+  const { content, data } = parseFrontMatter(raw);
+  const next: Record<string, unknown> = { ...data };
+
+  const TITLE_KEYS = ['title', '标题', 'Title', 'TITLE'];
+  const SUMMARY_KEYS = ['summary', '概述', 'Summary', 'SUMMARY'];
+  const TAG_KEYS = ['tags', '标签', 'Tag', 'TAG'];
+
+  // 清理旧的标题/概述/标签相关字段，避免中英并存
+  for (const k of [...TITLE_KEYS, ...SUMMARY_KEYS, ...TAG_KEYS]) delete next[k];
+
+  // 未显式传入的字段保持原值，防止更新 tags 时冲掉 summary/title 等关键信息
+  const existing = readFrontmatter(raw);
+  const title = patch.title !== undefined ? patch.title : existing.title;
+  const summary = patch.summary !== undefined ? patch.summary : existing.summary;
+  const tags = patch.tags !== undefined ? patch.tags : existing.tags;
+
+  if (title) next['title'] = title;
+  if (summary) next['summary'] = summary;
+  if (tags) {
+    const norm = Array.from(new Set(tags.map((t) => String(t).trim()).filter(Boolean)));
+    if (norm.length) next['tags'] = norm;
+  }
+
+  return matter.stringify(content, next);
+}
+
+/**
  * 提取一篇笔记的标签：
  * 1) 优先 FrontMatter 的 tags / 标签 / Tag 字段（数组或逗号分隔字符串）
  * 2) 匹配正文中的 `# 标签: v1 v2 ...` 行
