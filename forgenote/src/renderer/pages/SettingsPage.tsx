@@ -46,6 +46,13 @@ export function SettingsPage() {
   function handleInstall() {
     const app = window.forge.app;
     if (!app) return;
+    if (update?.type === 'downloaded') {
+      // 已下载完成：直接退出并安装
+      app.quitAndInstall().catch((e) => {
+        setUpdate({ type: 'error', message: String(e) });
+      });
+      return;
+    }
     setDownloading(true);
     app.installUpdate().catch((e) => {
       setDownloading(false);

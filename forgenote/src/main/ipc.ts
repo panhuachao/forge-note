@@ -12,7 +12,7 @@ import { templateService } from './services/template-service';
 import { aiService } from './services/ai-service';
 import { searchService } from './services/search-service';
 import { auditService } from './services/audit-service';
-import { checkForUpdates, downloadAndInstall, setAutoCheckEnabled } from './services/updater';
+import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // Window control（标题栏双击最大化 / 最小化 / 关闭）
@@ -183,6 +183,10 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
   ipcMain.handle(IPC.APP_UPDATE_INSTALL, () => {
     downloadAndInstall();
+    return true;
+  });
+  ipcMain.handle(IPC.APP_UPDATE_QUIT_INSTALL, () => {
+    quitAndInstall();
     return true;
   });
   ipcMain.handle(IPC.APP_UPDATE_ENABLE_AUTO, (_e, enabled: boolean) => {

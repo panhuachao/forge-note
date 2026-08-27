@@ -90,6 +90,7 @@ export const IPC = {
   APP_VERSION: 'app:version',
   APP_UPDATE_CHECK: 'app:updateCheck',
   APP_UPDATE_INSTALL: 'app:updateInstall',
+  APP_UPDATE_QUIT_INSTALL: 'app:updateQuitInstall',
   APP_UPDATE_ENABLE_AUTO: 'app:updateEnableAuto',
   EV_APP_UPDATE: 'ev:appUpdate'
 } as const;

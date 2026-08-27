@@ -65,6 +65,7 @@ const api = {
     getVersion: () => ipcRenderer.invoke(IPC.APP_VERSION) as Promise<string>,
     checkUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_CHECK) as Promise<void>,
     installUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_INSTALL) as Promise<void>,
+    quitAndInstall: () => ipcRenderer.invoke(IPC.APP_UPDATE_QUIT_INSTALL) as Promise<void>,
     setAutoCheck: (enabled: boolean) => ipcRenderer.invoke(IPC.APP_UPDATE_ENABLE_AUTO, enabled) as Promise<void>,
     onUpdate: (cb: (status: any) => void) => {
       const listener = (_e: IpcRendererEvent, status: any) => cb(status);
