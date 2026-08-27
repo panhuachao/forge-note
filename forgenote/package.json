@@ -14,7 +14,8 @@
     "package:win": "electron-vite build && electron-builder --win",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --ext .ts,.tsx",
-    "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/fix-electron-quarantine.js"
+    "rebuild:native": "electron-rebuild -f -o better-sqlite3",
+    "postinstall": "electron-rebuild -f -o better-sqlite3 && node scripts/fix-electron-quarantine.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

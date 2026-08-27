@@ -40,7 +40,7 @@ jobs:
       # 针对 Electron 的 ABI 重建原生模块（better-sqlite3），
       # 否则 CI 用系统 Node 22 编译会得到 ABI 127，运行时 Electron 31 需要 ABI 125 而崩溃
       - name: Rebuild native modules for Electron
-        run: npm exec electron-rebuild -f -w better-sqlite3
+        run: npm run rebuild:native
 
       # npm run package:mac 通过 dotenv -e .env 加载环境变量，CI 无 .env 文件，
       # 这里用 secrets 生成一个最小 .env（仅 GH_TOKEN；ELECTRON_MIRROR 已由 workflow env 提供）
@@ -74,7 +74,7 @@ jobs:
 
       # 针对 Electron 的 ABI 重建原生模块（better-sqlite3），与 macOS job 同理
       - name: Rebuild native modules for Electron
-        run: npm exec electron-rebuild -f -w better-sqlite3
+        run: npm run rebuild:native
 
       # package:win 直接读环境变量，无需 .env
       - name: Build & publish Windows
