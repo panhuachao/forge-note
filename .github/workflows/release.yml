@@ -12,14 +12,14 @@ permissions:
 env:
   # 仓库设置 GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
   # Name: GH_TOKEN
-  # Secret: 你的 PAT(fine-grained 或 classic,需 repo 权限) 
+  # Secret: 你的 PAT(fine-grained 或 classic,需 repo 权限)
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   # 国内网络加速：打多架构包时 electron-builder 下载对应架构 Electron 二进制
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
 
 jobs:
-  # ---------- macOS：分别产出 arm64 与 x64 两个包（Apple Silicon / Intel） ----------
-  release-mac:
+  # ---------- macOS arm64：在 Apple Silicon runner 上原生打包 ----------
+  release-mac-arm64:
     runs-on: macos-latest
     defaults:
       run:
@@ -40,18 +40,83 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 针对 Electron 的 ABI 重建原生模块（better-sqlite3），
-      # 否则 CI 用系统 Node 22 编译会得到 ABI 127，运行时 Electron 31 需要 ABI 125 而崩溃
+      # 导入 Developer ID 证书到钥匙串（用于签名 + 公证）
+      - name: Import Apple codesign cert
+        run: |
+          echo "${{ secrets.APPLE_CERT_BASE64 }}" | base64 --decode > /tmp/devid.p12
+          security create-keychain -p "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
+          security import /tmp/devid.p12 -k build.keychain -P "${{ secrets.APPLE_CERT_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/security -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
+          rm -f /tmp/devid.p12
+        env:
+          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+
+      # 针对 Electron 的 ABI 重建原生模块（better-sqlite3）
       - name: Rebuild native modules for Electron
         run: npm run rebuild:native
 
-      # npm run package:mac 通过 dotenv -e .env 加载环境变量，CI 无 .env 文件，
-      # 这里用 secrets 生成一个最小 .env（仅 GH_TOKEN；ELECTRON_MIRROR 已由 workflow env 提供）
+      # npm run package:mac:arm64 通过 dotenv -e .env 加载环境变量，CI 无 .env 文件
       - name: Write .env for dotenv
         run: echo "GH_TOKEN=${{ secrets.GH_TOKEN }}" > .env
 
-      - name: Build & publish macOS
-        run: npm run package:mac -- --publish=always
+      - name: Build & publish macOS arm64
+        run: npm run package:mac:arm64 -- --publish=always
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+  # ---------- macOS x64：在 Intel runner 上原生打包（避免交叉编译导致的渲染空白） ----------
+  release-mac-x64:
+    runs-on: macos-13
+    defaults:
+      run:
+        working-directory: forgenote
+    steps:
+      - name: Checkout（含 tag）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: forgenote/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 导入 Developer ID 证书到钥匙串（用于签名 + 公证）
+      - name: Import Apple codesign cert
+        run: |
+          echo "${{ secrets.APPLE_CERT_BASE64 }}" | base64 --decode > /tmp/devid.p12
+          security create-keychain -p "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
+          security import /tmp/devid.p12 -k build.keychain -P "${{ secrets.APPLE_CERT_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/security -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.APPLE_CERT_PASSWORD }}" build.keychain
+          rm -f /tmp/devid.p12
+        env:
+          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+
+      - name: Rebuild native modules for Electron
+        run: npm run rebuild:native
+
+      - name: Write .env for dotenv
+        run: echo "GH_TOKEN=${{ secrets.GH_TOKEN }}" > .env
+
+      - name: Build & publish macOS x64
+        run: npm run package:mac:x64 -- --publish=always
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
   # ---------- Windows：产出 nsis 安装包 ----------
   release-win:

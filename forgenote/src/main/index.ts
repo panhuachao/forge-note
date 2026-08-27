@@ -172,10 +172,17 @@ function buildMenu() {
 }
 
 app.whenReady().then(async () => {
-  initStore();
+  // 先创建窗口，避免 initStore 等后续步骤抛错导致窗口永远不显示
   registerIpcHandlers(() => mainWindow);
   buildMenu();
   createWindow();
+
+  // store 初始化失败不应阻断窗口显示，仅记录错误
+  try {
+    initStore();
+  } catch (err) {
+    console.error('[main] initStore failed:', err);
+  }
 
   // 自动更新：启动后自动检查（仅在打包环境生效）
   if (mainWindow) initAutoUpdater(mainWindow);

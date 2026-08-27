@@ -11,6 +11,8 @@
     "start": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
     "package:mac": "electron-vite build && dotenv -e .env -- electron-builder --mac --x64 --arm64",
+    "package:mac:arm64": "electron-vite build && dotenv -e .env -- electron-builder --mac --arm64",
+    "package:mac:x64": "electron-vite build && dotenv -e .env -- electron-builder --mac --x64",
     "package:win": "electron-vite build && electron-builder --win",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --ext .ts,.tsx",
@@ -76,7 +78,14 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "artifactName": "ForgeNote-${version}-${arch}.${ext}"
+      "artifactName": "ForgeNote-${version}-${arch}.${ext}",
+      "gatekeeperAssess": false,
+      "identity": "Developer ID Application",
+      "notarize": {
+        "teamId": "process.env.APPLE_TEAM_ID",
+        "appleId": "process.env.APPLE_ID",
+        "appleIdPassword": "process.env.APPLE_APP_PASSWORD"
+      }
     },
     "win": {
       "target": "nsis"

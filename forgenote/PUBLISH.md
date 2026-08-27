@@ -44,7 +44,9 @@ npm run dev
 
 # 生产构建 + 打包
 npm run package          # 按当前平台打包
-npm run package:mac       # 仅 macOS
+npm run package:mac:arm64  # 仅 macOS（Apple Silicon）
+npm run package:mac:x64    # 仅 macOS（Intel）
+npm run package:mac        # macOS 同时产出 arm64 + x64 两个包
 npm run package:win       # 仅 Windows
 
 # 仅构建（不打包）
@@ -57,7 +59,8 @@ npm run build
 `package.json` 已配置 `publish` 指向 `panhuachao/forge-note`（私有仓库）。打包时可附加 `--publish=always` 自动上传：
 
 ```bash
-npm run package:mac -- --publish=always
+npm run package:mac:arm64 -- --publish=always
+npm run package:mac:x64 -- --publish=always
 ```
 
 ## 三-1、如何发布「同一版本」的多平台安装包（macOS + Windows）
@@ -66,13 +69,21 @@ npm run package:mac -- --publish=always
 
 ### 方案 A：本机 + 一台 Windows 机器（手动，适合偶尔发布）
 
-1. **在 macOS 上打包并上传 macOS 包**
+1. **在 macOS（Apple Silicon）上打包并上传 arm64 包**
    ```bash
-   npm run package:mac -- --publish=always
+   npm run package:mac:arm64 -- --publish=always
    ```
-   产物：`ForgeNote-<version>-universal.dmg` / `.zip`（已在 `package.json` 配置 `--universal`，同时兼容 Apple Silicon 与 Intel Mac）。
+   产物：`ForgeNote-<version>-arm64.dmg` / `.zip`。
 
-2. **在一台 Windows 机器上打包并上传 Windows 包**
+2. **在 macOS（Intel）或 Rosetta 环境打包 x64 包**
+   ```bash
+   npm run package:mac:x64 -- --publish=always
+   ```
+   产物：`ForgeNote-<version>-x64.dmg` / `.zip`。
+
+   > 注意：**x64 包务必在 x64（Intel）原生环境打包**，避免在 Apple Silicon 上交叉编译导致原生模块（better-sqlite3）架构错配、窗口空白。CI 已用 `macos-13`（Intel）runner 专门产出 x64 包。
+
+3. **在一台 Windows 机器上打包并上传 Windows 包**
    同一份代码（或切到同一 git tag），在 Windows 上：
    ```bash
    npm install
@@ -85,7 +96,13 @@ npm run package:mac -- --publish=always
 
 ### 方案 B：GitHub Actions 自动跨平台发布（推荐，一次提交出齐）
 
-已在仓库 `.github/workflows/release.yml` 实现：推送版本 tag（如 `v1.0.0`）即在 `macos-latest` 与 `windows-latest` 两个运行器并行构建，各自 `--publish=always` 上传到同一 Release。无需手动切换机器。
+已在仓库 `.github/workflows/release.yml` 实现：推送版本 tag（如 `v1.0.0`）即在三个运行器并行构建：
+
+- `release-mac-arm64`：`macos-latest`（Apple Silicon）用 `package:mac:arm64` 产出 arm64 包。
+- `release-mac-x64`：`macos-13`（Intel）用 `package:mac:x64` 产出 x64 包（**原生 Intel 环境，避免交叉编译窗口空白**）。
+- `release-win`：`windows-latest` 产出 Windows nsis 包。
+
+三者各自 `--publish=always` 上传到同一 Release。无需手动切换机器。
 
 **使用步骤：**
 1. 在仓库 **Settings → Secrets and variables → Actions** 新增仓库密钥 `GH_TOKEN`（PAT classic，拥有 `repo` 权限）。
@@ -97,15 +114,77 @@ npm run package:mac -- --publish=always
    git tag v1.0.1
    git push origin v1.0.1
    ```
-4. GitHub Actions 自动跑两个 job：macOS 产 `ForgeNote-<version>-universal.dmg`/`.zip`，Windows 产 `ForgeNote-<version>.exe`，二者归入同一 Release。
+4. GitHub Actions 自动跑三个 job，macOS 产出 `ForgeNote-<version>-arm64.dmg`/`.zip` 与 `ForgeNote-<version>-x64.dmg`/`.zip`，Windows 产 `ForgeNote-<version>.exe`，三者归入同一 Release。
 
-> 说明：macOS 用 `package:mac`（`--universal` + 经 dotenv 读 `.env`），CI 中由 workflow 注入 `.env`；`ELECTRON_MIRROR` 已通过 workflow `env` 全局设置以加速 x64 Electron 下载。Windows 用 `package:win` 直接读 `GH_TOKEN` 环境变量。
+> 说明：macOS 用 `package:mac:*` 经 dotenv 读 `.env`（CI 中由 workflow 注入）；`ELECTRON_MIRROR` 已通过 workflow `env` 全局设置以加速 Electron 下载。Windows 用 `package:win` 直接读 `GH_TOKEN` 环境变量。
 
 ### 发布前检查清单
 - 确认 `package.json` 的 `version` 已是目标版本号。
 - 确认 `.env`（或 CI Secrets）中的 `GH_TOKEN` 具有 `repo` 权限。
-- macOS 打 universal 包时，需能下载 x64 Electron 二进制；国内网络可在 `.env` 设置 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 加速。
+- macOS arm64 / x64 分别由各自原生 runner 打包，原生模块（better-sqlite3）架构匹配，避免窗口空白。
 - Windows 包必须在 Windows 环境产出，macOS 本机无法直接生成。
+
+## 三-2、Apple 正式发布：开发者签名 + 公证（notarization）
+
+macOS 上未经签名与公证的 Electron 应用，用户从网络下载安装时会被 Gatekeeper 拦截（提示「已阻止恶意软件 / 无法验证开发者」）。本项目已接入 **Developer ID Application 证书签名 + Apple 公证**，使 GitHub Releases 下载的 dmg 可被正常安装。
+
+### 前置条件（一次性准备）
+1. 拥有有效的 **Apple Developer Program** 个人/公司账号。
+2. 在 `developer.apple.com → Certificates` 创建并下载 **Developer ID Application** 证书，安装到本机钥匙串（Keychain）。
+3. 在 `appleid.apple.com` 生成一个 **App-Specific Password**（用于公证上传，不是 Apple ID 登录密码）。
+4. 记录 **Team ID**（10 位字母数字，`developer.apple.com → Membership` 页面）。
+
+### 在 GitHub 配置仓库 Secrets
+`仓库 Settings → Secrets and variables → Actions → Repository secrets` 新增以下 5 项：
+
+| Secret 名 | 说明 |
+|---|---|
+| `APPLE_ID` | 你的 Apple ID 邮箱 |
+| `APPLE_APP_PASSWORD` | 上述 app-specific password |
+| `APPLE_TEAM_ID` | Membership 页的 Team ID |
+| `APPLE_CERT_BASE64` | Developer ID Application 证书导出的 `.p12` 经 base64 编码后的字符串 |
+| `APPLE_CERT_PASSWORD` | 导出 `.p12` 时设置的密码 |
+
+导出证书为 base64 的方法（在本机执行）：
+```bash
+# 1. 确认证书已存在
+security find-identity -v -p codesigning | grep "Developer ID Application"
+
+# 2. 导出 p12（按提示设置导出密码，请牢记）
+security export -t certs -f pkcs12 \
+  -k ~/Library/Keychains/login.keychain-db \
+  -o /tmp/devid.p12 -P "你的p12密码"
+
+# 3. 转 base64 并复制到剪贴板
+base64 -i /tmp/devid.p12 | pbcopy
+rm -f /tmp/devid.p12
+# 剪贴板内容即 APPLE_CERT_BASE64
+```
+
+### CI 自动签名 + 公证流程
+`.github/workflows/release.yml` 的两个 macOS job（`release-mac-arm64` / `release-mac-x64`）已包含：
+1. **导入证书**：将 `APPLE_CERT_BASE64` 解码为 p12 并导入到临时钥匙串（`build.keychain`），供 `codesign` 使用。
+2. **签名**：`package.json` 的 `mac.identity` 设为 `"Developer ID Application"`，electron-builder 打包时对 `.app` 做 Developer ID 签名。
+3. **公证**：`mac.notarize` 读取 `APPLE_ID` / `APPLE_APP_PASSWORD` / `APPLE_TEAM_ID` 环境变量，将产物提交 Apple 公证；通过后把 ticket stapled 到 dmg。
+4. **发布**：`--publish=always` 上传已公证的 dmg/zip 到同一 Release。
+
+> 公证通常需要 1–5 分钟，CI 会等待结果，属正常现象。
+
+### 本地手动签名 + 公证（可选）
+若想在本机直接产出已公证的包（需本机钥匙串已含 Developer ID 证书）：
+```bash
+export APPLE_ID="你的邮箱"
+export APPLE_APP_PASSWORD="app-specific-password"
+export APPLE_TEAM_ID="你的TeamID"
+npm run package:mac:arm64 -- --publish=always
+npm run package:mac:x64 -- --publish=always
+```
+
+### 故障排查
+- **公证失败 `App not found` / teamId 错误**：检查 `APPLE_TEAM_ID` 是否为 10 位 Team ID（非个人账号邮箱）。
+- **`Invalid certificate` / 找不到 identity**：确认 `APPLE_CERT_BASE64` 是 **Developer ID Application**（非 Apple Distribution），且 `APPLE_CERT_PASSWORD` 正确；`security find-identity` 能看到该证书。
+- **`APPLE_APP_PASSWORD` 报错**：必须是 app-specific password，不是账号密码；且 Apple ID 需开启双重认证。
+- **仍被 Gatekeeper 拦截**：多为公证信息缺失导致。可手动放行：`xattr -cr /Applications/锦囊笔记.app`，或右键 App →「打开」→「仍要打开」。正式分发应确保 CI 五个 Secrets 均配置正确、且公证步骤成功（查看 CI 日志 `notarize` 相关输出）。
 
 ## 四、升级方式
 
@@ -115,5 +194,6 @@ npm run package:mac -- --publish=always
 ## 五、注意事项
 
 - preload 脚本（contextBridge 暴露的 `window.forge`）改动**不会热重载**，dev 模式下修改后需完全重启 `npm run dev`。
-- macOS 首次打开若提示「无法验证开发者」，请在「系统设置 → 隐私与安全性」中允许，或执行 `npm run postinstall` 解除隔离属性。
+- **macOS 已配置 Apple 开发者签名 + 公证（notarization）**：CI 自动用 Developer ID Application 证书签名并公证，用户从 GitHub 下载的 dmg 可正常安装、不再被 Gatekeeper 拦截。需在仓库 Secrets 配置：`APPLE_ID`（Apple ID 邮箱）、`APPLE_APP_PASSWORD`（app-specific password）、`APPLE_TEAM_ID`（Team ID）、`APPLE_CERT_BASE64`（Developer ID Application 证书 p12 的 base64）、`APPLE_CERT_PASSWORD`（p12 密码）。`mac` 配置见 `identity: "Developer ID Application"` 与 `notarize` 字段。
+  - 若公证信息缺失导致仍被拦，可手动放行：安装后 `xattr -cr /Applications/锦囊笔记.app`，或右键 App →「打开」→「仍要打开」。
 - 知识库数据默认存储于用户目录下的应用数据位置，升级不会清除本地笔记。
