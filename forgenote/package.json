@@ -80,12 +80,8 @@
       "category": "public.app-category.productivity",
       "artifactName": "ForgeNote-${version}-${arch}.${ext}",
       "gatekeeperAssess": false,
-      "identity": "Developer ID Application",
-      "notarize": {
-        "teamId": "process.env.APPLE_TEAM_ID",
-        "appleId": "process.env.APPLE_ID",
-        "appleIdPassword": "process.env.APPLE_APP_PASSWORD"
-      }
+      "identity": "cn.com.tinyapp.forgenote.app",
+      "notarize": true
     },
     "win": {
       "target": "nsis"
