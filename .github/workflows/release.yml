@@ -10,6 +10,9 @@ permissions:
   contents: write
 
 env:
+  # 仓库设置 GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
+  # Name: GH_TOKEN
+  # Secret: 你的 PAT(fine-grained 或 classic,需 repo 权限) 
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   # 国内网络加速：打 universal / x64 包时 electron-builder 下载对应架构 Electron 二进制
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
