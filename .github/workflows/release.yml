@@ -14,11 +14,11 @@ env:
   # Name: GH_TOKEN
   # Secret: 你的 PAT(fine-grained 或 classic,需 repo 权限) 
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  # 国内网络加速：打 universal / x64 包时 electron-builder 下载对应架构 Electron 二进制
+  # 国内网络加速：打多架构包时 electron-builder 下载对应架构 Electron 二进制
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
 
 jobs:
-  # ---------- macOS：产出 universal 包（兼容 Apple Silicon + Intel） ----------
+  # ---------- macOS：分别产出 arm64 与 x64 两个包（Apple Silicon / Intel） ----------
   release-mac:
     runs-on: macos-latest
     defaults:

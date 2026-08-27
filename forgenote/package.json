@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
-    "package:mac": "electron-vite build && dotenv -e .env -- electron-builder --mac --universal",
+    "package:mac": "electron-vite build && dotenv -e .env -- electron-builder --mac --x64 --arm64",
     "package:win": "electron-vite build && electron-builder --win",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --ext .ts,.tsx",
