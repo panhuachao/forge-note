@@ -86,7 +86,7 @@ interface PersistedLayout {
 function loadPersisted(): PersistedLayout {
   const def: PersistedLayout = {
     leftPanelWidth: 260, rightPanelWidth: 280, leftPanelCollapsed: false, rightPanelCollapsed: false,
-    leftRailCollapsed: false, sortMode: 'name', fontSize: 'sm', lineHeight: 'sm', themeColor: 'red'
+    leftRailCollapsed: false, sortMode: 'name', fontSize: 'md', lineHeight: 'md', themeColor: 'blue'
   };
   if (typeof localStorage === 'undefined') return def;
   try {
@@ -116,6 +116,22 @@ function savePersisted(s: PersistedLayout) {
   } catch {}
 }
 
+// 保存当前完整持久化布局（避免部分字段覆盖导致其它字段丢失）
+function persistAll(get: () => LayoutState) {
+  const s = get();
+  savePersisted({
+    leftPanelWidth: s.leftPanelWidth,
+    rightPanelWidth: s.rightPanelWidth,
+    leftPanelCollapsed: s.leftPanelCollapsed,
+    rightPanelCollapsed: s.rightPanelCollapsed,
+    leftRailCollapsed: s.leftRailCollapsed,
+    sortMode: s.sortMode,
+    fontSize: s.fontSize,
+    lineHeight: s.lineHeight,
+    themeColor: s.themeColor
+  });
+}
+
 export const useLayoutStore = create<LayoutState>((set, get) => {
   const persisted = loadPersisted();
   return {
@@ -140,125 +156,51 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     setChatWithNote: (v) => set({ chatWithNote: v }),
     setFontSize: (v) => {
       set({ fontSize: v });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth, rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed, rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed, sortMode: cur.sortMode,
-        fontSize: v, lineHeight: cur.lineHeight
-      });
+      persistAll(get);
     },
     setLineHeight: (v) => {
       set({ lineHeight: v });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth, rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed, rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed, sortMode: cur.sortMode,
-        fontSize: cur.fontSize, lineHeight: v
-      });
+      persistAll(get);
     },
     setThemeColor: (v) => {
       set({ themeColor: v });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth, rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed, rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed, sortMode: cur.sortMode,
-        fontSize: cur.fontSize, lineHeight: cur.lineHeight, themeColor: v
-      });
+      persistAll(get);
     },
     setTreeView: (v) => set({ treeView: v }),
     setSortMode: (s) => {
       set({ sortMode: s });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth,
-        rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed,
-        rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed,
-        sortMode: s
-      });
+      persistAll(get);
     },
     toggleLeftRail: () => {
       const v = !get().leftRailCollapsed;
       set({ leftRailCollapsed: v });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth,
-        rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed,
-        rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: v,
-        sortMode: cur.sortMode
-      });
+      persistAll(get);
     },
     toggleLeftPanel: () => {
       const v = !get().leftPanelCollapsed;
       set({ leftPanelCollapsed: v });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth,
-        rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: v,
-        rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed,
-        sortMode: cur.sortMode
-      });
+      persistAll(get);
     },
     toggleRightPanel: () => {
       const v = !get().rightPanelCollapsed;
       set({ rightPanelCollapsed: v });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth,
-        rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed,
-        rightPanelCollapsed: v,
-        leftRailCollapsed: cur.leftRailCollapsed,
-        sortMode: cur.sortMode
-      });
+      persistAll(get);
     },
     toggleFocusMode: () => {
       const next = !get().focusMode;
       // 专注模式：同时收起左右栏；退出：同时展开左右栏
       set({ focusMode: next, leftPanelCollapsed: next, rightPanelCollapsed: next });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth,
-        rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed,
-        rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed,
-        sortMode: cur.sortMode
-      });
+      persistAll(get);
     },
     setLeftPanelWidth: (w) => {
       const clamped = Math.max(180, Math.min(500, w));
       set({ leftPanelWidth: clamped });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: clamped,
-        rightPanelWidth: cur.rightPanelWidth,
-        leftPanelCollapsed: cur.leftPanelCollapsed,
-        rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed,
-        sortMode: cur.sortMode
-      });
+      persistAll(get);
     },
     setRightPanelWidth: (w) => {
       const clamped = Math.max(200, Math.min(500, w));
       set({ rightPanelWidth: clamped });
-      const cur = get();
-      savePersisted({
-        leftPanelWidth: cur.leftPanelWidth,
-        rightPanelWidth: clamped,
-        leftPanelCollapsed: cur.leftPanelCollapsed,
-        rightPanelCollapsed: cur.rightPanelCollapsed,
-        leftRailCollapsed: cur.leftRailCollapsed,
-        sortMode: cur.sortMode
-      });
+      persistAll(get);
     },
     openTab: (notePath, title) => {
       const tabs = get().tabs;

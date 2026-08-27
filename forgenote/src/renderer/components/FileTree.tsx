@@ -45,8 +45,8 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
   const setExpanded = depth === 0 ? setLocalExpanded : (setExpandedProp ?? setLocalExpanded);
   // 顶部“全部展开/折叠”按钮的状态：false=折叠（默认），true=展开
   const [allExpanded, setAllExpanded] = useState(false);
-  // 目录重命名 / 新建后内联编辑态：{ path, name }
-  const [editing, setEditing] = useState<{ path: string; name: string } | null>(null);
+  // 重命名 / 新建后内联编辑态：{ path, name, kind }
+  const [editing, setEditing] = useState<{ path: string; name: string; kind: 'dir' | 'file' } | null>(null);
 
   // 新建目录（根或子目录），初始名“未命名目录”，创建后自动进入重命名态
   const handleCreateDir = async (parentPath: string) => {
@@ -57,13 +57,13 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
       setTree(t);
       // 展开并进入重命名
       setExpanded((s) => new Set([...s, parentPath]));
-      setEditing({ path: newPath, name: '未命名目录' });
+      setEditing({ path: newPath, name: '未命名目录', kind: 'dir' });
     } catch (e) {
       pushToast({ level: 'error', text: String(e) });
     }
   };
 
-  // 确认重命名
+  // 确认重命名（目录/笔记共用，按 kind 分流）
   const commitRename = async () => {
     if (!editing || !activeKb) {
       setEditing(null);
@@ -71,12 +71,23 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
     }
     const name = editing.name.trim();
     const oldPath = editing.path;
+    const kind = editing.kind;
     setEditing(null);
     if (!name) return;
-    const curName = oldPath.includes('/') ? oldPath.slice(oldPath.lastIndexOf('/') + 1) : oldPath;
+    // 当前名（笔记需去掉 .md 后缀比较）
+    const curBase = oldPath.includes('/') ? oldPath.slice(oldPath.lastIndexOf('/') + 1) : oldPath;
+    const curName = kind === 'file' ? curBase.replace(/\.md$/i, '') : curBase;
     if (name === curName) return; // 未变化
     try {
-      await window.forge.fs.renameDir(activeKb.id, oldPath, name);
+      if (kind === 'file') {
+        const newPath = await window.forge.fs.renameNote(activeKb.id, oldPath, name);
+        // 若正在编辑的恰好是当前打开的笔记，同步切换激活标签到新路径
+        if (oldPath === activeTabId && newPath) {
+          useLayoutStore.getState().setActiveTab(newPath);
+        }
+      } else {
+        await window.forge.fs.renameDir(activeKb.id, oldPath, name);
+      }
       const t = await window.forge.fs.listTree(activeKb.id);
       setTree(t);
     } catch (err) {
@@ -271,7 +282,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
               className="truncate flex-1"
               onDoubleClick={(e) => {
                 e.stopPropagation();
-                setEditing({ path: node.path, name: node.name });
+                setEditing({ path: node.path, name: node.name, kind: 'dir' });
               }}
               title="双击重命名"
             >
@@ -326,6 +337,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
   // file
   const indent = { paddingLeft: 8 + depth * 12 + 12 };
   const fileName = node.name.replace(/\.md$/i, '');
+  const isEditing = editing?.path === node.path;
   return (
     <div
       className={`group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-xl text-sm cursor-pointer transition-colors ${
@@ -334,9 +346,11 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
           : 'hover:bg-hover-bg'
       }`}
       style={indent}
-      onClick={() => onOpenNote(node.path)}
+      onClick={() => {
+        if (!isEditing) onOpenNote(node.path);
+      }}
       title={node.path}
-      draggable
+      draggable={!isEditing}
       onDragStart={(e) => {
         e.dataTransfer.setData('text/note-path', node.path);
         e.dataTransfer.effectAllowed = 'move';
@@ -348,7 +362,36 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
       }}
     >
       <Icon name="document" className="w-4 h-4 text-fg-muted shrink-0" />
-      <span className="truncate flex-1">{fileName}</span>
+      {isEditing ? (
+        <input
+          autoFocus
+          value={editing.name}
+          onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitRename();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setEditing(null);
+            }
+          }}
+          className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-brand rounded outline-none bg-content"
+        />
+      ) : (
+        <span
+          className="truncate flex-1"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setEditing({ path: node.path, name: fileName, kind: 'file' });
+          }}
+          title="双击重命名"
+        >
+          {fileName}
+        </span>
+      )}
     </div>
   );
 }
