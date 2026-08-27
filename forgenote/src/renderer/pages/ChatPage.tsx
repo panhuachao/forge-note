@@ -150,6 +150,16 @@ export default function ChatPage() {
     })();
   }, []);
 
+  // 首页问答跳转进来时，pendingAutoSendId === activeId 表示新会话需要自动触发一次 AI 回复
+  useEffect(() => {
+    if (!activeId || loading) return;
+    const pendingId = useChatStore.getState().consumeAutoSend();
+    if (pendingId !== activeId) return;
+    // 取最后一条 user 消息（createConversation 时写入的那一条）作为待发送文本
+    const lastUser = conversations.find((c) => c.id === activeId)?.messages.filter((m) => m.role === 'user').pop();
+    if (lastUser) sendWithText(lastUser.text);
+  }, [activeId]);
+
   // 重命名（inline）
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -436,7 +446,47 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="max-w-2xl mx-auto space-y-3">
-              {activeConv.messages.map((m) => (
+              {/* loading 时把流式态作为一条临时消息并入列表，与真实消息走同一协调，
+                  避免「map 外兄弟流式块」在卸载时触发 React removeChild DOM 冲突 */}
+              {(() => {
+                const STREAMING_ID = '__streaming__';
+                const base = activeConv.messages;
+                const display =
+                  loading
+                    ? [...base, { id: STREAMING_ID, role: 'assistant' as const, text: streaming?.text || '', toolActivity: streaming?.toolActivity || [], refs: [] as any[] }]
+                    : base;
+                return display.map((m) => {
+                  if ((m as any).id === STREAMING_ID) {
+                    return (
+                      <div key={STREAMING_ID} className="flex flex-col items-start">
+                        {streaming?.toolActivity && streaming.toolActivity.length > 0 && (
+                          <div className="mb-1 flex flex-col gap-1 w-full max-w-[80%]">
+                            {streaming.toolActivity.map((a, ai) => (
+                              <div
+                                key={ai}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-hover-bg border border-border-soft text-[11px] text-fg-secondary"
+                              >
+                                <Icon name="cpu" className="w-3 h-3 text-brand" />
+                                <span className="font-mono text-brand">{a.name}</span>
+                                <span className="text-fg-faint">{String(a.result || '').slice(0, 40)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="bg-content border border-border-soft rounded-xl px-3 py-2 text-sm text-fg markdown-preview chat-md leading-relaxed">
+                          {streaming ? (
+                            <>
+                              {streaming.text}
+                              <span className="inline-block w-1.5 h-4 align-middle bg-brand animate-pulse ml-0.5" />
+                            </>
+                          ) : (
+                            <span className="text-fg-muted">思考中…</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
                 <div
                   key={m.id}
                   className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
@@ -533,35 +583,9 @@ export default function ChatPage() {
                     </>
                   )}
                 </div>
-              ))}
-              {loading && (
-                <div className="flex flex-col items-start">
-                  {streaming?.toolActivity && streaming.toolActivity.length > 0 && (
-                    <div className="mb-1 flex flex-col gap-1 w-full max-w-[80%]">
-                      {streaming.toolActivity.map((a, ai) => (
-                        <div
-                          key={ai}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-hover-bg border border-border-soft text-[11px] text-fg-secondary"
-                        >
-                          <Icon name="cpu" className="w-3 h-3 text-brand" />
-                          <span className="font-mono text-brand">{a.name}</span>
-                          <span className="text-fg-faint">{String(a.result || '').slice(0, 40)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="bg-content border border-border-soft rounded-xl px-3 py-2 text-sm text-fg markdown-preview chat-md leading-relaxed">
-                    {streaming ? (
-                      <>
-                        {streaming.text}
-                        <span className="inline-block w-1.5 h-4 align-middle bg-brand animate-pulse ml-0.5" />
-                      </>
-                    ) : (
-                      <span className="text-fg-muted">思考中…</span>
-                    )}
-                  </div>
-                </div>
-              )}
+                  );
+                });
+              })()}
             </div>
           )}
         </div>

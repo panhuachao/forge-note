@@ -115,8 +115,10 @@ export function HomePage() {
     }
 
     // 问答模式：创建一个新的 AI 对话，跳转到 chat 页
+    // autoSend：标记该会话需在 ChatPage 挂载后自动触发一次 AI 回复，
+    // 否则用户从首页问答进入对话页时只看到自己的问题、没有 AI 响应（空白体验）
     const { createConversation } = useChatStore.getState();
-    createConversation({ firstUserText: q, kbId: activeKb.id });
+    createConversation({ firstUserText: q, kbId: activeKb.id, autoSend: true });
     setMainView('chat');
   }
 

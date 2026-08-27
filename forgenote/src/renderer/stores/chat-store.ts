@@ -32,17 +32,22 @@ export interface ChatConversation {
 interface ChatState {
   conversations: ChatConversation[];
   activeId: string | null;
+  /** 首页问答跳到 ChatPage 时携带：标记新会话应在挂载后自动触发一次 AI 回复，触发后置空 */
+  pendingAutoSendId: string | null;
 
   // CRUD
   createConversation: (params: {
     firstUserText: string;
     kbId?: string;
+    autoSend?: boolean;
   }) => string; // 返回新会话 id
   appendMessage: (convId: string, msg: ChatMessage) => void;
   renameConversation: (convId: string, title: string) => void;
   deleteConversation: (convId: string) => void;
   clearAll: () => void;
   setActive: (id: string | null) => void;
+  /** ChatPage 消费待发送标记：返回当前 pendingAutoSendId 并清空 */
+  consumeAutoSend: () => string | null;
 }
 
 const genId = () => 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -54,11 +59,12 @@ const deriveTitle = (text: string) => {
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       conversations: [],
       activeId: null,
+      pendingAutoSendId: null,
 
-      createConversation: ({ firstUserText, kbId }) => {
+      createConversation: ({ firstUserText, kbId, autoSend }) => {
         const id = genId();
         const now = Date.now();
         const conv: ChatConversation = {
@@ -72,6 +78,8 @@ export const useChatStore = create<ChatState>()(
         set((s) => ({
           conversations: [conv, ...s.conversations],
           activeId: id,
+          // 首页问答跳转到 ChatPage 后，需要自动触发一次 AI 回复（由 ChatPage 挂载 effect 消费）
+          pendingAutoSendId: autoSend ? id : s.pendingAutoSendId,
         }));
         return id;
       },
@@ -104,9 +112,16 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
-      clearAll: () => set({ conversations: [], activeId: null }),
+      clearAll: () => set({ conversations: [], activeId: null, pendingAutoSendId: null }),
 
       setActive: (id) => set({ activeId: id }),
+
+      /** ChatPage 挂载时调用：取走待发送标记，避免重复触发 */
+      consumeAutoSend: () => {
+        const id = get().pendingAutoSendId;
+        if (id) set({ pendingAutoSendId: null });
+        return id;
+      },
     }),
     {
       name: 'forge.chat',
