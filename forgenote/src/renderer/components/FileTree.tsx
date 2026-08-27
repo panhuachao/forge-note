@@ -244,7 +244,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
             const p = e.dataTransfer.getData('text/note-path');
             if (!p || !activeKb) return;
             e.preventDefault();
-            if (p === node.path || p.startsWith(node.path + '/')) return; // 不能拖到自己或子目录
+            if (p === node.path || node.path.startsWith(p + '/')) return; // 不能拖到自己目录，也不能拖到自己的子目录（避免循环）
             try {
               await window.forge.fs.moveNote(activeKb.id, p, node.path);
               const t = await window.forge.fs.listTree(activeKb.id);
