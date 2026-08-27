@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# 上传 Release 资产需要写权限
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # 国内网络加速：打 universal / x64 包时 electron-builder 下载对应架构 Electron 二进制
+  ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+jobs:
+  # ---------- macOS：产出 universal 包（兼容 Apple Silicon + Intel） ----------
+  release-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout（含 tag）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # npm run package:mac 通过 dotenv -e .env 加载环境变量，CI 无 .env 文件，
+      # 这里用 secrets 生成一个最小 .env（仅 GH_TOKEN；ELECTRON_MIRROR 已由 workflow env 提供）
+      - name: Write .env for dotenv
+        run: echo "GH_TOKEN=${{ secrets.GH_TOKEN }}" > .env
+
+      - name: Build & publish macOS
+        run: npm run package:mac -- --publish=always
+
+  # ---------- Windows：产出 nsis 安装包 ----------
+  release-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout（含 tag）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # package:win 直接读环境变量，无需 .env
+      - name: Build & publish Windows
+        run: npm run package:win -- --publish=always

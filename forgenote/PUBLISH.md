@@ -60,6 +60,53 @@ npm run build
 npm run package:mac -- --publish=always
 ```
 
+## 三-1、如何发布「同一版本」的多平台安装包（macOS + Windows）
+
+一个 GitHub Release 可以同时挂载 macOS（`.dmg`/`.zip`）和 Windows（`.exe`）安装包，供不同系统用户下载。由于 electron-builder **无法在单一操作系统上交叉产出另一系统的包**（尤其 Windows 包需 Windows 环境），需按平台分别打包、再上传到同一个 Release。
+
+### 方案 A：本机 + 一台 Windows 机器（手动，适合偶尔发布）
+
+1. **在 macOS 上打包并上传 macOS 包**
+   ```bash
+   npm run package:mac -- --publish=always
+   ```
+   产物：`ForgeNote-<version>-universal.dmg` / `.zip`（已在 `package.json` 配置 `--universal`，同时兼容 Apple Silicon 与 Intel Mac）。
+
+2. **在一台 Windows 机器上打包并上传 Windows 包**
+   同一份代码（或切到同一 git tag），在 Windows 上：
+   ```bash
+   npm install
+   npm run package:win -- --publish=always
+   ```
+   产物：`ForgeNote-<version>.exe`（nsis）及 `latest.yml`。
+   它会自动上传到同一个 `panhuachao/forge-note` Release，与 macOS 包并列。
+
+> 要点：两次上传都使用**相同的版本号**（读 `package.json` 的 `version`），electron-builder 会把资产追加到同一个 tag 的 Release，不会新建重复 Release。
+
+### 方案 B：GitHub Actions 自动跨平台发布（推荐，一次提交出齐）
+
+已在仓库 `.github/workflows/release.yml` 实现：推送版本 tag（如 `v1.0.0`）即在 `macos-latest` 与 `windows-latest` 两个运行器并行构建，各自 `--publish=always` 上传到同一 Release。无需手动切换机器。
+
+**使用步骤：**
+1. 在仓库 **Settings → Secrets and variables → Actions** 新增仓库密钥 `GH_TOKEN`（PAT classic，拥有 `repo` 权限）。
+2. 更新 `package.json` 的 `version` 为目标版本（如 `1.0.1`）。
+3. 提交并打 tag 推送：
+   ```bash
+   git add -A
+   git commit -m "release: v1.0.1"
+   git tag v1.0.1
+   git push origin v1.0.1
+   ```
+4. GitHub Actions 自动跑两个 job：macOS 产 `ForgeNote-<version>-universal.dmg`/`.zip`，Windows 产 `ForgeNote-<version>.exe`，二者归入同一 Release。
+
+> 说明：macOS 用 `package:mac`（`--universal` + 经 dotenv 读 `.env`），CI 中由 workflow 注入 `.env`；`ELECTRON_MIRROR` 已通过 workflow `env` 全局设置以加速 x64 Electron 下载。Windows 用 `package:win` 直接读 `GH_TOKEN` 环境变量。
+
+### 发布前检查清单
+- 确认 `package.json` 的 `version` 已是目标版本号。
+- 确认 `.env`（或 CI Secrets）中的 `GH_TOKEN` 具有 `repo` 权限。
+- macOS 打 universal 包时，需能下载 x64 Electron 二进制；国内网络可在 `.env` 设置 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 加速。
+- Windows 包必须在 Windows 环境产出，macOS 本机无法直接生成。
+
 ## 四、升级方式
 
 - **已安装用户**：应用启动后自动静默检查更新；发现新版本时右下角提示，前往「设置 → 关于」点击「下载并安装」即可，无需手动下载。
