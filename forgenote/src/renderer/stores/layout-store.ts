@@ -86,7 +86,7 @@ interface PersistedLayout {
 function loadPersisted(): PersistedLayout {
   const def: PersistedLayout = {
     leftPanelWidth: 260, rightPanelWidth: 280, leftPanelCollapsed: false, rightPanelCollapsed: false,
-    leftRailCollapsed: false, sortMode: 'name', fontSize: 'md', lineHeight: 'md', themeColor: 'blue'
+    leftRailCollapsed: false, sortMode: 'name', fontSize: 'md', lineHeight: 'md', themeColor: 'red'
   };
   if (typeof localStorage === 'undefined') return def;
   try {
@@ -102,7 +102,7 @@ function loadPersisted(): PersistedLayout {
       sortMode: v.sortMode ?? 'name',
       fontSize: (v.fontSize === 'md' || v.fontSize === 'lg' ? v.fontSize : 'sm') as FontSizeKey,
       lineHeight: (v.lineHeight === 'md' || v.lineHeight === 'lg' ? v.lineHeight : 'sm') as LineHeightKey,
-      themeColor: (['blue', 'green', 'purple', 'amber', 'teal'].includes(v.themeColor) ? v.themeColor : 'red') as ThemeColorKey
+      themeColor: (['red', 'blue', 'green', 'purple', 'amber', 'teal'].includes(v.themeColor) ? v.themeColor : 'red') as ThemeColorKey
     };
   } catch {
     return def;

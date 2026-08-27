@@ -4,8 +4,8 @@ import { IPC, UpdateStatus } from '../../shared/ipc-channels';
 
 // GitHub Release 的 owner/repo。
 // 请按实际仓库修改（如 owner 是组织名，repo 是仓库名）。
-const GITHUB_OWNER = 'forgenote';
-const GITHUB_REPO = 'forgenote';
+const GITHUB_OWNER = 'panhuachao';
+const GITHUB_REPO = 'forge-note';
 
 let mainWin: BrowserWindow | null = null;
 

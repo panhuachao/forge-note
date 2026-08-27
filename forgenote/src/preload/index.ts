@@ -147,6 +147,11 @@ const api = {
       const fn = () => cb();
       ipcRenderer.on('menu:addKb', fn);
       return () => ipcRenderer.off('menu:addKb', fn);
+    },
+    onMenuAbout: (cb: () => void) => {
+      const fn = () => cb();
+      ipcRenderer.on('menu:about', fn);
+      return () => ipcRenderer.off('menu:about', fn);
     }
   }
 };

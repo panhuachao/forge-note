@@ -56,6 +56,15 @@ export function StatusBar() {
             forgenote
           </button>
         </div>
+        {/* 中间：产品愿景 */}
+        <div className="flex-1 flex items-center justify-center px-4 min-w-0">
+          <span
+            className="text-fg-faint italic truncate"
+            title="在 AI 时代,不做 AI 的奴隶,而让 AI 帮助自己成长。"
+          >
+            在 AI 时代,不做 AI 的奴隶,而让 AI 帮助自己成长。
+          </span>
+        </div>
         {/* 右侧：字数统计 + 标签数 */}
         <div className="flex items-center gap-2.5">
           {stats && (

@@ -96,6 +96,16 @@
 /* 主题色（data-theme-color 挂在 <html> 上）。
    每套覆盖品牌色相关变量：主色 / hover / 浅高亮底 / fg，以及 Tailwind 用的 rgb 数字。
    --color-brand / --color-brand-light / --color-accent 已在 :root 用 var() 引用，自动跟随。 */
+:root[data-theme-color="red"] {
+  --brand: #ef4444;
+  --brand-hover: #dc2626;
+  --brand-soft: #fee2e2;
+  --brand-fg: #ffffff;
+  --c-brand: 239 68 68;
+  --c-brand-hover: 220 38 38;
+  --c-brand-soft: 254 226 226;
+  --c-brand-fg: 255 255 255;
+}
 :root[data-theme-color="blue"] {
   --brand: #2563eb;
   --brand-hover: #1d4ed8;

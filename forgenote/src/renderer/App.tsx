@@ -21,6 +21,7 @@ import { Onboarding } from './components/Onboarding';
 import { SetupWizard } from './components/SetupWizard';
 import { CreateNoteModal } from './components/CreateNoteModal';
 import { QuickNoteModal } from './components/QuickNoteModal';
+import { AboutDialog } from './components/AboutDialog';
 import { TopBar } from './components/TopBar';
 import { TreeContextMenuRoot } from './components/TreeContextMenuRoot';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
@@ -34,6 +35,7 @@ export function App() {
   const { mainView, leftPanelCollapsed, rightPanelCollapsed, fontSize, lineHeight, themeColor } = useLayoutStore();
   const [quickNoteInitial, setQuickNoteInitial] = useState('');
   const [showSetup, setShowSetup] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -80,6 +82,12 @@ export function App() {
       offUpdate();
       window.removeEventListener('forgenote:open-quicknote', onOpenQuickNote);
     };
+  }, []);
+
+  // 菜单「关于锦囊笔记」→ 弹出自定义关于对话框
+  useEffect(() => {
+    const off = window.forge.events.onMenuAbout(() => setShowAbout(true));
+    return () => off?.();
   }, []);
 
   async function openKb(kbId: string) {
@@ -153,6 +161,7 @@ export function App() {
         initialContent={quickNoteInitial}
         onClose={closeQuickNote}
       />
+      <AboutDialog open={showAbout} onClose={() => setShowAbout(false)} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // Electron 主进程入口
-import { app, BrowserWindow, shell, Menu, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, shell, Menu, ipcMain } from 'electron';
 import { join } from 'path';
 import { initStore, listKBs, getConfig } from './services/store';
 import { registerIpcHandlers } from './ipc';
@@ -157,13 +157,7 @@ function buildMenu() {
       submenu: [
         {
           label: '关于锦囊笔记',
-          click: () =>
-            dialog.showMessageBox(mainWindow!, {
-              type: 'info',
-              title: '关于',
-              message: '锦囊笔记 ForgeNote V1.1',
-              detail: '本地开源 AI 知识库笔记\n知识库模板增强版\nhttps://github.com/forgenote'
-            })
+          click: () => mainWindow?.webContents.send('menu:about')
         }
       ]
     }

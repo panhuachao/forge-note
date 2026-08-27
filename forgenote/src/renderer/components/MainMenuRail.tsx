@@ -19,8 +19,7 @@ const items: MenuItem[] = [
   { id: 'graph', icon: 'share', label: '图谱', requireKb: true },
   { id: 'chat', icon: 'chat-bubble', label: '对话', requireKb: true },
   { id: 'search-results', icon: 'search', label: '检索', requireKb: true },
-  { id: 'template', icon: 'clipboard', label: '模板', requireKb: true },
-  { id: 'audit', icon: 'clock', label: '历史', requireKb: true }
+  { id: 'template', icon: 'clipboard', label: '模板', requireKb: true }
 ];
 
 export function MainMenuRail() {
