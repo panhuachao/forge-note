@@ -1,7 +1,7 @@
 // Electron 主进程入口
 import { app, BrowserWindow, shell, Menu, ipcMain } from 'electron';
 import { join } from 'path';
-import { initStore, listKBs, getConfig } from './services/store';
+import { initStore, closeStore, listKBs, getConfig } from './services/store';
 import { registerIpcHandlers } from './ipc';
 import { startWatching, stopAll, bootstrapIndex } from './services/watcher';
 import { kbService } from './services/kb-service';
@@ -212,6 +212,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   await stopAll();
+  closeStore();
 });
 
 // 安全：禁止新窗口导航

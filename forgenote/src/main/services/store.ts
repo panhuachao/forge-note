@@ -51,6 +51,7 @@ export function initStore(): void {
       mtime INTEGER NOT NULL,
       size INTEGER NOT NULL,
       template_dir_id TEXT,
+      hash TEXT,
       PRIMARY KEY (kb_id, note_path)
     );
     CREATE TABLE IF NOT EXISTS note_chunks (
@@ -64,6 +65,36 @@ export function initStore(): void {
       PRIMARY KEY (kb_id, note_path, chunk_idx)
     );
   `);
+
+  // 旧库补充 hash 列（新库 CREATE 已含），列已存在则忽略
+  try {
+    db.exec('ALTER TABLE note_meta ADD COLUMN hash TEXT');
+  } catch {
+    /* 列已存在 */
+  }
+
+  // 显式索引：时间窗口查询按 mtime 收敛、分块按 (kb_id, note_path, chunk_idx) 有序加载，
+  // 避免 recentChunks / listRecentPaths / loadChunks 全表扫描
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_note_meta_mtime ON note_meta(kb_id, mtime);
+    CREATE INDEX IF NOT EXISTS idx_note_chunks_kb_path ON note_chunks(kb_id, note_path, chunk_idx);
+    CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(kb_id, ts);
+  `);
+
+  // schema 版本占位（当前 1），后续迁移以 PRAGMA user_version 比对增量执行
+  db.pragma('user_version = 1');
+}
+
+/** 优雅关闭：落盘 WAL、释放连接（在 app before-quit 调用，避免 WAL 残留未合并） */
+export function closeStore(): void {
+  if (!db) return;
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)');
+  } catch {
+    /* ignore */
+  }
+  db.close();
+  db = null;
 }
 
 // ============ RAG 分块索引（SQLite 持久化） ============
@@ -78,12 +109,13 @@ export interface NoteMetaRow {
   mtime: number;
   size: number;
   template_dir_id: string | null;
+  hash: string | null;
 }
 
-export function upsertNoteMeta(kbId: string, notePath: string, mtime: number, size: number, templateDirId?: string): void {
+export function upsertNoteMeta(kbId: string, notePath: string, mtime: number, size: number, templateDirId?: string, hash?: string): void {
   getDb()
-    .prepare('INSERT OR REPLACE INTO note_meta (kb_id, note_path, mtime, size, template_dir_id) VALUES (?, ?, ?, ?, ?)')
-    .run(kbId, notePath, mtime, size, templateDirId ?? null);
+    .prepare('INSERT OR REPLACE INTO note_meta (kb_id, note_path, mtime, size, template_dir_id, hash) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(kbId, notePath, mtime, size, templateDirId ?? null, hash ?? null);
 }
 
 export function removeNoteMeta(kbId: string, notePath: string): void {
@@ -92,7 +124,7 @@ export function removeNoteMeta(kbId: string, notePath: string): void {
 
 export function getNoteMeta(kbId: string, notePath: string): NoteMetaRow | null {
   const row = getDb()
-    .prepare('SELECT mtime, size, template_dir_id FROM note_meta WHERE kb_id = ? AND note_path = ?')
+    .prepare('SELECT mtime, size, template_dir_id, hash FROM note_meta WHERE kb_id = ? AND note_path = ?')
     .get(kbId, notePath) as NoteMetaRow | undefined;
   return row || null;
 }
@@ -106,9 +138,9 @@ export function loadChunks(kbId: string): { notePath: string; chunk: ChunkRow }[
 }
 
 export function loadAllMeta(kbId: string): Map<string, NoteMetaRow> {
-  const rows = getDb().prepare('SELECT note_path, mtime, size, template_dir_id FROM note_meta WHERE kb_id = ?').all(kbId) as { note_path: string; mtime: number; size: number; template_dir_id: string | null }[];
+  const rows = getDb().prepare('SELECT note_path, mtime, size, template_dir_id, hash FROM note_meta WHERE kb_id = ?').all(kbId) as { note_path: string; mtime: number; size: number; template_dir_id: string | null; hash: string | null }[];
   const m = new Map<string, NoteMetaRow>();
-  for (const r of rows) m.set(r.note_path, { mtime: r.mtime, size: r.size, template_dir_id: r.template_dir_id });
+  for (const r of rows) m.set(r.note_path, { mtime: r.mtime, size: r.size, template_dir_id: r.template_dir_id, hash: r.hash });
   return m;
 }
 

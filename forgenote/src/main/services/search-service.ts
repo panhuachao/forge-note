@@ -2,6 +2,7 @@
 // 索引以 SQLite（note_chunks / note_meta）为持久真源，内存为热缓存，
 // 启动时从 DB 加载，写入/删除经 fs-service 单通道增量更新，查询路径不再触发全目录重扫。
 import { promises as fs } from 'fs';
+import { createHash } from 'crypto';
 import { join } from 'path';
 import { isMarkdown, isHidden } from '../utils/fs';
 import { getKB, upsertChunks, removeChunks, upsertNoteMeta, removeNoteMeta, loadChunks, loadAllMeta, type ChunkRow } from './store';
@@ -15,10 +16,13 @@ interface MetaRow {
   mtime: number;
   size: number;
   templateDirId?: string;
+  hash?: string;
 }
 interface KBIndex {
   chunks: Chunk[];
   meta: Map<string, MetaRow>;
+  /** 按 mtime 降序的时间索引，时间窗口查询（recentChunks / listRecentPaths）直接切片，避免每次全扫 */
+  sortedByMtime: { notePath: string; mtime: number }[];
   ts: number;
 }
 
@@ -29,20 +33,32 @@ class SearchService {
     return { ...row, tokens: this.tokenize(row.chunk_text), noteName: notePath.split('/').pop() || notePath, notePath };
   }
 
+  /** 重建时间索引（meta 变更后调用，O(n log n)） */
+  private rebuildMtimeIndex(idx: KBIndex): void {
+    idx.sortedByMtime = [...idx.meta.entries()]
+      .map(([notePath, m]) => ({ notePath, mtime: m.mtime }))
+      .sort((a, b) => b.mtime - a.mtime);
+  }
+
+  private hashContent(content: string): string {
+    return createHash('sha1').update(content).digest('hex');
+  }
+
   /**
    * 确保某知识库索引已在内存（冷启动从 SQLite 加载，不触发全目录扫描）
    */
   private async ensure(kbId: string): Promise<KBIndex> {
     let idx = this.indexes.get(kbId);
     if (idx) return idx;
-    idx = { chunks: [], meta: new Map(), ts: Date.now() };
+    idx = { chunks: [], meta: new Map(), sortedByMtime: [], ts: Date.now() };
     const rows = loadChunks(kbId);
     for (const { notePath, chunk } of rows) {
       idx.chunks.push(this.newChunk(chunk, notePath));
     }
     for (const [notePath, m] of loadAllMeta(kbId)) {
-      idx.meta.set(notePath, { mtime: m.mtime, size: m.size, templateDirId: m.template_dir_id ?? undefined });
+      idx.meta.set(notePath, { mtime: m.mtime, size: m.size, templateDirId: m.template_dir_id ?? undefined, hash: m.hash ?? undefined });
     }
+    this.rebuildMtimeIndex(idx);
     this.indexes.set(kbId, idx);
     return idx;
   }
@@ -55,14 +71,16 @@ class SearchService {
     if (!kb) return 0;
     const collected: { notePath: string; content: string; mtime: number; size: number; templateDirId?: string }[] = [];
     await this.walk(kb.rootPath, '', collected);
-    const idx: KBIndex = { chunks: [], meta: new Map(), ts: Date.now() };
+    const idx: KBIndex = { chunks: [], meta: new Map(), sortedByMtime: [], ts: Date.now() };
     for (const n of collected) {
       const chunks = this.chunkNote(n.content);
       upsertChunks(kbId, n.notePath, chunks);
-      upsertNoteMeta(kbId, n.notePath, n.mtime, n.size, n.templateDirId);
-      idx.meta.set(n.notePath, { mtime: n.mtime, size: n.size, templateDirId: n.templateDirId });
+      const hash = this.hashContent(n.content);
+      upsertNoteMeta(kbId, n.notePath, n.mtime, n.size, n.templateDirId, hash);
+      idx.meta.set(n.notePath, { mtime: n.mtime, size: n.size, templateDirId: n.templateDirId, hash });
       for (const c of chunks) idx.chunks.push(this.newChunk(c, n.notePath));
     }
+    this.rebuildMtimeIndex(idx);
     this.indexes.set(kbId, idx);
     return idx.chunks.length;
   }
@@ -147,12 +165,28 @@ class SearchService {
    */
   async upsertNote(kbId: string, notePath: string, content: string, mtime: number, size: number, templateDirId?: string): Promise<void> {
     const idx = await this.ensure(kbId);
+    const hash = this.hashContent(content);
+
+    // #11 去重短路：内容 hash 未变（即使 mtime 被外部工具重置/保真复制）则跳过
+    // 昂贵的 tokenize + chunkNote + 全量分块写库，仅刷新 meta 的 mtime/size。
+    const prev = idx.meta.get(notePath);
+    if (prev && prev.hash === hash) {
+      upsertNoteMeta(kbId, notePath, mtime, size, templateDirId, hash);
+      prev.mtime = mtime;
+      prev.size = size;
+      prev.templateDirId = templateDirId;
+      this.rebuildMtimeIndex(idx);
+      idx.ts = Date.now();
+      return;
+    }
+
     const chunks = this.chunkNote(content);
     upsertChunks(kbId, notePath, chunks);
-    upsertNoteMeta(kbId, notePath, mtime, size, templateDirId);
+    upsertNoteMeta(kbId, notePath, mtime, size, templateDirId, hash);
     idx.chunks = idx.chunks.filter((c) => c.notePath !== notePath);
     for (const c of chunks) idx.chunks.push(this.newChunk(c, notePath));
-    idx.meta.set(notePath, { mtime, size, templateDirId });
+    idx.meta.set(notePath, { mtime, size, templateDirId, hash });
+    this.rebuildMtimeIndex(idx);
     idx.ts = Date.now();
   }
 
@@ -161,6 +195,7 @@ class SearchService {
     if (idx) {
       idx.chunks = idx.chunks.filter((c) => c.notePath !== notePath);
       idx.meta.delete(notePath);
+      this.rebuildMtimeIndex(idx);
     }
     removeChunks(kbId, notePath);
     removeNoteMeta(kbId, notePath);
@@ -214,11 +249,14 @@ class SearchService {
   /** 时间窗口列出最近修改的笔记路径（供 runTimeSummary 收敛候选集） */
   async listRecentPaths(kbId: string, sinceTs: number, limit = 50): Promise<{ notePath: string; mtime: number }[]> {
     const idx = await this.ensure(kbId);
-    return [...idx.meta.entries()]
-      .filter(([, m]) => m.mtime >= sinceTs)
-      .map(([notePath, m]) => ({ notePath, mtime: m.mtime }))
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, limit);
+    // #2 时间索引：sortedByMtime 已按 mtime 降序，直接过滤切片，O(n) 不重新排序
+    const out: { notePath: string; mtime: number }[] = [];
+    for (const e of idx.sortedByMtime) {
+      if (e.mtime < sinceTs) break; // 已降序，此后均更小
+      out.push(e);
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   /**
@@ -227,9 +265,12 @@ class SearchService {
    */
   async recentChunks(kbId: string, sinceTs: number, limit = 50): Promise<import('@shared/types').SearchResult[]> {
     const idx = await this.ensure(kbId);
-    const recent = new Set(
-      [...idx.meta.entries()].filter(([, m]) => m.mtime >= sinceTs).map(([notePath]) => notePath)
-    );
+    // #2 时间索引：用 sortedByMtime 收敛窗口内笔记路径集合，避免遍历整 meta Map
+    const recent = new Set<string>();
+    for (const e of idx.sortedByMtime) {
+      if (e.mtime < sinceTs) break;
+      recent.add(e.notePath);
+    }
     const out: import('@shared/types').SearchResult[] = [];
     for (const c of idx.chunks) {
       if (!recent.has(c.notePath)) continue;
