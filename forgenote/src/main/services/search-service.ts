@@ -234,7 +234,19 @@ class SearchService {
       results.push({ chunk: c, score, snippet, matchType });
     }
     results.sort((a, b) => b.score - a.score);
-    return results.slice(0, limit).map((r) => ({
+
+    // 按 notePath 去重：同一篇笔记只保留最高分的命中片段，避免列表重复
+    const bestByNote = new Map<string, typeof results[0]>();
+    for (const r of results) {
+      const path = r.chunk.notePath;
+      const prev = bestByNote.get(path);
+      if (!prev || r.score > prev.score || (r.score === prev.score && r.matchType === 'title' && prev.matchType !== 'title')) {
+        bestByNote.set(path, r);
+      }
+    }
+    const deduped = [...bestByNote.values()].sort((a, b) => b.score - a.score);
+
+    return deduped.slice(0, limit).map((r) => ({
       notePath: r.chunk.notePath,
       noteName: r.chunk.noteName,
       snippet: r.snippet,

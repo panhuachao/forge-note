@@ -73,7 +73,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
       }
 
       setStep('done');
-      setMainView('home');
+      setMainView('note');
       // 短暂展示完成态后通知外层关闭向导
       setTimeout(() => onDone(), 600);
     } catch (e) {

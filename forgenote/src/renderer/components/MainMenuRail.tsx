@@ -14,7 +14,6 @@ interface MenuItem {
 }
 
 const items: MenuItem[] = [
-  { id: 'home', icon: 'home', label: '首页' },
   { id: 'note', icon: 'folder', label: '笔记', requireKb: true },
   { id: 'graph', icon: 'share', label: '图谱', requireKb: true },
   { id: 'chat', icon: 'chat-bubble', label: '对话', requireKb: true },
