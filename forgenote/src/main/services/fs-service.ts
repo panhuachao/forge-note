@@ -1,5 +1,7 @@
 // 文件系统服务 - 笔记读写、目录操作、wiki 链接解析
 import { promises as fs } from 'fs';
+import * as fsSync from 'fs';
+import { type Dirent } from 'fs';
 import { join, dirname, basename } from 'path';
 import { nanoid } from 'nanoid';
 import type { NoteInfo, NoteContent, TagInfo, TagNote } from '@shared/types';
@@ -11,6 +13,7 @@ import matter from 'gray-matter';
 import { kbService } from './kb-service';
 import { templateService } from './template-service';
 import { eventBus } from '../utils/event-bus';
+import { searchService } from './search-service';
 
 class FSService {
   /**
@@ -57,6 +60,23 @@ class FSService {
   }
 
   /**
+   * 单通道索引维护（S1 §4）：文件原子写成功后，同步更新链接索引与 RAG 分块索引。
+   * 两步均在文件写成功之后执行，保证「文件为真源、索引为派生」的一致性。
+   */
+  private async syncIndex(kbId: string, notePath: string): Promise<void> {
+    const abs = this.abs(kbId, notePath);
+    try {
+      const raw = await fs.readFile(abs, 'utf-8');
+      const stat = await fs.stat(abs);
+      const newOutlinks = extractWikiLinks(raw);
+      linkIndex.updateOutlinks(kbId, notePath, newOutlinks);
+      await searchService.upsertNote(kbId, notePath, raw, stat.mtimeMs, stat.size);
+    } catch {
+      // 索引维护失败不阻断主流程（下次重扫可自愈）
+    }
+  }
+
+  /**
    * 写入笔记（原子写）
    */
   async writeNote(kbId: string, notePath: string, content: string): Promise<void> {
@@ -65,6 +85,7 @@ class FSService {
     await atomicWrite(abs, content);
     const newOutlinks = extractWikiLinks(content);
     linkIndex.updateOutlinks(kbId, notePath, newOutlinks);
+    await this.syncIndex(kbId, notePath);
     // 触发事件
     eventBus.emit('fsChange', { type: 'change', path: notePath });
   }
@@ -87,6 +108,7 @@ class FSService {
     const nextData = { ...(data || {}), tags: norm };
     const yaml = matter.stringify(content, nextData);
     await atomicWrite(abs, yaml);
+    await this.syncIndex(kbId, notePath);
     eventBus.emit('fsChange', { type: 'change', path: notePath });
   }
 
@@ -100,6 +122,7 @@ class FSService {
     const nextData = { ...(data || {}), summary: String(summary || '').trim() };
     const yaml = matter.stringify(content, nextData);
     await atomicWrite(abs, yaml);
+    await this.syncIndex(kbId, notePath);
     eventBus.emit('fsChange', { type: 'change', path: notePath });
   }
 
@@ -197,6 +220,7 @@ class FSService {
     const abs = this.abs(kbId, notePath);
     await fs.unlink(abs);
     linkIndex.removeNote(kbId, notePath);
+    await searchService.removeNote(kbId, notePath);
     // 清除 buildTree 的 5 秒缓存，避免 listTree 返回旧树导致删除"看似不生效"
     kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'unlink', path: notePath, isDir: false });
@@ -221,6 +245,8 @@ class FSService {
     }
     await fs.rename(fromAbs, toAbs);
     linkIndex.renameNote(kbId, fromPath, toPath);
+    await searchService.removeNote(kbId, fromPath);
+    await this.syncIndex(kbId, toPath);
     kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'change', path: toPath });
     return toPath;
@@ -235,6 +261,8 @@ class FSService {
     const newAbs = safeJoin(root, newPath);
     await fs.rename(oldAbs, newAbs);
     linkIndex.renameNote(kbId, oldPath, newPath);
+    await searchService.removeNote(kbId, oldPath);
+    await this.syncIndex(kbId, newPath);
     // 清除 buildTree 的 5 秒缓存，让重命名后的最新树被下次 listTree 拿到
     kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'change', path: newPath });
@@ -258,7 +286,7 @@ class FSService {
     // 递归收集该目录下所有笔记，先清理双链索引（避免已删除笔记残留在索引中）
     const collected: string[] = [];
     const walk = (p: string, rel: string) => {
-      const entries = fs.readdirSync(p, { withFileTypes: true });
+      const entries = fsSync.readdirSync(p, { withFileTypes: true });
       for (const e of entries) {
         const full = join(p, e.name);
         const relPath = rel ? join(rel, e.name) : e.name;
@@ -276,6 +304,7 @@ class FSService {
     }
     for (const notePath of collected) {
       linkIndex.removeNote(kbId, notePath);
+      await searchService.removeNote(kbId, notePath);
     }
     await fs.rm(abs, { recursive: true, force: true });
     kbService.invalidateMeta(root);

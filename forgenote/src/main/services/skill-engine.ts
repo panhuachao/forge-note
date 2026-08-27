@@ -2,6 +2,8 @@
 // 每个 AISkill = 一段声明式能力单元；新增一个 AI 能力只需在此注册，无需改主进程 / IPC / 渲染骨架。
 // AIHub 按 skill.id 路由到对应 handler，并由 SessionStore 自动挂载多轮上下文（stateful Skill）。
 import { aiService } from './ai-service';
+import { retrieve } from './rag-service';
+import { searchService } from './search-service';
 import { KB_TOOLS, executeTool, type ToolActivity } from './tool-runtime';
 import type { AIResponse, AITurn, AIRefHit, AIUsage } from '@shared/types/ai';
 
@@ -109,24 +111,43 @@ export async function runTimeSummary(
 ): Promise<{ text: string; refs: AIRefHit[]; usage: AIUsage } | null> {
   const tr = parseTimeRange(question);
   if (!tr || !kbId) return null;
-  const listText = await executeTool({ name: 'kb_list_notes', args: { sinceDays: tr.sinceDays, limit: 200 } }, { kbId });
-  onActivity?.({ name: 'kb_list_notes', args: { sinceDays: tr.sinceDays }, result: `筛出 ${[...listText.matchAll(/^- (.+)$/gm)].length} 篇` });
-  const paths = [...listText.matchAll(/^- (.+)$/gm)].map((m) => m[1].trim()).filter(Boolean);
-  if (paths.length === 0) {
-    return { text: `${tr.label} 没有新增或编辑的笔记。`, refs: [], usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 } };
+
+  // 计数类问题（如「本周写了多少篇」）直接返回真实计数，不调 LLM：
+  // 1) 计数答案就是窗口内笔记数，让模型数很容易输出长表格/卡住
+  // 2) 避免大量笔记正文进 context 造成 token 浪费与长 prompt 卡死
+  // 3) 用 listRecentPaths 拿真实数（不被 topK 截断），比模型自数准确
+  if (/(多少|几|几个|几条|多少篇|多少个|数量|总共|一共|共写了?|共编辑|统计|计数)/.test(question)) {
+    const sinceTs = Date.now() - tr.sinceDays * 86400_000;
+    const paths = await searchService.listRecentPaths(kbId, sinceTs, 5000);
+    onActivity?.({ name: 'kb_list_notes', args: { sinceDays: tr.sinceDays }, result: `筛出 ${paths.length} 篇相关笔记` });
+    const lines = [`${tr.label} 你共新增或编辑了 **${paths.length}** 篇笔记。`];
+    if (paths.length > 0) {
+      // 附上笔记名清单（最多列 20 条 + 其余聚合），方便核对
+      const top = paths.slice(0, 20);
+      lines.push('');
+      lines.push('笔记清单：');
+      for (const p of top) lines.push(`- [[${p.notePath.split('/').pop()?.replace(/\.md$/i, '') || p.notePath}]]`);
+      if (paths.length > top.length) lines.push(`- …（其余 ${paths.length - top.length} 篇略）`);
+    }
+    const text = lines.join('\n');
+    // 计数结果不需要把全部分块都列进 refs，仅列前 20 条作为引用（按 path 去重）
+    const refs: AIRefHit[] = paths.slice(0, 20).map((p) => {
+      const name = p.notePath.split('/').pop()?.replace(/\.md$/i, '') || p.notePath;
+      return { path: p.notePath, name, snippet: '' };
+    });
+    // 同步流式回调（保持 UI 体验一致：单 token 一次性输出）
+    onToken?.(text);
+    return { text, refs, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 } };
   }
-  // 读取每篇正文并拼接（限制总长，避免超 token）
-  const PER = 2000;
-  const MAX_TOTAL = 24000;
-  const parts: string[] = [];
-  let total = 0;
-  for (const p of paths.slice(0, 30)) {
-    const body = await executeTool({ name: 'kb_read_note', args: { notePath: p } }, { kbId });
-    onActivity?.({ name: 'kb_read_note', args: { notePath: p }, result: `${body.length} 字` });
-    const trimmed = body.length > PER ? body.slice(0, PER) + '\n…(截断)' : body;
-    parts.push(`### [[${p.replace(/\.md$/i, '').split('/').pop()}]]\n路径: ${p}\n${trimmed}`);
-    total += trimmed.length;
-    if (total >= MAX_TOTAL) break;
+
+  // S1 §8：先按时间窗口收敛候选集，再在候选内做语义精排，避免对全库无关笔记做检索
+  // S1 §8：先按时间窗口收敛候选集，再在候选内做语义精排，避免对全库无关笔记做检索
+  // groupByNote：本周/今天/最近 N 天是「整篇阅读」场景，把同一笔记多块合并为一个 ref，
+  // 避免长文档被切多块后在 UI 上产生 N 行重复引用、token 浪费
+  const { refs, context } = await retrieve(kbId, question, { sinceDays: tr.sinceDays, topK: 16, tokenBudget: 24000, timeWindowOnly: true, groupByNote: true });
+  onActivity?.({ name: 'kb_list_notes', args: { sinceDays: tr.sinceDays }, result: `筛出 ${refs.length} 篇相关片段` });
+  if (refs.length === 0) {
+    return { text: `${tr.label} 没有新增或编辑的笔记。`, refs: [], usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 } };
   }
   const historyBlock = history.length
     ? `\n\n# 多轮上下文\n${history
@@ -135,15 +156,15 @@ export async function runTimeSummary(
         .join('\n')}`
     : '';
   const sys = `你是锦囊笔记的总结助手。用户的问题是按时间维度（${tr.label}）总结知识库笔记。
-下方已为你筛选出该时间窗口内【${parts.length} 篇】笔记的正文，请基于内容做结构化总结：
+下方已为你筛选出该时间窗口内【${refs.length} 篇】相关笔记的分块内容，请基于内容做结构化总结：
 - 提炼出该时间段的核心主题/灵感/行动项
 - 若用户要求"今天/本周"汇总，用日期顺序或主题聚类组织
-- 引用具体笔记用 [[笔记名]]
+- 引用具体笔记用 [[笔记名#标题]] 形式，并标注命中行号
 - 若内容不足以回答，明确说明并建议
 ${historyBlock}
 
-# ${tr.label}的笔记（共 ${parts.length} 篇）
-${parts.join('\n\n')}`;
+# ${tr.label}的笔记（共 ${refs.length} 篇）
+${context}`;
   // 真流式 #11：逐 token 渲染，降低"思考中"等待焦虑
   let text = '';
   let usage: AIUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 };
@@ -154,10 +175,9 @@ ${parts.join('\n\n')}`;
       onToken(d);
       if (chunk.usage) usage = { ...usage, promptTokens: chunk.usage.promptTokens, completionTokens: chunk.usage.completionTokens, totalTokens: chunk.usage.totalTokens, ms: usage.ms };
     }
-    return { text, refs: paths.map((p) => ({ path: p, name: p.replace(/\.md$/i, '').split('/').pop() || p })), usage };
+    return { text, refs, usage };
   }
   const r = await aiService.chat(question, sys);
-  const refs: AIRefHit[] = paths.map((p) => ({ path: p, name: p.replace(/\.md$/i, '').split('/').pop() || p }));
   return { text: r, refs, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: 0 } };
 }
 

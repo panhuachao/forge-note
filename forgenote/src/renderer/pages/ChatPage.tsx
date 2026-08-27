@@ -487,9 +487,12 @@ export default function ChatPage() {
                       {m.refs && m.refs.length > 0 && (
                         <div className="mt-1.5 flex flex-col gap-1 w-full max-w-[80%]">
                           <span className="text-[10px] text-fg-faint px-1">引用来源</span>
-                          {m.refs.map((r, ri) => (
+                          {/* 去重：同一笔记（按 path 或 name）只显示一次，避免长文档多分块重复列出 */}
+                          {m.refs
+                            .filter((r, i, arr) => arr.findIndex((x) => (x.path || x.name) === (r.path || r.name)) === i)
+                            .map((r, ri) => (
                             <button
-                              key={ri}
+                              key={r.path || r.name || ri}
                               onClick={() => openWikiLink(r.name)}
                               className="text-left px-2.5 py-1.5 rounded-lg bg-panel border border-border-soft hover:border-brand hover:bg-hover-bg transition-colors"
                               title={r.path}

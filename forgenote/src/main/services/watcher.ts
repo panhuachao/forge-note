@@ -5,11 +5,22 @@ import { promises as fs } from 'fs';
 import { getKB } from './store';
 import { extractWikiLinks } from '../utils/markdown';
 import { linkIndex } from './link-index';
+import { searchService } from './search-service';
 import { eventBus } from '../utils/event-bus';
 import { isMarkdown, isHidden } from '../utils/fs';
 import { kbService } from './kb-service';
 
 const watchers = new Map<string, FSWatcher>();
+
+/** 外部编辑器改动时，同步维护 RAG 分块索引（单通道：先链接后分块） */
+async function syncChunk(kbId: string, abs: string, rel: string): Promise<void> {
+  try {
+    const c = await fs.readFile(abs, 'utf-8');
+    const stat = await fs.stat(abs);
+    linkIndex.updateOutlinks(kbId, rel, extractWikiLinks(c));
+    await searchService.upsertNote(kbId, rel, c, stat.mtimeMs, stat.size);
+  } catch {}
+}
 
 export async function startWatching(kbId: string): Promise<void> {
   if (watchers.has(kbId)) return;
@@ -34,8 +45,8 @@ export async function startWatching(kbId: string): Promise<void> {
     .on('add', (p) => {
       if (isHidden(p.split(/[/\\]/).pop() || '')) return;
       if (isMarkdown(p)) {
-        // 预热索引
-        fs.readFile(p, 'utf-8').then((c) => linkIndex.updateOutlinks(kbId, p.replace(kb.rootPath + '/', ''), extractWikiLinks(c))).catch(() => {});
+        // 预热索引（链接 + RAG 分块）
+        syncChunk(kbId, p, p.replace(kb.rootPath + '/', '')).catch(() => {});
         eventBus.emit('fsChange', { type: 'add', path: p.replace(kb.rootPath + '/', ''), isDir: false });
       }
     })
@@ -46,16 +57,14 @@ export async function startWatching(kbId: string): Promise<void> {
         kbService.invalidateMeta(kb.rootPath);
       }
       if (isMarkdown(p)) {
-        try {
-          const c = await fs.readFile(p, 'utf-8');
-          linkIndex.updateOutlinks(kbId, rel, extractWikiLinks(c));
-        } catch {}
+        await syncChunk(kbId, p, rel).catch(() => {});
       }
       eventBus.emit('fsChange', { type: 'change', path: rel });
     })
     .on('unlink', (p) => {
       const rel = p.replace(kb.rootPath + '/', '');
       linkIndex.removeNote(kbId, rel);
+      searchService.removeNote(kbId, rel).catch(() => {});
       eventBus.emit('fsChange', { type: 'unlink', path: rel, isDir: false });
     })
     .on('addDir', (p) => eventBus.emit('fsChange', { type: 'addDir', path: p.replace(kb.rootPath + '/', '') }))
@@ -82,12 +91,14 @@ export async function stopAll(): Promise<void> {
 }
 
 /**
- * 启动时全量扫描，建立链接索引
+ * 启动时全量扫描，建立链接索引 + RAG 分块索引（SQLite 持久化）
  */
 export async function bootstrapIndex(kbId: string): Promise<void> {
   const kb = getKB(kbId);
   if (!kb) return;
   await walk(kb.rootPath, '', kbId, kb.rootPath);
+  // 全量重建 RAG 分块索引并落盘（后台，不阻塞首查；首查由 ensure 兜底）
+  await searchService.reindex(kbId).catch((e) => console.error('[bootstrapIndex] reindex 失败', e));
 }
 
 async function walk(abs: string, rel: string, kbId: string, root: string): Promise<void> {

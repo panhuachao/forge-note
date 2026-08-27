@@ -163,7 +163,10 @@ export async function executeTool(call: ToolCall, ctx: ToolCtx): Promise<string>
         const hits = await searchService.query(kbId, String(call.args.query || ''), { limit: Number(call.args.limit) || 8 });
         if (!hits.length) return '未检索到相关笔记。';
         return hits
-          .map((h) => `### [[${h.noteName}]]\n路径: ${h.notePath}\n片段: ${h.snippet}`)
+          .map((h) => {
+            const anchor = h.heading ? `[[${h.noteName}#${h.heading}]]` : `[[${h.noteName}]]`;
+            return `### ${anchor}${h.startLine ? ` (行 ${h.startLine})` : ''}\n路径: ${h.notePath}\n片段: ${h.snippet}`;
+          })
           .join('\n\n');
       }
       case 'kb_read_note': {

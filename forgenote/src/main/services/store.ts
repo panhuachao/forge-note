@@ -44,7 +44,88 @@ export function initStore(): void {
       payload TEXT NOT NULL,
       undone INTEGER NOT NULL DEFAULT 0
     );
+    -- RAG 分块索引持久化（S1：替代纯内存索引，重启不丢、增量维护）
+    CREATE TABLE IF NOT EXISTS note_meta (
+      kb_id TEXT NOT NULL,
+      note_path TEXT NOT NULL,
+      mtime INTEGER NOT NULL,
+      size INTEGER NOT NULL,
+      template_dir_id TEXT,
+      PRIMARY KEY (kb_id, note_path)
+    );
+    CREATE TABLE IF NOT EXISTS note_chunks (
+      kb_id TEXT NOT NULL,
+      note_path TEXT NOT NULL,
+      chunk_idx INTEGER NOT NULL,
+      chunk_text TEXT NOT NULL,
+      heading TEXT,
+      start_line INTEGER,
+      end_line INTEGER,
+      PRIMARY KEY (kb_id, note_path, chunk_idx)
+    );
   `);
+}
+
+// ============ RAG 分块索引（SQLite 持久化） ============
+export interface ChunkRow {
+  chunk_idx: number;
+  chunk_text: string;
+  heading: string | null;
+  start_line: number | null;
+  end_line: number | null;
+}
+export interface NoteMetaRow {
+  mtime: number;
+  size: number;
+  template_dir_id: string | null;
+}
+
+export function upsertNoteMeta(kbId: string, notePath: string, mtime: number, size: number, templateDirId?: string): void {
+  getDb()
+    .prepare('INSERT OR REPLACE INTO note_meta (kb_id, note_path, mtime, size, template_dir_id) VALUES (?, ?, ?, ?, ?)')
+    .run(kbId, notePath, mtime, size, templateDirId ?? null);
+}
+
+export function removeNoteMeta(kbId: string, notePath: string): void {
+  getDb().prepare('DELETE FROM note_meta WHERE kb_id = ? AND note_path = ?').run(kbId, notePath);
+}
+
+export function getNoteMeta(kbId: string, notePath: string): NoteMetaRow | null {
+  const row = getDb()
+    .prepare('SELECT mtime, size, template_dir_id FROM note_meta WHERE kb_id = ? AND note_path = ?')
+    .get(kbId, notePath) as NoteMetaRow | undefined;
+  return row || null;
+}
+
+/** 全量加载某知识库的分块（冷启动重建内存索引用） */
+export function loadChunks(kbId: string): { notePath: string; chunk: ChunkRow }[] {
+  const rows = getDb()
+    .prepare('SELECT note_path, chunk_idx, chunk_text, heading, start_line, end_line FROM note_chunks WHERE kb_id = ? ORDER BY note_path, chunk_idx')
+    .all(kbId) as { note_path: string; chunk_idx: number; chunk_text: string; heading: string | null; start_line: number | null; end_line: number | null }[];
+  return rows.map((r) => ({ notePath: r.note_path, chunk: { chunk_idx: r.chunk_idx, chunk_text: r.chunk_text, heading: r.heading, start_line: r.start_line, end_line: r.end_line } }));
+}
+
+export function loadAllMeta(kbId: string): Map<string, NoteMetaRow> {
+  const rows = getDb().prepare('SELECT note_path, mtime, size, template_dir_id FROM note_meta WHERE kb_id = ?').all(kbId) as { note_path: string; mtime: number; size: number; template_dir_id: string | null }[];
+  const m = new Map<string, NoteMetaRow>();
+  for (const r of rows) m.set(r.note_path, { mtime: r.mtime, size: r.size, template_dir_id: r.template_dir_id });
+  return m;
+}
+
+/** 增量更新某笔记的分块（先删后插，与内存索引同事务语义） */
+export function upsertChunks(kbId: string, notePath: string, chunks: ChunkRow[]): void {
+  const db = getDb();
+  const del = db.prepare('DELETE FROM note_chunks WHERE kb_id = ? AND note_path = ?');
+  const ins = db.prepare('INSERT OR REPLACE INTO note_chunks (kb_id, note_path, chunk_idx, chunk_text, heading, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  const tx = db.transaction(() => {
+    del.run(kbId, notePath);
+    for (const c of chunks) ins.run(kbId, notePath, c.chunk_idx, c.chunk_text, c.heading ?? null, c.start_line ?? null, c.end_line ?? null);
+  });
+  tx();
+}
+
+export function removeChunks(kbId: string, notePath: string): void {
+  getDb().prepare('DELETE FROM note_chunks WHERE kb_id = ? AND note_path = ?').run(kbId, notePath);
 }
 
 function getDb(): Database.Database {

@@ -7,6 +7,8 @@ export interface SearchResult {
   templateDirId?: string;
   matchType: 'title' | 'content' | 'tag' | 'link';
   score: number;
+  heading?: string;   // 所属标题（RAG 分块面包屑）
+  startLine?: number; // 片段起始行（引用锚点）
 }
 
 export type FSChangeEvent =
