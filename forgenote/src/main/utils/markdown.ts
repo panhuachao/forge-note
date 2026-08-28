@@ -119,6 +119,9 @@ export function writeFrontmatter(
   raw: string,
   patch: { title?: string; summary?: string; tags?: string[]; extra?: Record<string, unknown> }
 ): string {
+  // 关键修复：raw 是「要保留 frontmatter 的旧 markdown」或「新正文」。
+  // 当 raw 是新正文时（writeNote 的保存路径），parseFrontMatter 不会读到任何 fm，
+  // 导致 createdAt 等保留字段丢失——必须以 raw 中的旧 fm 数据为准。
   const { content, data } = parseFrontMatter(raw);
   const next: Record<string, unknown> = { ...data };
 
@@ -141,11 +144,15 @@ export function writeFrontmatter(
     const norm = Array.from(new Set(tags.map((t) => String(t).trim()).filter(Boolean)));
     if (norm.length) next['tags'] = norm;
   }
-  // 扩展字段（如 source 来源），直接原样写入 FrontMatter
+  // 扩展字段（如 source 来源、createdAt），直接原样写入 FrontMatter
   if (patch.extra) {
     for (const [k, v] of Object.entries(patch.extra)) next[k] = v;
   }
 
+  // 用 raw 的 body 部分作为写入的 markdown 正文（这样 raw 是旧 markdown 时保留旧正文；
+  // 是新正文时则写入新正文）。但当 raw 是「带 fm 的旧 markdown」而调用方传入新正文时，
+  // 上层应在调用前把 raw 替换为「旧 markdown」，否则这里会复用旧正文——
+  // 这是已知契约：writeFrontmatter 不感知新正文，由调用方负责把 body 替换好。
   return matter.stringify(content, next);
 }
 

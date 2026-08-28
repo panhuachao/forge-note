@@ -118,13 +118,18 @@ class FSService {
     try {
       const existing = await fs.readFile(abs, 'utf-8');
       const oldFm = readFrontmatter(existing);
-      // 仅当磁盘上已有 frontmatter 时，将其拼回正文（content 为纯正文，不含头）
+      // 仅当磁盘上已有 frontmatter 时，将其与新正文合并写回。
+      // 这里不能直接调 writeFrontmatter(content, ...)——writeFrontmatter 内部会从
+      // 入参 raw 中 parse fm，但入参是新正文（无 fm），将导致 createdAt 等保留字段
+      // 被丢失，下次 readNote 回退到 stat.birthtimeMs（rename 后几乎等于 mtime），
+      // 表现为「创建时间 == 最后更新」。
+      // 因此这里显式按「旧 fm 字段 + 新正文」合并，保留所有原字段（含 createdAt）。
       if (oldFm.data && Object.keys(oldFm.data).length > 0) {
-        raw = writeFrontmatter(content, {
-          title: oldFm.title,
-          summary: oldFm.summary,
-          tags: oldFm.tags
-        });
+        const next: Record<string, unknown> = { ...oldFm.data };
+        if (oldFm.title !== undefined) next['title'] = oldFm.title;
+        if (oldFm.summary !== undefined) next['summary'] = oldFm.summary;
+        if (oldFm.tags && oldFm.tags.length) next['tags'] = oldFm.tags;
+        raw = matter.stringify(content, next);
       }
     } catch {
       // 文件尚不存在等情况：直接写入纯正文

@@ -1,7 +1,8 @@
 // 统一 AI 调用入口（方案 §4 · 防腐层 + 会话上下文 + Skill 路由）
 // 渲染层 / IPC 一律只调 aiHub.run(req)，由它：按 skill 路由 → 挂载多轮 SessionStore → 调用 Skill。
 // 流式场景调用 aiHub.runStream(req, onToken)（方案 §三.1）。旧 window.forge.ai.* 业务方法保留兼容。
-import { getSkill, SKILLS, runTimeSummary, routeSkill, compressHistory, resolveAgentId, type AISkillCtx } from './skill-engine';
+import { getSkill, SKILLS, runTimeSummary, routeSkill, compressHistory, resolveAgentId, type AISkill, type AISkillCtx } from './skill-engine';
+import { agentRegistry } from './agents/registry';
 import { sessionStore } from './session-store';
 import { aiService } from './ai-service';
 import { profileService } from './profile-service';
@@ -20,8 +21,13 @@ export type AIHubResult = AIResponse & { sessionId?: string; refs?: AIRefHit[]; 
 class AIHub {
   /** 统一入口（非流式） */
   async run(req: AIRequest): Promise<AIHubResult> {
-    const skill = getSkill(req.skill);
-    if (!skill) return { kind: 'text', text: `未支持的技能: ${req.skill}` };
+    // 方案 A：agentId 优先 —— Agent 注册表为一等数据源，直接运行 agent，
+    // 无需在 SKILLS 里为每个 agent 再写一遍薄包装 skill。
+    const agent = req.agentId ? agentRegistry.get(req.agentId) : undefined;
+    let skill = req.skill ? getSkill(req.skill) : undefined;
+    if (!skill && agent) skill = this.agentAsSkill(agent, req);
+
+    if (!skill) return { kind: 'text', text: `未支持的技能: ${req.skill ?? req.agentId}` };
 
     const input: AISkillCtx['input'] = {
       text: String(req.input?.text ?? req.input?.question ?? ''),
@@ -128,6 +134,30 @@ class AIHub {
     this.afterRun(skill, sessionId, resp, t0);
     this.scheduleProfileExtract(req, skill, resp, sessionId);
     return resp;
+  }
+
+  /**
+   * 把 AgentProfile 包装成一个临时 AISkill，使其能复用 AIHub 的会话/用量/画像抽取流程。
+   * 这样「一个 agent 直接可调用」成为一等能力，SKILLS 表只需保留带复杂编排逻辑的 skill。
+   */
+  private agentAsSkill(agent: NonNullable<ReturnType<typeof agentRegistry.get>>, req: AIRequest): AISkill {
+    const agentId = agent.id;
+    return {
+      id: agentId,
+      title: agent.title,
+      description: agent.description,
+      run: async (ctx: AISkillCtx) => {
+        const text = await aiService.runAgent({
+          agentId,
+          kbId: req.kbId,
+          userMessage: String(ctx.input.text ?? ''),
+          extra: req.extra,
+          input: ctx.input as Record<string, unknown>,
+          history: ctx.history as unknown[]
+        });
+        return { kind: 'text', text };
+      }
+    };
   }
 
   /** 解析/创建会话（stateful 才有多轮上下文） */

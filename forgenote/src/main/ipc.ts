@@ -137,10 +137,10 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   );
   // 统一 AI 调用入口（Skill 路由 + 会话上下文）
   ipcMain.handle(IPC.AI_HUB_RUN, async (_e, req: import('@shared/types/ai').AIRequest) => aiHub.run(req));
-  // 多 Agent 方案（§3.5）：渲染层直接按 agentId 调用，无需关心 skill 路由
+  // 多 Agent 方案（§3.5）：渲染层直接按 agentId 调用，无需关心 skill 路由。
+  // agentId 优先在 aiHub.run 内解析（agentRegistry 为一等数据源），找不到时回退 skill 路由。
   ipcMain.handle(IPC.AI_RUN_AGENT, async (_e, kbId: string, agentId: string, text: string, extra?: Record<string, unknown>) => {
-    const skill = agentId === 'daily-muse' ? 'daily-insight' : agentId === 'inspirer' ? 'inspiration' : agentId;
-    return aiHub.run({ skill, agentId, input: { text }, kbId, extra });
+    return aiHub.run({ agentId, input: { text }, kbId, extra });
   });
   // 阶段 C3：读取 / 保存 Agent 用户覆写（app_config['ai:agents']）；含旧 dailyInsight 迁移
   ipcMain.handle(IPC.AI_AGENT_OVERRIDES, async (_e, overrides?: import('@shared/types/ai').AgentOverridesLike) => {

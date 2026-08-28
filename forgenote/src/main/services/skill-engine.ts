@@ -20,8 +20,7 @@ export const SKILL_TO_AGENT: Record<string, string> = {
   'refine-note': 'refiner',
   'forge-card': 'card-smith',
   'daily-insight': 'daily-muse',
-  inspiration: 'inspirer',
-  wander: 'wander'
+  inspiration: 'inspirer'
 };
 
 /** 解析本次请求的 Agent：显式 agentId 优先，否则按 SKILL_TO_AGENT 兜底到 conversationalist */
@@ -357,23 +356,6 @@ export const SKILLS: Record<string, AISkill> = {
         }
       }
       return txt(reportText);
-    }
-  },
-
-  // 闲逛漫游：让 wander agent 在知识库材料里组合出新的价值洞察（旧知识的新组合）
-  // 该 skill 自身不做预处理，材料由渲染层（WanderOverlay）拼好后注入 input.text
-  wander: {
-    id: 'wander',
-    title: '知识漫游',
-    description: '把不同笔记的片段重新组合成新的价值知识点（旧知识的新组合）。',
-    run: async ({ kbId, input, agentId }) => {
-      const prompt = typeof input.text === 'string' ? input.text : '';
-      const r = await aiService.runAgent({
-        agentId: agentId || 'wander',
-        kbId,
-        userMessage: prompt
-      });
-      return txt(r);
     }
   },
 
