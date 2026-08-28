@@ -26,6 +26,7 @@ import { AboutDialog } from './components/AboutDialog';
 import { TopBar } from './components/TopBar';
 import { TreeContextMenuRoot } from './components/TreeContextMenuRoot';
 import { WikiLinkLayer } from './components/WikiLinkLayer';
+import { WanderOverlay } from './components/WanderOverlay';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
 
 export function App() {
@@ -157,6 +158,7 @@ export function App() {
       {showSetup && <SetupWizard onDone={() => setShowSetup(false)} />}
       <TreeContextMenuRoot />
       <WikiLinkLayer />
+      <WanderOverlay />
       <CreateNoteModal open={createNoteOpen} initialDirPath={createNoteDir} onClose={closeCreateNote} />
       <QuickNoteModal
         key={quickNoteInitial ? 'qk-filled' : 'qk-empty'}

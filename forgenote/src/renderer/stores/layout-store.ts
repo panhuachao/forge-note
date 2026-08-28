@@ -79,6 +79,11 @@ interface LayoutState {
   setActiveTab: (id: string) => void;
   markTabDirty: (id: string, dirty: boolean) => void;
   closeAllTabs: () => void;
+  // 闲逛浮层：不持久化（临时状态）
+  wanderOpen: boolean;
+  openWander: () => void;
+  closeWander: () => void;
+  toggleWander: () => void;
 }
 
 const STORAGE_KEY = 'forgenote:layout';
@@ -153,6 +158,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     mainView: 'note',
     treeView: 'tree',
     tabs: [],
+    wanderOpen: false,
     activeTabId: null,
     leftRailCollapsed: persisted.leftRailCollapsed,
     leftPanelWidth: persisted.leftPanelWidth,
@@ -208,6 +214,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
       set({ focusMode: next, leftPanelCollapsed: next, rightPanelCollapsed: next });
       persistAll(get);
     },
+    openWander: () => set({ wanderOpen: true }),
+    closeWander: () => set({ wanderOpen: false }),
+    toggleWander: () => set({ wanderOpen: !get().wanderOpen }),
     setLeftPanelWidth: (w) => {
       const clamped = Math.max(180, Math.min(500, w));
       set({ leftPanelWidth: clamped });

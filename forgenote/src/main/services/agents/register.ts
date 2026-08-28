@@ -6,6 +6,7 @@ import { refiner } from './built-in/refiner';
 import { cardSmith } from './built-in/card-smith';
 import { inspirer } from './built-in/inspirer';
 import { dailyMuse } from './built-in/daily-muse';
+import { wanderer } from './built-in/wander';
 import type { AgentProfile } from './types';
 
 const BUILT_IN: AgentProfile[] = [
@@ -14,7 +15,8 @@ const BUILT_IN: AgentProfile[] = [
   refiner,
   cardSmith,
   inspirer,
-  dailyMuse
+  dailyMuse,
+  wanderer
 ];
 
 /** 进程启动时调用：注册内置 + 叠加用户覆写 */

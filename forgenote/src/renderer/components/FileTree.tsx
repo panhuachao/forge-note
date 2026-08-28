@@ -223,6 +223,11 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
             className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg hover:text-brand rounded-xl transition-colors"
             title="AI 诊断知识库"
           ><Icon name="viewfinder-circle" className="w-4 h-4" /></button>
+          <button
+            onClick={() => useLayoutStore.getState().openWander()}
+            className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg hover:text-brand rounded-xl transition-colors"
+            title="闲逛：让 AI 组合出新的价值知识点"
+          ><Icon name="sparkles" className="w-4 h-4" /></button>
         </div>
         {/* 关注列表：已关注的目录 / 笔记，可直接跳转或展开 */}
         <FollowedList
