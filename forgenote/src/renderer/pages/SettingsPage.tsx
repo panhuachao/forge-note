@@ -33,6 +33,8 @@ export function SettingsPage() {
 
   // 索引重建进度（见上文 “数据维护” section）；3 个按钮共用一个 in-flight 状态，避免并发
   const [rebuilding, setRebuilding] = useState<'tags' | 'meta' | 'chunks' | null>(null);
+  // 更新说明弹窗
+  const [showReleaseNotes, setShowReleaseNotes] = useState(false);
 
   /**
    * 触发索引重建。空值/null 任务会被拒绝（按钮 disabled 已经挡了大部分情况）。
@@ -98,6 +100,21 @@ export function SettingsPage() {
   useEffect(() => {
     if (tab === 'advanced') loadUsage();
   }, [tab]);
+
+  // 更新说明弹窗：ESC 关闭 + 锁定 body 滚动
+  useEffect(() => {
+    if (!showReleaseNotes) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowReleaseNotes(false);
+    };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [showReleaseNotes]);
 
   function handleCheck() {
     const app = window.forge.app;
@@ -488,12 +505,14 @@ export function SettingsPage() {
               启动时自动检查更新
             </label>
             {update?.type === 'available' && update.releaseNotes && (
-              <details className="mt-3 text-xs text-fg-muted">
-                <summary className="cursor-pointer">查看更新说明</summary>
-                <pre className="mt-2 whitespace-pre-wrap bg-canvas rounded p-2 max-h-48 overflow-auto">
-                  {update.releaseNotes}
-                </pre>
-              </details>
+              <button
+                type="button"
+                onClick={() => setShowReleaseNotes(true)}
+                className="mt-3 inline-flex items-center gap-1 text-xs text-brand hover:underline cursor-pointer"
+              >
+                <span>查看更新说明</span>
+                <span aria-hidden>▼</span>
+              </button>
             )}
           </div>
         </section>
@@ -777,6 +796,49 @@ export function SettingsPage() {
           </section>
         )}
       </div>
+
+      {/* 更新说明弹窗 - 富文本渲染 GitHub Release Notes（受信任源） */}
+      {showReleaseNotes && update?.releaseNotes && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="更新说明"
+          onClick={() => setShowReleaseNotes(false)}
+        >
+          <div
+            className="relative w-full max-w-2xl max-h-[80vh] bg-content rounded-xl border border-border-soft shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border-soft">
+              <div className="text-sm font-medium">
+                v{update.version || version} 更新说明
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReleaseNotes(false)}
+                className="w-7 h-7 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-canvas hover:text-fg text-lg leading-none"
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
+            <div
+              className="flex-1 overflow-auto px-6 py-4 text-sm leading-relaxed text-fg release-notes-body"
+              dangerouslySetInnerHTML={{ __html: update.releaseNotes }}
+            />
+            <div className="px-5 py-3 border-t border-border-soft flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowReleaseNotes(false)}
+                className="btn btn-primary"
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

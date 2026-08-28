@@ -118,6 +118,13 @@ npm run package:mac:x64 -- --publish=always
 
 > 说明：macOS 用 `package:mac:*` 经 dotenv 读 `.env`（CI 中由 workflow 注入）；`ELECTRON_MIRROR` 已通过 workflow `env` 全局设置以加速 Electron 下载。Windows 用 `package:win` 直接读 `GH_TOKEN` 环境变量。
 
+```
+# 本地删除某tag
+git tag -d v1.0.0
+# 远程删除某tag（如果这个tag关联了release，也连同一起删除）
+git push origin --delete tag v1.0.0
+```
+
 ### 发布前检查清单
 - 确认 `package.json` 的 `version` 已是目标版本号。
 - 确认 `.env`（或 CI Secrets）中的 `GH_TOKEN` 具有 `repo` 权限。

@@ -1,6 +1,6 @@
 {
   "name": "forgenote",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "锦囊笔记 ForgeNote - 本地开源AI知识库笔记",
   "main": "dist/main/index.js",
   "author": "Pan HuaChao",
@@ -13,6 +13,8 @@
     "package:mac": "electron-vite build && dotenv -e .env -- electron-builder --mac --x64 --arm64",
     "package:mac:arm64": "electron-vite build && dotenv -e .env -- electron-builder --mac --arm64",
     "package:mac:x64": "electron-vite build && dotenv -e .env -- electron-builder --mac --x64",
+    "package:mac:dev": "electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 --c.mac.notarize=false --c.mac.identity=null",
+    "package:mac:dev:x64": "electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --x64 --c.mac.notarize=false --c.mac.identity=null",
     "package:win": "electron-vite build && electron-builder --win",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --ext .ts,.tsx",
