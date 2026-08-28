@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChatStore } from '../stores/chat-store';
 import { useKBStore, requireAI } from '../stores/kb-store';
+import { openWikiLink } from '../utils/wikilink';
 import { useLayoutStore } from '../stores/layout-store';
 import {
   AI_SERVICE_MODELS,
@@ -38,7 +39,6 @@ export default function ChatPage() {
   const setAIConfig = useKBStore((s) => s.setAIConfig);
 
   const setMainView = useLayoutStore((s) => s.setMainView);
-  const openTab = useLayoutStore((s) => s.openTab);
 
   const activeConv = useMemo(
     () => conversations.find((c) => c.id === activeId) || null,
@@ -57,52 +57,6 @@ export default function ChatPage() {
       await window.forge.ai.setConfig(next);
     } catch (e) {
       console.error(e);
-    }
-  };
-
-  /** 把 [[笔记名]] 解析为笔记路径（遍历目录树，方案 §三.2） */
-  const resolveWikiLink = async (name: string): Promise<string | null> => {
-    if (!activeKb) return null;
-    try {
-      const tree = await window.forge.fs.listTree(activeKb.id);
-      let hit: string | null = null;
-      const walk = (nodes: any[]) => {
-        for (const n of nodes) {
-          if (hit) return;
-          if (n.type === 'file' && n.name.replace(/\.md$/i, '') === name) {
-            hit = n.path;
-            return;
-          }
-          if (n.children) walk(n.children);
-        }
-      };
-      walk(tree?.children ?? []);
-      return hit;
-    } catch {
-      return null;
-    }
-  };
-
-  /** 点击引用卡片 / 回答内 [[笔记名]] 链接，跳转到对应笔记 */
-  const openWikiLink = async (name: string) => {
-    const path = await resolveWikiLink(name);
-    if (path) {
-      openTab(path);
-      setMainView('note');
-    } else {
-      // 未找到则退化为全局搜索
-      window.dispatchEvent(new CustomEvent('forgenote:search', { detail: { q: name } }));
-    }
-  };
-
-  /** 拦截 markdown 内的 wiki-link 点击 */
-  const onWikiLinkClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const a = target.closest('a.wiki-link') as HTMLAnchorElement | null;
-    if (a) {
-      e.preventDefault();
-      const name = decodeURIComponent((a.getAttribute('href') || '').replace(/^#wiki=/, ''));
-      if (name) openWikiLink(name);
     }
   };
 
@@ -504,7 +458,6 @@ export default function ChatPage() {
                     ) : (
                       <div
                         className="markdown-preview chat-md leading-relaxed"
-                        onClick={onWikiLinkClick}
                         dangerouslySetInnerHTML={{
                           __html: renderMarkdownPreview(m.text, activeKb?.id || '', '')
                         }}

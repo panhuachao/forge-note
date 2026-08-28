@@ -17,6 +17,9 @@ import { eventBus } from '../utils/event-bus';
 import { searchService } from './search-service';
 
 class FSService {
+  // 已迁移 createdAt 的笔记（kbId + notePath），避免 readNote 每次都写盘
+  private migratedCtime = new Set<string>();
+
   /**
    * 通过 kbId 获取绝对根目录
    */
@@ -48,12 +51,38 @@ class FSService {
     // 需通过 linkIndex.resolve(target) 判定是否可解析到真实 notePath，
     // 不能直接用 notePath 集合去比对 target，否则所有出链都会被误判为失效
     const broken = outlinks.filter((o) => !linkIndex.resolve(kbId, o));
+    // 优先使用 FrontMatter.createdAt 作为「创建时间」：
+    // atomicWrite 是 writeFile(.tmp) + rename，rename 会替换 inode，
+    // 导致 stat.birthtimeMs 变成「最近一次写盘时间」而非真实创建时间。
+    // 旧笔记没有 createdAt 时，惰性回填 birthtime 到 frontmatter 并写盘。
+    let ctime: number;
+    const fmCreatedAt = data['createdAt'];
+    if (typeof fmCreatedAt === 'number' && fmCreatedAt > 0) {
+      ctime = fmCreatedAt;
+    } else {
+      ctime = stat.birthtimeMs || stat.ctimeMs;
+      const key = `${kbId}::${notePath}`;
+      if (!this.migratedCtime.has(key)) {
+        this.migratedCtime.add(key);
+        try {
+          const withCreatedAt = writeFrontmatter(raw, {
+            extra: { createdAt: ctime }
+          });
+          await atomicWrite(abs, withCreatedAt);
+          // 回填本次返回的 frontmatter，保持一致
+          data['createdAt'] = ctime;
+        } catch (e) {
+          // 迁移失败不影响本次读取
+          this.migratedCtime.delete(key);
+        }
+      }
+    }
     return {
       path: notePath,
       content,
       frontmatter: data,
       mtime: stat.mtimeMs,
-      ctime: stat.birthtimeMs || stat.ctimeMs,
+      ctime,
       outlinks,
       inlinks,
       brokenLinks: broken
@@ -246,7 +275,14 @@ class FSService {
     // 写入标准 FrontMatter 头（title/summary/tags），使关键元数据持久化于文件开头，
     // 便于跨设备重新索引、查看摘要与标签，并支持后续扩展（source 等）。
     const title = basename(fileName, '.md');
-    const withFm = writeFrontmatter(content, { title, summary: '', tags: [] });
+    // 在 FrontMatter 中固化 createdAt，避免 atomicWrite 替换 inode 后 stat.birthtimeMs
+    // 变成「最近一次写盘时间」而失去真实创建时间。
+    const withFm = writeFrontmatter(content, {
+      title,
+      summary: '',
+      tags: [],
+      extra: { createdAt: Date.now() }
+    });
     await atomicWrite(finalAbs, withFm);
     linkIndex.updateOutlinks(kbId, finalPath, extractWikiLinks(content));
     const stat = await fs.stat(finalAbs);

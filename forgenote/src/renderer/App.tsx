@@ -25,6 +25,7 @@ import { AISetupGuideModal } from './components/AISetupGuideModal';
 import { AboutDialog } from './components/AboutDialog';
 import { TopBar } from './components/TopBar';
 import { TreeContextMenuRoot } from './components/TreeContextMenuRoot';
+import { WikiLinkLayer } from './components/WikiLinkLayer';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
 
 export function App() {
@@ -155,6 +156,7 @@ export function App() {
       <Onboarding />
       {showSetup && <SetupWizard onDone={() => setShowSetup(false)} />}
       <TreeContextMenuRoot />
+      <WikiLinkLayer />
       <CreateNoteModal open={createNoteOpen} initialDirPath={createNoteDir} onClose={closeCreateNote} />
       <QuickNoteModal
         key={quickNoteInitial ? 'qk-filled' : 'qk-empty'}
