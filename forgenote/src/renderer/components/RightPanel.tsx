@@ -627,7 +627,8 @@ export function RightPanel() {
           </PanelCard>
         )}
 
-        {/* 语音录入：录音 → 自动转写 → 生成文本笔记 */}
+        {/* 语音录入：录音 → 自动转写 → 生成文本笔记（仅在打开笔记时显示） */}
+        {activeKb && notePath && (
         <PanelCard title="语音录入">
           <div className="flex items-center gap-3">
             {!recording ? (
@@ -671,6 +672,7 @@ export function RightPanel() {
             </div>
           </div>
         </PanelCard>
+        )}
 
         {/* 双向链接 */}
         {info && (

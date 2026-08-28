@@ -150,23 +150,19 @@ export function writeFrontmatter(
 }
 
 /**
- * 提取一篇笔记的标签：
- * 1) 优先 FrontMatter 的 tags / 标签 / Tag 字段（数组或逗号分隔字符串）
- * 2) 匹配正文中的 `# 标签: v1 v2 ...` 行
- * 3) 收集正文里散落的 `#标签`（如 `#育儿方法`）
+ * 提取一篇笔记的标签：仅取自 FrontMatter 的 tags / 标签 / Tag 字段
+ * （数组或逗号分隔字符串）。正文中的 #标签 不再作为标签来源，
+ * 避免把笔记正文里的偶然 # 词当作标签污染标签面板。
  * 返回去重后的标签数组（不含 # 前缀）
  */
 export function extractTags(raw: string): string[] {
   const tags = new Set<string>();
   let fmData: Record<string, unknown> = {};
-  let content = raw;
   try {
     const parsed = matter(raw);
     fmData = (parsed.data || {}) as Record<string, unknown>;
-    content = parsed.content;
   } catch {
     fmData = {};
-    content = raw;
   }
   const fmTags = fmData['tags'] ?? fmData['标签'] ?? fmData['Tag'] ?? fmData['TAG'];
   if (Array.isArray(fmTags)) {
@@ -177,22 +173,6 @@ export function extractTags(raw: string): string[] {
       .map((s) => s.trim())
       .filter(Boolean)
       .forEach((t) => tags.add(t));
-  }
-  const inlineTags = raw.match(/#\s*标签\s*[:：]\s*(.+)/);
-  if (inlineTags) {
-    inlineTags[1]
-      .split(/\s+/)
-      .map((s) => s.replace(/^#/, '').trim())
-      .filter(Boolean)
-      .forEach((t) => tags.add(t));
-  }
-  // 正文散落的 #标签：兼容 Unicode 字母、数字、下划线、连字符
-  const HASH_TAG_RE = /(?:^|\s)#([\p{L}\p{N}_\-]+)/gu;
-  let m: RegExpExecArray | null;
-  HASH_TAG_RE.lastIndex = 0;
-  while ((m = HASH_TAG_RE.exec(content)) !== null) {
-    const t = m[1].trim();
-    if (t) tags.add(t);
   }
   return [...tags];
 }

@@ -75,6 +75,9 @@ export const IPC = {
   // Search
   SEARCH: 'search:query',
   SEARCH_REINDEX: 'search:reindex',
+  SEARCH_REBUILD_CHUNKS: 'search:rebuildChunks',
+  SEARCH_REBUILD_META: 'search:rebuildMeta',
+  SEARCH_REBUILD_TAGS: 'search:rebuildTags',
 
   // Note templates
   TPL_GET_NOTE_TEMPLATE: 'tpl:getNoteTemplate',

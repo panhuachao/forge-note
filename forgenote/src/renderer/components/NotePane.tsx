@@ -248,6 +248,30 @@ export function NotePane(props: Props) {
     };
   }, [loadedPath]);
 
+  // 预览区任务项点击：切换 [ ]/[x]/[~]/[-] 状态并写回编辑器（→ 自动保存 + 实时预览刷新）
+  const onTaskToggle = (e: React.MouseEvent) => {
+    const target = (e.target as HTMLElement).closest('.task-toggle');
+    if (!target) return;
+    const wrap = target.closest('.task-list-item') as HTMLElement | null;
+    if (!wrap) return;
+    const line = Number(wrap.getAttribute('data-line'));
+    const view = viewRef.current;
+    if (!view || !line || !activeKb) return;
+    // 状态循环：待办 → 进行中 → 已完成 → 取消 → 待办
+    const order = ['todo', 'doing', 'done', 'cancel'] as const;
+    const cur = (target.getAttribute('data-state') as (typeof order)[number]) || 'todo';
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    const mark = next === 'done' ? 'x' : next === 'doing' ? '~' : next === 'cancel' ? '-' : ' ';
+    const ln = Math.min(Math.max(line, 1), view.state.doc.lines);
+    const lineObj = view.state.doc.line(ln);
+    const replaced = lineObj.text.replace(/^(\s*(?:[-*+]|\d+\.)\s*\[)[ xX~\-](\]\s+)/, `$1${mark}$2`);
+    if (replaced === lineObj.text) return; // 该行不是任务项，避免误改
+    view.dispatch({
+      changes: { from: lineObj.from, to: lineObj.to, insert: replaced },
+      selection: { anchor: lineObj.from }
+    });
+  };
+
   // 编辑/分屏/预览切换时容器尺寸或显隐发生变化，CodeMirror 不会自动重排，
   // 需手动触发重新测量，否则分屏/切回时左侧原文区会空白或错位。
   useEffect(() => {
@@ -364,6 +388,7 @@ export function NotePane(props: Props) {
           <div
             ref={previewRef}
             onScroll={handleScroll}
+            onClick={onTaskToggle}
             className={`h-full overflow-auto bg-content p-8 ${tab === 'split' ? 'w-1/2' : 'w-full'}`}
           >
             <article

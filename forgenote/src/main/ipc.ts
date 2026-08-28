@@ -197,6 +197,13 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // Search
   ipcMain.handle(IPC.SEARCH, async (_e, kbId: string, q: string, opts) => searchService.query(kbId, q, opts));
   ipcMain.handle(IPC.SEARCH_REINDEX, async (_e, kbId: string) => searchService.reindex(kbId));
+  // 索引重建（在 Settings 页手动触发）：
+  // - rebuildChunks：只刷新 note_chunks（RAG 分段），保留 meta
+  // - rebuildMeta：  清掉旧 note_meta 行，重新提取 mtime/size/hash/summary/tags
+  // - rebuildTags：  仅重写 note_meta.tags，并清理已删除文件的残留标签行
+  ipcMain.handle(IPC.SEARCH_REBUILD_CHUNKS, async (_e, kbId: string) => searchService.rebuildChunks(kbId));
+  ipcMain.handle(IPC.SEARCH_REBUILD_META, async (_e, kbId: string) => searchService.rebuildNoteMeta(kbId));
+  ipcMain.handle(IPC.SEARCH_REBUILD_TAGS, async (_e, kbId: string) => searchService.rebuildTagIndex(kbId));
 
   // Audit
   ipcMain.handle(IPC.AUDIT_LIST, async (_e, kbId: string) => auditService.list(kbId));

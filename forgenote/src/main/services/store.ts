@@ -160,6 +160,16 @@ export function removeNoteMeta(kbId: string, notePath: string): void {
   getDb().prepare('DELETE FROM note_meta WHERE kb_id = ? AND note_path = ?').run(kbId, notePath);
 }
 
+/** 清空某知识库的全部 note_meta 行（仅索引重建工具使用，前端走 IPC） */
+export function clearNoteMeta(kbId: string): void {
+  getDb().prepare('DELETE FROM note_meta WHERE kb_id = ?').run(kbId);
+}
+
+/** 清空某知识库的全部 note_chunks 行（同上，仅供索引重建使用） */
+export function clearChunks(kbId: string): void {
+  getDb().prepare('DELETE FROM note_chunks WHERE kb_id = ?').run(kbId);
+}
+
 export function getNoteMeta(kbId: string, notePath: string): NoteMetaRow | null {
   const row = getDb()
     .prepare('SELECT mtime, size, template_dir_id, hash, summary, tags FROM note_meta WHERE kb_id = ? AND note_path = ?')

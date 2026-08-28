@@ -27,6 +27,50 @@ export function SettingsPage() {
   // 成本可观测：AI 调用用量（方案 §三.3）
   const [usage, setUsage] = useState<Record<string, { calls: number; tokens: number; ms: number }>>({});
 
+  // 索引重建进度（见上文 “数据维护” section）；3 个按钮共用一个 in-flight 状态，避免并发
+  const [rebuilding, setRebuilding] = useState<'tags' | 'meta' | 'chunks' | null>(null);
+
+  /**
+   * 触发索引重建。空值/null 任务会被拒绝（按钮 disabled 已经挡了大部分情况）。
+   * 重建后通过 pushToast 把影响条目数告诉用户，让 "我点了有用吗" 立刻有反馈。
+   */
+  async function rebuildIndex(kind: 'tags' | 'meta' | 'chunks') {
+    if (!activeKb) {
+      pushToast({ level: 'warn', text: '请先选择知识库' });
+      return;
+    }
+    setRebuilding(kind);
+    try {
+      let count = 0;
+      if (kind === 'tags') count = await window.forge.search.rebuildTags(activeKb.id);
+      else if (kind === 'meta') count = await window.forge.search.rebuildMeta(activeKb.id);
+      else count = await window.forge.search.rebuildChunks(activeKb.id);
+      // 触发左面板“标签视图”刷新：把 KB 状态轻推一下，最简单的办法是重发一次 fs.listTags
+      try {
+        if (kind === 'tags' || kind === 'meta') {
+          const tags = await window.forge.fs.listTags(activeKb.id);
+          // 由 LeftPanel 自己监听 store，这里只是确保读取路径上都走到，避免缓存延迟
+          if (Array.isArray(tags)) void tags.length;
+        }
+      } catch {
+        /* 缓存读取失败不影响重建结果 */
+      }
+      pushToast({
+        level: 'success',
+        text:
+          kind === 'tags'
+            ? `已完成标签索引重建（${activeKb.name}，共 ${count} 条笔记）`
+            : kind === 'meta'
+            ? `已完成笔记 meta 重建（${activeKb.name}，共 ${count} 条）`
+            : `已完成笔记分段重建（${activeKb.name}，共 ${count} 段）`
+      });
+    } catch (err) {
+      pushToast({ level: 'error', text: `重建失败：${(err as Error)?.message ?? String(err)}` });
+    } finally {
+      setRebuilding(null);
+    }
+  }
+
   useEffect(() => {
     const app = window.forge.app;
     if (!app) return;
@@ -327,6 +371,58 @@ export function SettingsPage() {
             <p className="text-xs text-fg-muted break-all">路径：{activeKb.rootPath}</p>
           </section>
         )}
+
+        <section className="bg-content rounded-xl border border-border-soft p-5">
+          <h2 className="font-semibold mb-1">数据维护（重建索引）</h2>
+          <p className="text-xs text-fg-muted mb-3">
+            SQLite 中保存的标签 / 笔记元信息 / 分段索引可能在文件移动、删除后残留旧记录。
+            可选择下方按钮按知识库逐一重建；重建在后台完成，安全且不影响正在编辑的笔记。
+          </p>
+          {!activeKb ? (
+            <p className="text-xs text-fg-faint">当前未选择知识库，无法执行重建。</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-3">
+              <button
+                onClick={() => rebuildIndex('tags')}
+                disabled={rebuilding !== null}
+                className="btn flex flex-col items-start gap-1 py-2 text-left"
+                title="清理已被删除文件的标签残留，按当前 FrontMatter 重新生成 note_meta.tags"
+              >
+                <span className="font-medium">重新构建标签记录</span>
+                <span className="text-[11px] text-fg-muted">
+                  {rebuilding === 'tags' ? '重建中…' : `适用：${activeKb.name}`}
+                </span>
+              </button>
+              <button
+                onClick={() => rebuildIndex('meta')}
+                disabled={rebuilding !== null}
+                className="btn flex flex-col items-start gap-1 py-2 text-left"
+                title="清空 note_meta，重新提取 mtime / size / hash / summary / tags"
+              >
+                <span className="font-medium">重新构建笔记 meta</span>
+                <span className="text-[11px] text-fg-muted">
+                  {rebuilding === 'meta' ? '重建中…' : `适用：${activeKb.name}`}
+                </span>
+              </button>
+              <button
+                onClick={() => rebuildIndex('chunks')}
+                disabled={rebuilding !== null}
+                className="btn flex flex-col items-start gap-1 py-2 text-left"
+                title="清空 note_chunks 后重新分段，用于 RAG 检索/AI 提示偶发不一致"
+              >
+                <span className="font-medium">重新构建笔记分段</span>
+                <span className="text-[11px] text-fg-muted">
+                  {rebuilding === 'chunks' ? '重建中…' : `适用：${activeKb.name}`}
+                </span>
+              </button>
+            </div>
+          )}
+          {rebuilding && (
+            <div className="mt-3 h-1.5 w-full rounded-full bg-canvas overflow-hidden">
+              <div className="h-full bg-brand transition-all animate-pulse" style={{ width: '60%' }} />
+            </div>
+          )}
+        </section>
 
         <section className="bg-content rounded-xl border border-border-soft p-5">
           <h2 className="font-semibold mb-2">备份指引</h2>

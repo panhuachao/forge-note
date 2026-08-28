@@ -549,6 +549,81 @@ html, body, #root {
 .markdown-preview .task-list-item {
   list-style: none;
   margin-left: -1.2em;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  padding: 2px 0;
+}
+.markdown-preview .task-toggle {
+  flex-shrink: 0;
+  width: 1.05em;
+  height: 1.05em;
+  margin-top: 0.18em;
+  border-radius: 4px;
+  border: 1.5px solid var(--c-text-muted);
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+.markdown-preview .task-toggle:hover {
+  border-color: rgb(var(--c-brand));
+}
+/* 待办：空心 */
+/* 已完成：品牌色填充 + 对勾 */
+.markdown-preview .task-toggle[data-state="done"] {
+  background: rgb(var(--c-brand));
+  border-color: rgb(var(--c-brand));
+}
+.markdown-preview .task-toggle[data-state="done"]::after {
+  content: "";
+  position: absolute;
+  left: 0.32em;
+  top: 0.12em;
+  width: 0.28em;
+  height: 0.55em;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+/* 进行中：蓝色圆环 + 脉冲 */
+.markdown-preview .task-toggle[data-state="doing"] {
+  border-color: rgb(var(--c-info, 59 130 246));
+  background: rgb(var(--c-info, 59 130 246) / 0.18);
+  box-shadow: 0 0 0 3px rgb(var(--c-info, 59 130 246) / 0.12);
+}
+.markdown-preview .task-toggle[data-state="doing"]::after {
+  content: "";
+  position: absolute;
+  inset: 0.28em;
+  border-radius: 50%;
+  background: rgb(var(--c-info, 59 130 246));
+}
+/* 取消：灰色填充 + 横线 */
+.markdown-preview .task-toggle[data-state="cancel"] {
+  border-color: var(--c-text-faint);
+  background: var(--c-text-faint);
+}
+.markdown-preview .task-toggle[data-state="cancel"]::after {
+  content: "";
+  position: absolute;
+  left: 0.22em;
+  right: 0.22em;
+  top: 50%;
+  height: 2px;
+  background: #fff;
+  transform: translateY(-50%);
+}
+.markdown-preview .task-list-item[data-task="done"] .task-text {
+  color: var(--c-text-muted);
+}
+.markdown-preview .task-list-item[data-task="cancel"] .task-text {
+  color: var(--c-text-faint);
+  text-decoration: line-through;
+}
+.markdown-preview .task-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .btn {

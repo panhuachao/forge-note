@@ -153,7 +153,10 @@ const api = {
   search: {
     query: (kbId: string, q: string, opts?: { templateDirIds?: string[]; limit?: number }) =>
       ipcRenderer.invoke(IPC.SEARCH, kbId, q, opts) as Promise<SearchResult[]>,
-    reindex: (kbId: string) => ipcRenderer.invoke(IPC.SEARCH_REINDEX, kbId) as Promise<number>
+    reindex: (kbId: string) => ipcRenderer.invoke(IPC.SEARCH_REINDEX, kbId) as Promise<number>,
+    rebuildChunks: (kbId: string) => ipcRenderer.invoke(IPC.SEARCH_REBUILD_CHUNKS, kbId) as Promise<number>,
+    rebuildMeta: (kbId: string) => ipcRenderer.invoke(IPC.SEARCH_REBUILD_META, kbId) as Promise<number>,
+    rebuildTags: (kbId: string) => ipcRenderer.invoke(IPC.SEARCH_REBUILD_TAGS, kbId) as Promise<number>
   },
   audit: {
     list: (kbId: string) => ipcRenderer.invoke(IPC.AUDIT_LIST, kbId) as Promise<AuditEntry[]>,

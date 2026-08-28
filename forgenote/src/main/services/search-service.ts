@@ -5,7 +5,7 @@ import { promises as fs } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';
 import { isMarkdown, isHidden } from '../utils/fs';
-import { getKB, upsertChunks, removeChunks, upsertNoteMeta, removeNoteMeta, loadChunks, loadAllMeta, type ChunkRow } from './store';
+import { getKB, upsertChunks, removeChunks, upsertNoteMeta, removeNoteMeta, loadChunks, loadAllMeta, clearNoteMeta, clearChunks, type ChunkRow } from './store';
 import { readFrontmatter } from '../utils/markdown';
 
 interface Chunk extends ChunkRow {
@@ -77,10 +77,14 @@ class SearchService {
 
   /**
    * 全量重建（启动/手动触发，后台执行，不在查询路径上）
+   * - 先清空 SQLite 中的 note_meta / note_chunks 再 walk 文件，保证被删除的笔记留下的旧记录不会残留
+   * - 重新提取 FrontMatter 的 summary / tags 一并写入 meta，供「标签」面板与检索复用
    */
   async reindex(kbId: string): Promise<number> {
     const kb = getKB(kbId);
     if (!kb) return 0;
+    clearChunks(kbId);
+    clearNoteMeta(kbId);
     const collected: { notePath: string; content: string; mtime: number; size: number; templateDirId?: string }[] = [];
     await this.walk(kb.rootPath, '', collected);
     const idx: KBIndex = { chunks: [], meta: new Map(), sortedByMtime: [], ts: Date.now() };
@@ -88,13 +92,129 @@ class SearchService {
       const chunks = this.chunkNote(n.content);
       upsertChunks(kbId, n.notePath, chunks);
       const hash = this.hashContent(n.content);
-      upsertNoteMeta(kbId, n.notePath, n.mtime, n.size, n.templateDirId, hash);
-      idx.meta.set(n.notePath, { mtime: n.mtime, size: n.size, templateDirId: n.templateDirId, hash });
+      const fm = readFrontmatter(n.content);
+      const summary = fm.summary ?? '';
+      const tags = fm.tags;
+      upsertNoteMeta(kbId, n.notePath, n.mtime, n.size, n.templateDirId, hash, summary, tags);
+      idx.meta.set(n.notePath, { mtime: n.mtime, size: n.size, templateDirId: n.templateDirId, hash, summary, tags });
       for (const c of chunks) idx.chunks.push(this.newChunk(c, n.notePath));
     }
     this.rebuildMtimeIndex(idx);
     this.indexes.set(kbId, idx);
     return idx.chunks.length;
+  }
+
+  /**
+   * 仅重建笔记分段（note_chunks）：用于笔记正文已修改但分段策略/锚点错乱时刷新 RAG 索引
+   * 不会清空 note_meta，已有的 summary/tags 保留。
+   */
+  async rebuildChunks(kbId: string): Promise<number> {
+    const kb = getKB(kbId);
+    if (!kb) return 0;
+    const idx = await this.ensure(kbId);
+    clearChunks(kbId);
+    idx.chunks = [];
+    const collected: { notePath: string; content: string; mtime: number; size: number; templateDirId?: string }[] = [];
+    await this.walk(kb.rootPath, '', collected);
+    let total = 0;
+    for (const n of collected) {
+      const chunks = this.chunkNote(n.content);
+      upsertChunks(kbId, n.notePath, chunks);
+      for (const c of chunks) idx.chunks.push(this.newChunk(c, n.notePath));
+      total += chunks.length;
+    }
+    this.rebuildMtimeIndex(idx);
+    idx.ts = Date.now();
+    this.indexes.set(kbId, idx);
+    return total;
+  }
+
+  /**
+   * 仅重建笔记 meta（mtime/size/hash/summary/tags）：fix "标签面板能看到、笔记里却查不到" 类的旧记录残留。
+   * 不动 note_chunks。
+   */
+  async rebuildNoteMeta(kbId: string): Promise<number> {
+    const kb = getKB(kbId);
+    if (!kb) return 0;
+    const idx = await this.ensure(kbId);
+    clearNoteMeta(kbId);
+    idx.meta.clear();
+    const collected: { notePath: string; content: string; mtime: number; size: number; templateDirId?: string }[] = [];
+    await this.walk(kb.rootPath, '', collected);
+    for (const n of collected) {
+      const hash = this.hashContent(n.content);
+      const fm = readFrontmatter(n.content);
+      const summary = fm.summary ?? '';
+      const tags = fm.tags;
+      upsertNoteMeta(kbId, n.notePath, n.mtime, n.size, n.templateDirId, hash, summary, tags);
+      idx.meta.set(n.notePath, { mtime: n.mtime, size: n.size, templateDirId: n.templateDirId, hash, summary, tags });
+    }
+    this.rebuildMtimeIndex(idx);
+    idx.ts = Date.now();
+    this.indexes.set(kbId, idx);
+    return idx.meta.size;
+  }
+
+  /**
+   * 重建标签索引（只刷新 note_meta.tags）：用户改了 frontmatter tags 后想让面板立刻看到
+   * 也用于清理"笔记已删但 tags 仍残留"的旧 sqlite 行。
+   */
+  async rebuildTagIndex(kbId: string): Promise<number> {
+    const kb = getKB(kbId);
+    if (!kb) return 0;
+    const idx = await this.ensure(kbId);
+    const collected: { notePath: string; content: string }[] = [];
+    const walkTags = async (abs: string, rel: string) => {
+      let entries;
+      try {
+        entries = await fs.readdir(abs, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        if (isHidden(e.name) && e.name !== '.kb_template.json') continue;
+        const childRel = rel ? `${rel}/${e.name}` : e.name;
+        const childAbs = join(abs, e.name);
+        if (e.isDirectory()) await walkTags(childAbs, childRel);
+        else if (isMarkdown(e.name)) {
+          try {
+            const content = await fs.readFile(childAbs, 'utf-8');
+            collected.push({ notePath: childRel, content });
+          } catch {
+            /* 跳过不可读 */
+          }
+        }
+      }
+    };
+    await walkTags(kb.rootPath, '');
+    const walkLive = new Set<string>();
+    for (const n of collected) walkLive.add(n.notePath);
+    // 删掉"文件已不存在"的旧 meta 行（标签旧记录残留就是它造成的）
+    for (const path of [...idx.meta.keys()]) {
+      if (!walkLive.has(path)) {
+        removeNoteMeta(kbId, path);
+        idx.meta.delete(path);
+      }
+    }
+    // 重新写入 tags/summary，保留已有的 mtime/size/hash
+    for (const n of collected) {
+      const fm = readFrontmatter(n.content);
+      const summary = fm.summary ?? '';
+      const tags = fm.tags;
+      const prev = idx.meta.get(n.notePath);
+      const mtime = prev?.mtime ?? 0;
+      const size = prev?.size ?? 0;
+      const hash = prev?.hash;
+      const templateDirId = prev?.templateDirId;
+      upsertNoteMeta(kbId, n.notePath, mtime, size, templateDirId, hash, summary, tags);
+      if (prev) {
+        prev.summary = summary;
+        prev.tags = tags;
+      }
+    }
+    idx.ts = Date.now();
+    this.indexes.set(kbId, idx);
+    return walkLive.size;
   }
 
   private async walk(abs: string, rel: string, out: { notePath: string; content: string; mtime: number; size: number; templateDirId?: string }[]): Promise<void> {

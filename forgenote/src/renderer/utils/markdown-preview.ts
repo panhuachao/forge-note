@@ -144,14 +144,58 @@ export function renderMarkdownPreview(md: string, kbId: string, currentPath: str
       i++;
       continue;
     }
-    // 任务列表
-    const task = /^\s*-\s\[( |x|X)\]\s+(.+)$/.exec(line);
+    // 任务列表（支持 4 种状态）：[ ] 待办 / [x] 已完成 / [~] 进行中 / [-] 取消
+    // 同时匹配无序列表形式 `- [ ]` / `* [ ]` / `+ [ ]`，以及有序列表形式 `1. [ ]`
+    // 不在正则末尾写 $ 以容忍行尾可能残留的 \r（Windows 风格换行）
+    const TASK_LINE = /^\s*(?:[-*+]|\d+\.)\s*\[([ xX~\-])\]\s+(.+)/;
+    const task = TASK_LINE.exec(line);
     if (task) {
-      const checked = task[1].toLowerCase() === 'x';
+      // 连续收集相邻任务项，按列表标记类型聚合为 <ul> 或 <ol>
+      const marker = /^\s*(?:[-*+]|\d+\.)\s*\[/.exec(line)![0].match(/[-*+]|\d+\./)![0];
+      const isOrdered = /\d/.test(marker);
+      type Item = { state: string; text: string; line: number };
+      const items: Item[] = [];
+      while (i < lines.length) {
+        const m = TASK_LINE.exec(lines[i]);
+        if (!m) break;
+        const raw = m[1];
+        const state =
+          raw === 'x' || raw === 'X' ? 'done' : raw === '~' ? 'doing' : raw === '-' ? 'cancel' : 'todo';
+        items.push({ state, text: m[2].replace(/\s+$/, ''), line: i + 1 });
+        i++;
+      }
+      const renderItems = items
+        .map(
+          (it) => {
+            // inline style 作为最基础保险：即使外部 css 缓存未刷新，按钮也能立刻可见
+            const colors: Record<string, { bg: string; mark: string; fg: string }> = {
+              todo: { bg: 'transparent', mark: 'transparent', fg: 'currentColor' },
+              doing: { bg: 'rgba(59,130,246,.18)', mark: 'rgba(59,130,246,1)', fg: 'rgba(59,130,246,1)' },
+              done: { bg: 'rgb(var(--c-brand,239 68 68))', mark: '#fff', fg: 'rgb(var(--c-brand,239 68 68))' },
+              cancel: { bg: 'var(--c-text-faint,#9ca3af)', mark: '#fff', fg: 'var(--c-text-faint,#9ca3af)' }
+            };
+            const c = colors[it.state] || colors.todo;
+            const inner =
+              it.state === 'done'
+                ? '<span style="position:absolute;left:5px;top:2px;width:6px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)"></span>'
+                : it.state === 'doing'
+                ? '<span style="position:absolute;inset:5px;border-radius:50%;background:rgba(59,130,246,1)"></span>'
+                : it.state === 'cancel'
+                ? '<span style="position:absolute;left:3px;right:3px;top:50%;height:2px;background:#fff;transform:translateY(-50%)"></span>'
+                : '';
+            return (
+              `<li><div class="task-list-item" data-task="${it.state}" data-line="${it.line}" style="display:flex;align-items:flex-start;gap:8px;margin:2px 0">` +
+              `<button type="button" class="task-toggle" data-state="${it.state}" title="点击切换：待办 / 已完成 / 进行中 / 取消" ` +
+              `style="position:relative;flex-shrink:0;width:18px;height:18px;margin-top:3px;border-radius:4px;border:2px solid ${c.fg};background:${c.bg};cursor:pointer;padding:0">${inner}</button>` +
+              `<span class="task-text" style="flex:1;min-width:0">${inline(escapeHtml(it.text))}</span>` +
+              `</div></li>`
+            );
+          }
+        )
+        .join('');
       out.push(
-        `<div class="task-list-item"><input type="checkbox" ${checked ? 'checked' : ''} disabled /> ${inline(escapeHtml(task[2]))}</div>`
+        (isOrdered ? '<ol>' : '<ul>') + renderItems + (isOrdered ? '</ol>' : '</ul>')
       );
-      i++;
       continue;
     }
     // 无序列表
