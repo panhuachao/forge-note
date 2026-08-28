@@ -7,7 +7,7 @@ import { join, dirname, basename } from 'path';
 import { nanoid } from 'nanoid';
 import type { NoteInfo, NoteContent, TagInfo, TagNote } from '@shared/types';
 import { atomicWrite, safeJoin } from '../utils/fs';
-import { extractWikiLinks, parseFrontMatter, extractTags, writeFrontmatter, readFrontmatter } from '../utils/markdown';
+import { extractWikiLinks, parseFrontMatter, extractTags, writeFrontmatter, readFrontmatter, replaceWikiTarget } from '../utils/markdown';
 import { getKB } from './store';
 import { linkIndex } from './link-index';
 import matter from 'gray-matter';
@@ -267,14 +267,13 @@ class FSService {
 
     const filePath = dirPath ? join(dirPath, fileName) : fileName;
     const abs = safeJoin(root, filePath);
-    // 避免重名
+    // 避免重名：存在同名则自动追加序号后缀（保持创建流程不被中断）
     let finalPath = filePath;
     let i = 1;
     while (await fs.access(abs).then(() => true).catch(() => false)) {
       const base = basename(fileName, '.md');
       finalPath = dirPath ? join(dirPath, `${base}-${i}.md`) : `${base}-${i}.md`;
       i++;
-      break;
     }
     const finalAbs = safeJoin(root, finalPath);
     // 写入标准 FrontMatter 头（title/summary/tags），使关键元数据持久化于文件开头，
@@ -347,14 +346,69 @@ class FSService {
     const dir = dirname(oldPath);
     const newPath = dir ? join(dir, newFileName) : newFileName;
     const newAbs = safeJoin(root, newPath);
+
+    const oldBase = basename(oldPath, '.md');
+    const newBase = basename(newPath, '.md');
+
+    // 1) 唯一性校验：双链 [[笔记名]] 基于 basename 命名空间，重名会导致链接歧义，
+    //    因此要求新名称在当前知识库内唯一（排除自身）。
+    if (newBase !== oldBase) {
+      const conflict = this.findNoteByBaseName(kbId, newBase, oldPath);
+      if (conflict) {
+        throw new Error(`笔记名「${newBase}」已存在，为保证双链唯一性请使用其他名称`);
+      }
+    }
+
     await fs.rename(oldAbs, newAbs);
     linkIndex.renameNote(kbId, oldPath, newPath);
     await searchService.removeNote(kbId, oldPath);
     await this.syncIndex(kbId, newPath);
     // 清除 buildTree 的 5 秒缓存，让重命名后的最新树被下次 listTree 拿到
     kbService.invalidateMeta(root);
+
+    // 2) 双链同步：其它笔记通过 [[旧名]] 引用了本笔记时，改名后需同步更新引用，
+    //    否则旧链接失效（resolve 不到新路径）。
+    if (newBase !== oldBase) {
+      await this.syncWikiRename(kbId, oldBase, newBase);
+    }
+
     eventBus.emit('fsChange', { type: 'change', path: newPath });
     return newPath;
+  }
+
+  /**
+   * 在整个知识库内查找 basename（去 .md）等于 baseName 的笔记路径，
+   * 排除 excludePath 自身。用于重命名唯一性校验。
+   */
+  private findNoteByBaseName(kbId: string, baseName: string, excludePath?: string): string | undefined {
+    for (const p of linkIndex.getAllNotePaths(kbId)) {
+      if (p === excludePath) continue;
+      if (basename(p, '.md') === baseName) return p;
+    }
+    return undefined;
+  }
+
+  /**
+   * 把所有引用了 oldName（basename）的笔记中的 [[oldName]] 同步替换为 [[newName]]，
+   * 保留别名（如 [[newName|别名]]）。更新索引并触发 fsChange 事件。
+   */
+  private async syncWikiRename(kbId: string, oldName: string, newName: string): Promise<void> {
+    const refs = linkIndex.getBacklinks(kbId, oldName);
+    for (const refPath of refs) {
+      try {
+        const abs = this.abs(kbId, refPath);
+        const raw = await fs.readFile(abs, 'utf-8');
+        const updated = replaceWikiTarget(raw, oldName, newName);
+        if (updated === raw) continue;
+        // 直接写盘（保留 frontmatter），并刷新双链索引与搜索索引
+        await atomicWrite(abs, updated);
+        linkIndex.updateOutlinks(kbId, refPath, extractWikiLinks(updated));
+        await this.syncIndex(kbId, refPath);
+        eventBus.emit('fsChange', { type: 'change', path: refPath });
+      } catch {
+        // 单个引用笔记更新失败不影响其余引用
+      }
+    }
   }
 
   async createDir(kbId: string, parentPath: string, name: string): Promise<string> {

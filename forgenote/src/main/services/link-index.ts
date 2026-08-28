@@ -38,17 +38,28 @@ class LinkIndex {
 
   /**
    * 反向链接：所有 指向 target 的笔记
+   * target 支持「path 形式」或「纯名（basename）形式」，统一按 basename（去 .md）匹配，
+   * 因为 extractWikiLinks 取出的出链是 basename（如 [[笔记B]] -> "笔记B"）。
    */
   getBacklinks(kbId: string, targetPath: string): string[] {
     const map = this.ensure(kbId);
-    const targetName = targetPath.replace(/\.md$/i, '');
+    const targetBase =
+      targetPath.split('/').pop()?.replace(/\.md$/i, '') || targetPath.replace(/\.md$/i, '');
     const result = new Set<string>();
     for (const [notePath, links] of map) {
       for (const l of links) {
-        if (l === targetName || l === targetPath) result.add(notePath);
+        const lBase = l.split('/').pop()?.replace(/\.md$/i, '') || l.replace(/\.md$/i, '');
+        if (lBase === targetBase || l === targetPath) result.add(notePath);
       }
     }
     return [...result];
+  }
+
+  /**
+   * 返回某一知识库内所有笔记路径（用于唯一性校验等）。
+   */
+  getAllNotePaths(kbId: string): string[] {
+    return [...this.ensure(kbId).keys()];
   }
 
   /**

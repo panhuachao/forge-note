@@ -17,6 +17,27 @@ export function extractWikiLinks(md: string): string[] {
   return [...result];
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 将 Markdown 中所有指向 oldName 的 [[wiki 链接]] 同步改为 newName。
+ * 兼容形如 [[旧名]]、[[ 旧名 ]]、[[旧名|别名]]、[[旧名 | 别名]] 的写法，
+ * 替换后保留别名（如 [[新名|别名]]），并去掉多余空白。
+ * 返回修改后的文本（若未变化则返回原文本）。
+ */
+export function replaceWikiTarget(md: string, oldName: string, newName: string): string {
+  const oldRaw = (oldName || '').trim();
+  const neuRaw = (newName || '').trim();
+  if (!oldRaw || oldRaw === neuRaw) return md;
+  const re = new RegExp(`\\[\\[\\s*${escapeRegExp(oldRaw)}\\s*(?:\\|\\s*([^\\]]*?)\\s*)?\\]\\]`, 'g');
+  return md.replace(re, (_full, alias) => {
+    const a = typeof alias === 'string' ? alias.trim() : '';
+    return a ? `[[${neuRaw}|${a}]]` : `[[${neuRaw}]]`;
+  });
+}
+
 /**
  * 将 [[目标|别名]] 转为 [别名](forge://note/目标) 以便渲染
  */
