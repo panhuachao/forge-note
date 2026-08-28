@@ -15,11 +15,25 @@ import { searchService } from './services/search-service';
 import { auditService } from './services/audit-service';
 import { profileService } from './services/profile-service';
 import { agentRegistry } from './services/agents/registry';
+import { actionService } from './services/confirmable-action-service';
 import type { UserProfile } from '@shared/types/profile';
 import type { AIPrompts } from '@shared/types/ai';
 import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
+  // 确认操作扩展点 openDialog：AI 建议「打开某个弹窗」，用户确认后由主进程通知渲染层
+  // （doc/MCP技术实现方案.md §8）
+  actionService.register<{ dialog: string; params?: Record<string, unknown> }>('openDialog', {
+    preview: async (payload) => ({ dialog: payload?.dialog, params: payload?.params ?? {} }),
+    execute: async (payload) => {
+      getMainWindow()?.webContents.send(IPC.EV_OPEN_DIALOG, {
+        dialog: payload?.dialog,
+        params: payload?.params ?? {}
+      });
+      return { ok: true, message: `已请求打开弹窗：${payload?.dialog}` };
+    }
+  });
+
   // Window control（标题栏双击最大化 / 最小化 / 关闭）
   ipcMain.handle(IPC.WIN_MAXIMIZE_TOGGLE, () => {
     const win = getMainWindow();

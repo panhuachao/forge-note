@@ -13,7 +13,7 @@ import { extractWikiLinks, previewLine, writeFrontmatter } from '../utils/markdo
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
 import { retrieve, rerankHits } from './rag-service';
-import { KB_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
+import { KB_TOOLS, WRITE_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
 import { listExternalTools, executeExternalTool } from './mcp-client';
 import { profileService } from './profile-service';
 import { agentRegistry } from './agents/registry';
@@ -1173,13 +1173,23 @@ class AIService {
     kbId: string | undefined,
     sys: string,
     user: string,
-    opts?: { history?: { role: 'user' | 'assistant'; text: string }[]; onActivity?: (a: ToolActivity) => void }
-  ): Promise<string> {
-    const cfg = await this.getConfig();
-    if (!this.isEnabled(cfg)) {
-      return '当前未配置 AI 模型，无法启用智能体工具调用。';
+    opts?: {
+      history?: { role: 'user' | 'assistant'; text: string }[];
+      onActivity?: (a: ToolActivity) => void;
+      /** 是否已获得用户确认（doc/MCP技术实现方案.md §4.2）：未确认时不暴露写类工具 */
+      canWrite?: boolean;
     }
-    const tools = KB_TOOLS.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+    ): Promise<string> {
+      const cfg = await this.getConfig();
+      if (!this.isEnabled(cfg)) {
+        return '当前未配置 AI 模型，无法启用智能体工具调用。';
+      }
+      const canWrite = !!opts?.canWrite;
+      // 未确认时从工具表中剔除写类工具：模型「看不见」就无法误调用，比提示词约束更可靠
+      const tools = KB_TOOLS.filter((t) => canWrite || !WRITE_TOOLS.has(t.name)).map((t) => ({
+        type: 'function',
+        function: { name: t.name, description: t.description, parameters: t.input_schema }
+      }));
     // 合并外部 MCP server 暴露的工具（方案 §6.4）：默认禁用，设置开启后才出现，实现跨域能力扩展。
     try {
       const ext = await listExternalTools();
@@ -1192,7 +1202,7 @@ class AIService {
     messages.push({ role: 'user', content: user });
 
     const provider = cfg.provider === 'ollama' ? 'ollama' : 'openai';
-    const maxRounds = 6;
+    const maxRounds = 10;
     for (let round = 0; round < maxRounds; round++) {
       const { content, toolCalls } =
         provider === 'ollama'

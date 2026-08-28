@@ -6,7 +6,9 @@ import { profileService } from './profile-service';
 import { retrieve } from './rag-service';
 import { searchService } from './search-service';
 import { KB_TOOLS, executeTool, type ToolActivity } from './tool-runtime';
-import type { AIResponse, AITurn, AIRefHit, AIUsage } from '@shared/types/ai';
+import { actionService } from './confirmable-action-service';
+import { getStoredPreview } from './note-patch';
+import type { AIResponse, AITurn, AIRefHit, AIUsage, ConfirmableAction, NotePatchPayload, NotePatchPreview } from '@shared/types/ai';
 
 /**
  * Skill → Agent 默认映射（多 Agent 方案 §3.5）。
@@ -31,7 +33,7 @@ export function resolveAgentId(skillId: string, explicit?: string): string {
 /** Skill 运行上下文（由 AIHub 注入） */
 export interface AISkillCtx {
   kbId?: string;
-  input: { text: string; question?: string; dirId?: string };
+  input: { text: string; question?: string; dirId?: string; notePath?: string };
   /** 已注入的多轮历史（stateful Skill 才有） */
   history: AITurn[];
   /** 会话草稿（awaitConfirm Skill 确认后回传） */
@@ -206,6 +208,105 @@ ${context}`;
 }
 
 /**
+ * 从模型回答中提取「待确认操作」（doc/MCP技术实现方案.md §5.2）。
+ * 约定：模型在最终回答里输出一个 ```json 代码块，形如
+ * { "type": "notePatch", "title": "...", "description": "...", "payload": { "notePath": "...", "previewId": "pv_xxx" } }
+ */
+export function extractConfirmableAction(text: string): ConfirmableAction | null {
+  if (!text) return null;
+  const blocks = Array.from(text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)).map((m) => m[1]);
+  for (const b of blocks) {
+    const s = b.trim();
+    if (!s.startsWith('{')) continue;
+    try {
+      const obj = JSON.parse(s) as Record<string, unknown>;
+      if (typeof obj.type !== 'string' || !obj.type) continue;
+      if (!obj.payload || typeof obj.payload !== 'object') continue;
+      return {
+        id: `act_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        type: obj.type,
+        title: String(obj.title || 'AI 建议的操作'),
+        description: String(obj.description || ''),
+        payload: obj.payload
+      };
+    } catch {
+      /* 非 JSON 块忽略 */
+    }
+  }
+  return null;
+}
+
+/**
+ * 兜底：当模型耗尽轮次仍未输出 JSON 建议时，
+ * 从工具调用记录里取出最后一次 kb_preview_patch 的结果，
+ * 自动构造 notePatch 确认建议（doc/MCP技术实现方案.md）。
+ */
+function buildFallbackNotePatchAction(
+  activities: { name: string; args: Record<string, unknown>; result: string }[],
+  kbId?: string
+): ConfirmableAction<NotePatchPayload, NotePatchPreview> | null {
+  const patchCalls = activities
+    .filter((a) => a.name === 'kb_preview_patch')
+    .map((a) => {
+      try {
+        return JSON.parse(String(a.result || '{}')) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })
+    .filter((x): x is Record<string, unknown> => !!x);
+  const last = patchCalls[patchCalls.length - 1];
+  if (!last || typeof last.previewId !== 'string') return null;
+  const previewId = last.previewId as string;
+  const notePath = String(last.notePath || '');
+  if (!notePath) return null;
+  const preview = getStoredPreview(previewId);
+  const action: ConfirmableAction<NotePatchPayload, NotePatchPreview> = {
+    id: `act_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    type: 'notePatch',
+    title: `修改：${notePath}`,
+    description: '已自动生成修改预览，请确认是否应用。',
+    payload: { notePath, previewId },
+    preview: preview ?? undefined
+  };
+  if (preview && kbId) {
+    action.preview = preview;
+  }
+  return action;
+}
+
+/** 智能体「建议模式」系统提示：只可检索/预览，修改以 JSON 建议输出 */
+const AGENT_PLAN_SYS = `你是锦囊笔记的智能体，可以调用知识库工具来检索、阅读和分析笔记。
+
+【重要：你当前处于「建议模式」，不允许直接修改任何笔记】
+可用工具：kb_search / kb_read_note / kb_list_notes / kb_link_graph / kb_diagnose / kb_suggest_dir / kb_preview_patch。
+
+判断是否需要修改：
+- 若用户只想总结、分析、提问，**不要修改**，直接以自然语言回答，**不要**输出 json 代码块。
+- 若用户明确要求修改笔记（如“调整格式”“润色”“补标签”“统一缩进”“重排章节”等），你必须以“生成修改预览”为最终目标。
+
+流程规则：
+1. 先用最少必要工具（通常只需 kb_read_note）理解当前笔记内容。
+2. 如果你已经明确知道怎么修改，**立即调用 kb_preview_patch 生成修改预览**（它会返回 previewId 和 diff），不要询问用户是否需要继续。然后输出 \`\`\`json 建议块。
+3. 如果你确实没把握，可以简要说明你的理解并最多问 1 个澄清问题。
+4. 一旦用户回复「继续」「是的」「好」「确认」「生成预览」「按你说的做」等，即表示同意继续，你必须**立即调用 kb_preview_patch 生成预览**，然后输出 \`\`\`json 建议块。不要再次询问。
+5. 最终回答中必须包含且仅包含一个 \`\`\`json 代码块，描述待用户确认的操作，格式如下：
+\`\`\`json
+{
+  "type": "notePatch",
+  "title": "修改：<笔记路径>",
+  "description": "一句话说明改了什么、为什么",
+  "payload": { "notePath": "01 项目/foo.md", "previewId": "pv_xxx" }
+}
+\`\`\`
+6. 永远不要调用 kb_apply_patch、kb_write_note 等写工具；真正的写入只会在用户确认后执行。
+7. 引用笔记请使用 [[笔记名]] 形式。`;
+
+/** 智能体「已确认」系统提示：操作已执行，负责向用户总结 */
+const AGENT_APPLIED_SYS = `你是锦囊笔记的智能体。用户已确认并执行了某个操作，请用简洁中文（1~3 句）向用户说明执行结果。
+不要重复罗列 diff 全文，不要再次输出 json 代码块。`;
+
+/**
  * 规则优先路由（#9）：用关键词/正则先判定意图，命中则直接返回 skill id，
  * 省去一次路由 LLM 调用（低成本、低延迟、零幻觉）。
  * 仅当无法判定时才回落到模型自路由（routeSkill）。
@@ -267,10 +368,55 @@ export const SKILLS: Record<string, AISkill> = {
     stateful: true,
     awaitConfirm: true,
     useTools: KB_TOOLS.map((t) => t.name),
-    run: async ({ kbId, input, history, onActivity }) => {
-      const sys = `你是锦囊笔记的智能体。可以调用知识库工具（检索/读/写/诊断）来完成用户请求。
-原则：先检索再下结论；写操作以「建议」形式给出，确认后才执行；引用笔记用 [[笔记名]]。`;
-      const answer = await aiService.agentChat(kbId, sys, input.text, { history: toChatHistory(history), onActivity });
+    run: async ({ kbId, input, history, onActivity, pendingDraft }) => {
+      // ===== 已确认：执行操作（不依赖模型重新生成 Patch，保证「所见即所改」）=====
+      const approved = pendingDraft as ConfirmableAction | undefined;
+      if (approved) {
+        let execResult = '';
+        try {
+          const r = await actionService.execute(approved, { kbId });
+          execResult = typeof r === 'string' ? r : JSON.stringify(r);
+        } catch (e) {
+          execResult = `执行失败：${String(e)}`;
+        }
+        const answer = await aiService.agentChat(
+          kbId,
+          AGENT_APPLIED_SYS,
+          `已执行操作：${approved.title}\n执行结果：${execResult}`,
+          { history: toChatHistory(history), onActivity, canWrite: true }
+        );
+        return txt(answer || execResult);
+      }
+
+      // ===== 首轮：只可预览，产出待确认建议 =====
+      // notePath 由笔记侧栏对话（NoteAIChat）传入：聚焦当前笔记，让「这篇笔记」有明确指代
+      const noteCtx = input.notePath ? `\n\n【当前聚焦笔记】${input.notePath}\n用户提到「这篇笔记/本文」时均指它；修改类操作默认针对它。` : '';
+      // 本地记录工具调用轨迹，用于「模型耗尽轮次仍未输出 JSON」时的兜底
+      const localActivity: { name: string; args: Record<string, unknown>; result: string }[] = [];
+      const wrappedOnActivity = (a: ToolActivity) => {
+        localActivity.push(a);
+        onActivity?.(a);
+      };
+      const answer = await aiService.agentChat(kbId, AGENT_PLAN_SYS + noteCtx, input.text, {
+        history: toChatHistory(history),
+        onActivity: wrappedOnActivity,
+        canWrite: false
+      });
+      // 模型按约定输出 JSON 建议 → 直接使用
+      const action = extractConfirmableAction(answer);
+      if (action) {
+        // 填装 preview（diff 等），供渲染层渲染确认卡片
+        try {
+          const pv = await actionService.preview(action, { kbId });
+          if (pv) (action as ConfirmableAction<unknown, unknown>).preview = pv;
+        } catch {
+          /* 预览失败不影响建议展示 */
+        }
+        return { kind: 'structured', data: action, pending: true };
+      }
+      // 兜底：模型耗尽轮次仍未输出 JSON，但已调用 kb_preview_patch → 自动构造建议
+      const fallbackAction = buildFallbackNotePatchAction(localActivity, kbId);
+      if (fallbackAction) return { kind: 'structured', data: fallbackAction, pending: true };
       return txt(answer);
     }
   },

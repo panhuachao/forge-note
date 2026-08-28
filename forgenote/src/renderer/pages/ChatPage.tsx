@@ -12,10 +12,12 @@ import {
   ModelOption,
   AIModelConfig,
   inferServiceProvider,
-  normalizeAIModelConfig
+  normalizeAIModelConfig,
+  type ConfirmableAction
 } from '@shared/types/ai';
 import { Icon } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ConfirmableActionCard } from '../components/ConfirmableActionCard';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
 import {
   handleTitleBarDoubleClick,
@@ -125,6 +127,14 @@ export default function ChatPage() {
   const [routeMode, setRouteMode] = useState(false);
   // 待删除的对话 id（null 时不显示确认弹窗）
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  // AI 建议的「待确认操作」（doc/MCP技术实现方案.md）：AI 先给建议，用户确认后才落盘
+  const [pendingAction, setPendingAction] = useState<ConfirmableAction | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  // 切换会话时清空上一个会话未处理的建议
+  useEffect(() => {
+    setPendingAction(null);
+  }, [activeId]);
 
   const startNewConversation = () => {
     setActive(null);
@@ -195,9 +205,15 @@ export default function ChatPage() {
         toolActs.push(chunk.activity);
         setStreaming((s) => ({ ...s, text: acc, toolActivity: [...toolActs] }));
       });
+      // 智能体模式下若用户只回复「继续」等，追加指令让模型直接生成预览而非再次询问
+      const isContinue = agentMode && /^(继续|是的|确认|好|生成预览|按你说的做|继续修改)$/i.test(t.trim());
+      const inputText = isContinue
+        ? `${t.trim()}（请按之前提出的计划，立即调用 kb_preview_patch 生成修改预览，并输出 \`\`\`json 建议块。不要再询问）`
+        : t;
+
       const res = (await window.forge.ai.hubRunStream({
         skill,
-        input: { question: t, text: t },
+        input: { question: inputText, text: inputText },
         kbId: activeKb.id,
         sessionId: existingSession,
         history: seedHistory,
@@ -206,6 +222,12 @@ export default function ChatPage() {
       off();
       offAct?.();
       if (res?.sessionId) convSessionMap.current[convId!] = res.sessionId;
+      // 待确认操作：不落为普通文本消息，改为渲染「确认 / 放弃」卡片
+      if (res?.kind === 'structured' && (res as any).pending && (res as any).data) {
+        setStreaming(null);
+        setPendingAction((res as any).data as ConfirmableAction);
+        return;
+      }
       const ans =
         res?.kind === 'text'
           ? res.text
@@ -233,6 +255,59 @@ export default function ChatPage() {
   };
 
   const send = () => sendWithText(input);
+
+  /**
+   * 用户确认执行 AI 建议：回传 draft（confirm: true），
+   * 主进程 actionService 按 type 执行，模型只负责总结结果（doc/MCP技术实现方案.md §5.3）。
+   */
+  const confirmPendingAction = async (action: ConfirmableAction) => {
+    if (!activeKb || !activeId) return;
+    setPendingAction(null);
+    setActionBusy(true);
+    setLoading(true);
+    const streamId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    let acc = '';
+    const off = window.forge.ai.onAIStream((chunk) => {
+      if (chunk.streamId !== streamId) return;
+      acc += chunk.delta;
+      setStreaming({ text: acc });
+    });
+    try {
+      const res = (await window.forge.ai.hubRunStream({
+        skill: 'agent',
+        input: { text: '确认执行上述修改', question: '确认执行上述修改' },
+        kbId: activeKb.id,
+        sessionId: convSessionMap.current[activeId],
+        confirm: true,
+        draft: action,
+        streamId
+      } as any)) as any;
+      off();
+      if (res?.sessionId) convSessionMap.current[activeId] = res.sessionId;
+      const text = res?.kind === 'text' ? res.text : acc || '（已执行）';
+      setStreaming(null);
+      appendMessage(activeId, {
+        id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        role: 'assistant',
+        text,
+        ts: Date.now(),
+        refs: res?.refs,
+        usage: res?.usage
+      });
+    } catch (err) {
+      off();
+      setStreaming(null);
+      appendMessage(activeId, {
+        id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        role: 'assistant',
+        text: `执行失败：${String(err)}`,
+        ts: Date.now()
+      });
+    } finally {
+      setActionBusy(false);
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex-1 flex bg-content overflow-hidden">
@@ -540,6 +615,18 @@ export default function ChatPage() {
                   );
                 });
               })()}
+
+              {/* AI 建议的待确认操作：用户确认后才真正执行（doc/MCP技术实现方案.md） */}
+              {pendingAction && (
+                <div className="flex flex-col items-start">
+                  <ConfirmableActionCard
+                    action={pendingAction}
+                    busy={actionBusy}
+                    onConfirm={() => confirmPendingAction(pendingAction)}
+                    onCancel={() => setPendingAction(null)}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -150,6 +150,43 @@ export function NotePane(props: Props) {
     };
   }, [activeKb?.id, props.notePath]);
 
+  // AI / 外部修改笔记后，实时刷新当前笔记的编辑区与预览区（doc/MCP技术实现方案.md）
+  useEffect(() => {
+    if (!activeKb) return;
+    const off = window.forge.events.onFsChange((e) => {
+      if (e.type !== 'change' || e.path !== props.notePath) return;
+      void (async () => {
+        try {
+          const c = await window.forge.fs.readNote(activeKb.id, props.notePath);
+          const info = {
+            content: c.content,
+            outlinks: c.outlinks,
+            inlinks: c.inlinks,
+            brokenLinks: c.brokenLinks,
+            mtime: c.mtime,
+            ctime: c.ctime,
+            frontmatter: c.frontmatter
+          };
+          setNote(info);
+          setLiveContent(c.content);
+          setLoadedPath(props.notePath);
+          props.onContentChange?.(info);
+          // 若当前处于编辑态，同步 CodeMirror 文档（仅在内容确实变化时，避免覆盖未保存的本地编辑）
+          const view = viewRef.current;
+          if (view && view.state.doc.toString() !== c.content) {
+            view.dispatch({
+              changes: { from: 0, to: view.state.doc.length, insert: c.content },
+              selection: { anchor: 0 }
+            });
+          }
+        } catch (e) {
+          pushToast({ level: 'error', text: '刷新笔记失败：' + String(e) });
+        }
+      })();
+    });
+    return off;
+  }, [activeKb?.id, props.notePath]);
+
   // 初始化 CodeMirror（仅在切换笔记 loadedPath 变化时重建，自动保存不再触发重建）
   useEffect(() => {
     if (!containerRef.current || !note || loadedPath !== props.notePath) return;

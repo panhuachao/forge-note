@@ -183,25 +183,39 @@ const api = {
     close: () => ipcRenderer.invoke(IPC.WIN_CLOSE) as Promise<void>
   },
   events: {
+    // 确认操作扩展点：主进程请求打开弹窗（doc/MCP技术实现方案.md §8）
+    onOpenDialog: (cb: (payload: { dialog: string; params?: Record<string, unknown> }) => void) => {
+      const fn = (_e: IpcRendererEvent, payload: { dialog: string; params?: Record<string, unknown> }) => cb(payload);
+      ipcRenderer.on(IPC.EV_OPEN_DIALOG, fn);
+      return () => ipcRenderer.removeListener(IPC.EV_OPEN_DIALOG, fn);
+    },
     onFsChange: (cb: (e: FSChangeEvent) => void) => {
       const fn = (_: IpcRendererEvent, payload: FSChangeEvent) => cb(payload);
       ipcRenderer.on(IPC.EV_FS_CHANGE, fn);
-      return () => ipcRenderer.off(IPC.EV_FS_CHANGE, fn);
+      return () => {
+        ipcRenderer.off(IPC.EV_FS_CHANGE, fn);
+      };
     },
     onMenuNewNote: (cb: () => void) => {
       const fn = () => cb();
       ipcRenderer.on('menu:newNote', fn);
-      return () => ipcRenderer.off('menu:newNote', fn);
+      return () => {
+        ipcRenderer.off('menu:newNote', fn);
+      };
     },
     onMenuAddKb: (cb: () => void) => {
       const fn = () => cb();
       ipcRenderer.on('menu:addKb', fn);
-      return () => ipcRenderer.off('menu:addKb', fn);
+      return () => {
+        ipcRenderer.off('menu:addKb', fn);
+      };
     },
     onMenuAbout: (cb: () => void) => {
       const fn = () => cb();
       ipcRenderer.on('menu:about', fn);
-      return () => ipcRenderer.off('menu:about', fn);
+      return () => {
+        ipcRenderer.off('menu:about', fn);
+      };
     }
   }
 };

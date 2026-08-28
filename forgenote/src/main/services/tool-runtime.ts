@@ -6,6 +6,7 @@ import { linkIndex } from './link-index';
 import { aiService } from './ai-service';
 import { auditService } from './audit-service';
 import { getKB } from './store';
+import { previewNotePatch, applyNotePatch, normalizeOps } from './note-patch';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -76,6 +77,56 @@ export const KB_TOOLS: MCPTool[] = [
     }
   },
   {
+    name: 'kb_preview_patch',
+    description:
+      '对指定笔记生成修改预览（diff），不会写入文件。当你想修改笔记正文或 frontmatter 时，必须先调用本工具生成预览，让用户确认。返回 previewId 与 diff。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        notePath: { type: 'string', description: '笔记相对路径' },
+        ops: {
+          type: 'array',
+          description: '修改操作列表',
+          items: {
+            type: 'object',
+            properties: {
+              op: {
+                type: 'string',
+                enum: ['set_frontmatter', 'replace', 'insert_after', 'append', 'delete_lines'],
+                description:
+                  'set_frontmatter=改 frontmatter 字段；replace=替换正文文本；insert_after=在锚点后插入；append=追加到末尾；delete_lines=删除行'
+              },
+              key: { type: 'string', description: 'frontmatter 键名（op=set_frontmatter）' },
+              value: { description: 'frontmatter 值（op=set_frontmatter）' },
+              oldText: { type: 'string', description: '被替换的原始文本（op=replace）' },
+              newText: { type: 'string', description: '替换后的文本（op=replace）' },
+              anchor: { type: 'string', description: '定位锚点文本（op=insert_after）' },
+              text: { type: 'string', description: '插入/追加的文本（op=insert_after / append）' },
+              startLine: { type: 'number', description: '起始行号，1-based（op=delete_lines）' },
+              endLine: { type: 'number', description: '结束行号，含（op=delete_lines）' }
+            },
+            required: ['op']
+          }
+        }
+      },
+      required: ['notePath', 'ops']
+    }
+  },
+  {
+    name: 'kb_apply_patch',
+    description:
+      '将已生成预览的修改真正写入笔记。只有在用户已明确确认该修改后才能调用；传入 previewId 可保证所见即所改。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        notePath: { type: 'string', description: '笔记相对路径' },
+        previewId: { type: 'string', description: 'kb_preview_patch 返回的预览 id（强烈建议传入）' },
+        ops: { type: 'array', description: '修改操作列表（无 previewId 时必填）' }
+      },
+      required: ['notePath']
+    }
+  },
+  {
     name: 'kb_suggest_dir',
     description: '为某篇笔记推荐最合适的归属目录。返回建议目录与理由。',
     input_schema: {
@@ -99,6 +150,12 @@ export const KB_TOOLS: MCPTool[] = [
     input_schema: { type: 'object', properties: {} }
   }
 ];
+
+/**
+ * 会产生副作用的「写类工具」。
+ * 未拿到用户确认前，这些工具不应出现在模型可见的工具列表中（doc/MCP技术实现方案.md §4.2）。
+ */
+export const WRITE_TOOLS = new Set<string>(['kb_write_note', 'kb_apply_patch']);
 
 function walkNotes(root: string, dir: string, out: string[], limit: number): void {
   if (out.length >= limit) return;
@@ -232,6 +289,32 @@ export async function executeTool(call: ToolCall, ctx: ToolCtx): Promise<string>
         }
         auditService.record(kbId, 'move', { notePath, action: 'aiWrite', by: 'ai' });
         return `已写入笔记: ${notePath}`;
+      }
+      case 'kb_preview_patch': {
+        const notePath = String(call.args.notePath || '');
+        const ops = normalizeOps(call.args.ops);
+        if (!notePath) return '缺少 notePath';
+        if (!ops.length) return '缺少有效的 ops';
+        const pv = await previewNotePatch(kbId, notePath, ops);
+        return [
+          '预览已生成。请立即停止调用任何工具，直接按 system 提示输出最终的 ```json 建议块。',
+          `previewId: ${pv.previewId}`,
+          `notePath: ${pv.notePath}`,
+          `canApply: ${pv.canApply}`,
+          `affectedLines: ${pv.affectedLines}`,
+          `message: ${pv.message || '无'}`,
+          `diff（供你判断，不要复制进 JSON）：\n${(pv.diff || '').slice(0, 2000)}`,
+          '提示：最终 ```json 建议块中，payload 必须包含 previewId 和 notePath；不要复制 diff 正文。'
+        ].join('\n');
+      }
+      case 'kb_apply_patch': {
+        const notePath = String(call.args.notePath || '');
+        if (!notePath) return '缺少 notePath';
+        const ops = normalizeOps(call.args.ops);
+        const previewId = call.args.previewId ? String(call.args.previewId) : undefined;
+        if (!ops.length && !previewId) return '缺少 ops 或 previewId';
+        const r = await applyNotePatch(kbId, notePath, ops, previewId);
+        return r.ok ? `${r.message}（影响 ${r.affected} 处）` : `应用失败：${r.message}`;
       }
       case 'kb_suggest_dir': {
         const sug = await aiService.suggestDir(kbId, String(call.args.notePath));

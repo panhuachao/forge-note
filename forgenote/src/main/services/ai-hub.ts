@@ -32,7 +32,8 @@ class AIHub {
     const input: AISkillCtx['input'] = {
       text: String(req.input?.text ?? req.input?.question ?? ''),
       question: req.input?.question ? String(req.input.question) : undefined,
-      dirId: req.input?.dirId ? String(req.input.dirId) : undefined
+      dirId: req.input?.dirId ? String(req.input.dirId) : undefined,
+      notePath: req.input?.notePath ? String(req.input.notePath) : undefined
     };
 
     const { sessionId, history } = this.resolveSession(skill, req);
@@ -87,7 +88,8 @@ class AIHub {
     const input: AISkillCtx['input'] = {
       text: String(req.input?.text ?? req.input?.question ?? ''),
       question: req.input?.question ? String(req.input.question) : undefined,
-      dirId: req.input?.dirId ? String(req.input.dirId) : undefined
+      dirId: req.input?.dirId ? String(req.input.dirId) : undefined,
+      notePath: req.input?.notePath ? String(req.input.notePath) : undefined
     };
     const { sessionId, history } = this.resolveSession(skill, req);
     if (sessionId && input.text) sessionStore.append(sessionId, { role: 'user', text: input.text, ts: Date.now() });
@@ -127,6 +129,16 @@ class AIHub {
       full = textOf(r);
       refs = r.refs;
       usage = r.usage;
+      // 待确认操作（doc/MCP技术实现方案.md §5.2）：
+      // 保留 structured + pending 原样回传，渲染层据此渲染「确认 / 放弃」卡片。
+      // 不能像普通结果那样压平成 kind:'text'，否则 pending 语义丢失；
+      // 同时不把草稿 JSON 推给流式渲染，避免界面闪现原始 JSON。
+      if (r.kind === 'structured' && r.pending) {
+        const pendingResp: AIHubResult = { kind: 'structured', data: r.data, pending: true, sessionId, refs, usage };
+        this.afterRun(skill, sessionId, pendingResp, t0);
+        this.scheduleProfileExtract(req, skill, pendingResp, sessionId);
+        return pendingResp;
+      }
       onToken(full);
     }
 

@@ -316,6 +316,71 @@ export interface ToolActivity {
   result: string;
 }
 
+// ===================== MCP 确认执行（doc/MCP技术实现方案.md） =====================
+// AI 先产出「建议」（ConfirmableAction，pending），用户确认后才真正执行。
+
+/** 笔记 Patch 的单个操作 */
+export interface NotePatchOp {
+  op: 'set_frontmatter' | 'replace' | 'insert_after' | 'append' | 'delete_lines';
+  /** frontmatter 键名（op=set_frontmatter 时必填） */
+  key?: string;
+  /** frontmatter 值（op=set_frontmatter 时用） */
+  value?: unknown;
+  /** 被替换的原始文本（op=replace 时必填） */
+  oldText?: string;
+  /** 替换后的文本（op=replace 时用） */
+  newText?: string;
+  /** 定位锚点文本（op=insert_after 时必填） */
+  anchor?: string;
+  /** 插入/追加的文本（op=insert_after / op=append 时用） */
+  text?: string;
+  /** 起始行号，1-based（op=delete_lines 时用） */
+  startLine?: number;
+  /** 结束行号，含（op=delete_lines 时用） */
+  endLine?: number;
+}
+
+/** 笔记 Patch 预览结果（主进程生成，模型只引用 previewId，不复制 diff 正文） */
+export interface NotePatchPreview {
+  previewId: string;
+  notePath: string;
+  /** 该 Patch 是否可安全应用（如 replace 的 oldText 是否命中） */
+  canApply: boolean;
+  /** unified diff 文本 */
+  diff: string;
+  /** 影响的行/处数 */
+  affectedLines: number;
+  /** 失败原因（canApply=false 时） */
+  message?: string;
+}
+
+/** notePatch 类型 action 的 payload */
+export interface NotePatchPayload {
+  notePath: string;
+  /** 主进程兜底生成建议时可直接用 previewId 关联已存 ops */
+  ops?: NotePatchOp[];
+  /** 若由 kb_preview_patch 生成过预览，带上 previewId 可校验「所见即所改」 */
+  previewId?: string;
+}
+
+/** 需要用户确认后才执行的 AI 建议操作 */
+export interface ConfirmableAction<P = unknown, V = unknown> {
+  id: string;
+  /** 'notePatch' | 'settingUpdate' | 'openDialog' | 'moveNote' | 'createNote' | 'external.<server>.<tool>' */
+  type: string;
+  /** 卡片标题，如「修改：01 项目/foo.md」 */
+  title: string;
+  /** AI 对本次操作的说明 */
+  description: string;
+  /** 执行所需参数 */
+  payload: P;
+  /** 渲染预览用的数据（主进程填装，模型不产出） */
+  preview?: V;
+}
+
+/** 便捷别名：笔记修改类 action */
+export type NotePatchAction = ConfirmableAction<NotePatchPayload, NotePatchPreview>;
+
 /** Skill 声明（能力单元） */
 export interface Skill {
   id: string;

@@ -96,6 +96,8 @@ export const IPC = {
   EV_TPL_CHANGE: 'ev:tplChange',
   EV_TOAST: 'ev:toast',
   EV_THEME: 'ev:theme',
+  // 确认操作扩展点：主进程请求渲染层打开某个弹窗（doc/MCP技术实现方案.md §8）
+  EV_OPEN_DIALOG: 'ev:openDialog',
 
   // Window control
   WIN_MAXIMIZE_TOGGLE: 'win:maximizeToggle',

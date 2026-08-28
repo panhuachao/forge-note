@@ -28,7 +28,7 @@ export interface ToastMessage {
 export interface AuditEntry {
   id: string;
   ts: number;
-  action: 'move' | 'insertLink' | 'forge' | 'applyTemplate' | 'removeTemplate';
+  action: 'move' | 'insertLink' | 'forge' | 'applyTemplate' | 'removeTemplate' | 'aiPatch' | 'confirmableAction';
   payload: Record<string, unknown>;
   undone?: boolean;
 }

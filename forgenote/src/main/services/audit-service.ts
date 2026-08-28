@@ -54,7 +54,11 @@ class AuditService {
     markAuditUndone(auditId);
   }
 
-  record(kbId: string, action: 'move' | 'insertLink' | 'forge' | 'applyTemplate' | 'removeTemplate', payload: Record<string, unknown>) {
+  record(
+    kbId: string,
+    action: 'move' | 'insertLink' | 'forge' | 'applyTemplate' | 'removeTemplate' | 'aiPatch' | 'confirmableAction',
+    payload: Record<string, unknown>
+  ) {
     addAudit({ id: nanoid(), ts: Date.now(), action, payload }, kbId);
   }
 }
