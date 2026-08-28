@@ -34,6 +34,10 @@ interface KBState {
   openQuickNote: () => void;
   closeQuickNote: () => void;
   createQuickNote: (content: string, dirId?: string) => Promise<void>;
+  // AI 配置引导弹窗（未配置 AI 模型时，用户触发 AI 功能则弹出引导）
+  aiSetupGuideOpen: boolean;
+  openAISetupGuide: () => void;
+  closeAISetupGuide: () => void;
 }
 
 export const useKBStore = create<KBState>((set) => ({
@@ -45,6 +49,7 @@ export const useKBStore = create<KBState>((set) => ({
   theme: 'light',
   toasts: [],
   aiConfig: { provider: 'none', serviceProvider: 'none' },
+  aiSetupGuideOpen: false,
   setKBs: (kbs) => set({ kbs }),
   setActiveKb: (activeKb) => set({ activeKb }),
   setApplied: (applied) => set({ applied }),
@@ -143,8 +148,29 @@ export const useKBStore = create<KBState>((set) => ({
     } catch (e) {
       useKBStore.getState().pushToast({ level: 'error', text: '快速笔记失败：' + String(e) });
     }
-  }
+  },
+  openAISetupGuide: () => set({ aiSetupGuideOpen: true }),
+  closeAISetupGuide: () => set({ aiSetupGuideOpen: false })
 }));
+
+/**
+ * 是否已配置可用的 AI 模型：provider 不是 'none' 且已填写 model。
+ * 调用任何 window.forge.ai.* 前应先判断，否则应在 UI 层引导用户配置。
+ */
+export function isAIConfigured(): boolean {
+  const cfg = useKBStore.getState().aiConfig;
+  return cfg.provider !== 'none' && !!cfg.model;
+}
+
+/**
+ * 调用 AI 前的守卫：已配置返回 true；未配置则弹出引导弹窗并返回 false。
+ * 用法：if (!requireAI()) return;
+ */
+export function requireAI(): boolean {
+  if (isAIConfigured()) return true;
+  useKBStore.getState().openAISetupGuide();
+  return false;
+}
 
 // 启动时异步加载 AI 配置（含 serviceProvider 推断）
 if (typeof window !== 'undefined' && window.forge?.ai?.getConfig) {

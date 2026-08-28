@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useKBStore } from '../stores/kb-store';
+import { useKBStore, requireAI } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 
 interface Props {
@@ -21,6 +21,10 @@ export function AIChat({ mode }: Props) {
     setLoading(true);
     try {
       if (mode === 'ask') {
+        if (!requireAI()) {
+          setInput(q);
+          return;
+        }
         const ans = await window.forge.ai.ask(activeKb.id, q);
         setMessages((m) => [...m, { role: 'ai', text: ans || '（无回答）' }]);
       } else {

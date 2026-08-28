@@ -3,7 +3,7 @@
 // AI 操作通过 window.__forgeNoteActions 暴露给 TopToolbar 调用
 import { useState, useEffect, useCallback } from 'react';
 import { useLayoutStore } from '../stores/layout-store';
-import { useKBStore } from '../stores/kb-store';
+import { useKBStore, requireAI } from '../stores/kb-store';
 import { NotePane } from './NotePane';
 import { ForgeCardModal } from './ForgeCardModal';
 import { Icon } from './Icon';
@@ -70,6 +70,7 @@ export function MultiNoteEditor() {
 
   const handleSuggestLinks = useCallback(async (notePath: string) => {
     if (!activeKb) return [];
+    if (!requireAI()) return [];
     try {
       const r = await window.forge.ai.suggestLinks(activeKb.id, notePath);
       setLinkSuggestions(r);
@@ -82,6 +83,7 @@ export function MultiNoteEditor() {
 
   const handleSuggestDir = useCallback(async (notePath: string) => {
     if (!activeKb) return [];
+    if (!requireAI()) return [];
     try {
       const r = await window.forge.ai.suggestDir(activeKb.id, notePath);
       setDirSuggestions(r);
@@ -94,6 +96,7 @@ export function MultiNoteEditor() {
 
   const handleSummarize = useCallback(async (notePath: string) => {
     if (!activeKb) return '';
+    if (!requireAI()) return '';
     const r = await window.forge.ai.summarize(activeKb.id, notePath);
     setSummary(r);
     return r;
@@ -102,6 +105,7 @@ export function MultiNoteEditor() {
   // AI 生成标签（合并去重已有 + 新标签，最多 8 个）
   const handleGenerateTags = useCallback(async (notePath: string) => {
     if (!activeKb) return [];
+    if (!requireAI()) return [];
     const generated = await window.forge.ai.generateTags(activeKb.id, notePath);
     // 重新读取笔记以获取最新 tags + frontmatter
     const fresh = await window.forge.fs.readNote(activeKb.id, notePath);
@@ -151,6 +155,7 @@ export function MultiNoteEditor() {
 
   const handleForgeCard = useCallback(async (notePath: string) => {
     if (!activeKb) throw new Error('无知识库');
+    if (!requireAI()) throw new Error('请先配置 AI 模型');
     const d = await window.forge.ai.forgeCard(activeKb.id, notePath);
     setForgeDraft(d);
   }, [activeKb]);

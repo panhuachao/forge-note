@@ -9,7 +9,7 @@ import { NoteOutline } from './NoteOutline';
 import { LinkPanel } from './LinkPanel';
 import { EVT_ACTIVE_HEADING } from './NotePane';
 import { useLayoutStore } from '../stores/layout-store';
-import { useKBStore } from '../stores/kb-store';
+import { useKBStore, requireAI } from '../stores/kb-store';
 import { NoteAIChat } from './NoteAIChat';
 
 interface LinkInfo {
@@ -187,6 +187,7 @@ export function RightPanel() {
 
   const handleAiTags = useCallback(async () => {
     if (!activeKb || !notePath) return;
+    if (!requireAI()) return;
     const actions = (window as any).__forgeNoteActions as
       | { generateTags: (p: string) => Promise<string[]> }
       | undefined;

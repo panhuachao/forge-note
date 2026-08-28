@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChatStore } from '../stores/chat-store';
-import { useKBStore } from '../stores/kb-store';
+import { useKBStore, requireAI } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import {
   AI_SERVICE_MODELS,
@@ -196,6 +196,7 @@ export default function ChatPage() {
   const sendWithText = async (text: string) => {
     const t = text.trim();
     if (!t || !activeKb) return;
+    if (!requireAI()) return;
 
     let convId = activeId;
     if (!convId) {

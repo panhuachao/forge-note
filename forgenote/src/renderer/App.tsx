@@ -21,6 +21,7 @@ import { Onboarding } from './components/Onboarding';
 import { SetupWizard } from './components/SetupWizard';
 import { CreateNoteModal } from './components/CreateNoteModal';
 import { QuickNoteModal } from './components/QuickNoteModal';
+import { AISetupGuideModal } from './components/AISetupGuideModal';
 import { AboutDialog } from './components/AboutDialog';
 import { TopBar } from './components/TopBar';
 import { TreeContextMenuRoot } from './components/TreeContextMenuRoot';
@@ -161,6 +162,7 @@ export function App() {
         initialContent={quickNoteInitial}
         onClose={closeQuickNote}
       />
+      <AISetupGuideModal />
       <AboutDialog open={showAbout} onClose={() => setShowAbout(false)} />
     </div>
   );

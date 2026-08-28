@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Icon } from './Icon';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
+import { isAIConfigured } from '../stores/kb-store';
 
 interface Message {
   role: 'user' | 'ai';
@@ -42,6 +43,18 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
     if (!kbId || !question || loading) return;
     setMessages((m) => [...m, { role: 'user', text: question }]);
     setInput('');
+    // 未配置 AI 模型时直接在对话流中以 AI 身份回复引导文案，
+    // 不弹全局模态，让用户能在笔记侧栏里直接看到原因与后续路径。
+    if (!isAIConfigured()) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: 'ai',
+          text: '当前无 AI 模型可用，无法进行智能回复，请前往设置页面进行配置。'
+        }
+      ]);
+      return;
+    }
     setLoading(true);
     try {
       const ans = await window.forge.ai.askAboutNote(kbId, notePath, question);

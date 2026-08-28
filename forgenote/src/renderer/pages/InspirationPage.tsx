@@ -1,7 +1,7 @@
 // 灵感页面：基于当前知识库，提供补充/完善思路、补全思维缺陷、延伸案例，
 // 帮助用户发现自己没想到的角度，了解更多。
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useKBStore } from '../stores/kb-store';
+import { useKBStore, requireAI } from '../stores/kb-store';
 import { Icon } from '../components/Icon';
 import { PageHeader } from '../components/PageHeader';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
@@ -62,6 +62,7 @@ export function InspirationPage() {
 
   const generate = async () => {
     if (!activeKb || !aiEnabled) {
+      requireAI();
       setError('请先在「设置」中配置可用的 AI 模型（provider / model / apiKey）。');
       return;
     }
@@ -97,6 +98,7 @@ export function InspirationPage() {
 
   const dailyInsight = async () => {
     if (!activeKb || !aiEnabled) {
+      requireAI();
       setError('请先在「设置」中配置可用的 AI 模型（provider / model / apiKey）。');
       return;
     }

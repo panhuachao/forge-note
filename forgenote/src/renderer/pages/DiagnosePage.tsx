@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { useKBStore } from '../stores/kb-store';
+import { useKBStore, requireAI } from '../stores/kb-store';
 import { PageHeader } from '../components/PageHeader';
 import { Icon } from '../components/Icon';
 import type { TreeNode } from '@shared/types';
@@ -94,6 +94,11 @@ export function DiagnosePage() {
 
   async function runDiagnose() {
     if (!activeKb) return;
+    // 未配置 AI 模型时直接拒绝执行：避免无 AI 时跑完 file walk + ask 拿到空解析再 toast “诊断完成”，误导用户以为结构良好
+    if (!requireAI()) {
+      pushToast({ level: 'warn', text: '请先在「设置」中配置 AI 模型' });
+      return;
+    }
     cancelledRef.current = false;
     setLoading(true);
     setItems([]);
@@ -139,6 +144,7 @@ export function DiagnosePage() {
 
   async function applyItem(idx: number) {
     if (!activeKb) return;
+    if (!requireAI()) return;
     const it = items[idx];
     if (!it) return;
     setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, status: 'doing', msg: '' } : p)));

@@ -7,7 +7,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
-import { useKBStore } from '../stores/kb-store';
+import { useKBStore, requireAI } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import { Icon } from './Icon';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
@@ -77,6 +77,7 @@ export function NotePane(props: Props) {
       const detail = (e as CustomEvent<{ text: string }>).detail;
       const view = viewRef.current;
       if (!view || !detail?.text || !activeKb) return;
+      if (!requireAI()) return;
       const reply = detail.text.trim();
       if (!reply) return;
       pushToast({ level: 'info', text: 'AI 正在完善笔记…' });
