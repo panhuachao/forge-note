@@ -13,6 +13,8 @@ import { aiService } from './services/ai-service';
 import { aiHub } from './services/ai-hub';
 import { searchService } from './services/search-service';
 import { auditService } from './services/audit-service';
+import { profileService } from './services/profile-service';
+import type { UserProfile } from '@shared/types/profile';
 import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
@@ -208,6 +210,11 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // Audit
   ipcMain.handle(IPC.AUDIT_LIST, async (_e, kbId: string) => auditService.list(kbId));
   ipcMain.handle(IPC.AUDIT_UNDO, async (_e, kbId: string, id: string) => auditService.undo(kbId, id));
+
+  // User Profile（用户画像，doc/用户画像实现方案.md §7.1）
+  ipcMain.handle(IPC.PROFILE_GET, async (_e, kbId: string) => profileService.getProfile(kbId));
+  ipcMain.handle(IPC.PROFILE_SAVE, async (_e, kbId: string, profile: UserProfile) => profileService.saveProfile(kbId, profile));
+  ipcMain.handle(IPC.PROFILE_RESET, async (_e, kbId: string) => profileService.resetProfile(kbId));
 
   // 事件总线 -> 渲染
   eventBus.on('fsChange', (payload) => {

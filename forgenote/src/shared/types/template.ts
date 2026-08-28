@@ -22,6 +22,7 @@ export interface TemplateMeta {
 }
 
 export interface AppliedTemplate {
+  kbId: string;
   meta: TemplateMeta;
   rootPath: string;
   aiConfigContent: string;

@@ -128,10 +128,6 @@ export function RightPanel() {
     let tags: string[] = [];
     if (Array.isArray(fmTags)) tags = fmTags.map(String);
     else if (typeof fmTags === 'string' && fmTags.trim()) tags = fmTags.split(/[\s,，]+/).filter(Boolean);
-    if (tags.length === 0) {
-      const m = info.content.match(/#\s*标签\s*[:：]\s*(.+)/);
-      if (m) tags = m[1].split(/\s+/).map((s) => s.replace(/^#/, '')).filter(Boolean);
-    }
     setLocalTags(tags);
     // 从 frontmatter.summary 恢复摘要显示（重新打开笔记时同步）
     const fmSummary = (fm['summary'] ?? fm['摘要'] ?? fm['Summary']) as unknown;
@@ -336,16 +332,12 @@ export function RightPanel() {
       const p = (n: number) => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
     };
-    // 标签：优先 frontmatter，其次内容中的 #标签: 行
+    // 标签：仅取自 FrontMatter 的 tags / 标签 / Tag / TAG 字段
     let tags: string[] = [];
     const fm = info.frontmatter || {};
     const fmTags = (fm['tags'] ?? fm['标签'] ?? fm['Tag'] ?? fm['TAG']) as unknown;
     if (Array.isArray(fmTags)) tags = fmTags.map(String);
     else if (typeof fmTags === 'string' && fmTags.trim()) tags = fmTags.split(/[\s,，]+/).filter(Boolean);
-    if (tags.length === 0) {
-      const m = info.content.match(/#\s*标签\s*[:：]\s*(.+)/);
-      if (m) tags = m[1].split(/\s+/).map((s) => s.replace(/^#/, '')).filter(Boolean);
-    }
     return {
       created: fmt(info.ctime),
       updated: fmt(info.mtime),

@@ -24,7 +24,9 @@ import type {
   AIRequest,
   AIResponse,
   AIRefHit,
-  AIUsage
+  AIUsage,
+  AIPrompts,
+  UserProfile
 } from '@shared/types';
 
 const api = {
@@ -161,6 +163,11 @@ const api = {
   audit: {
     list: (kbId: string) => ipcRenderer.invoke(IPC.AUDIT_LIST, kbId) as Promise<AuditEntry[]>,
     undo: (kbId: string, id: string) => ipcRenderer.invoke(IPC.AUDIT_UNDO, kbId, id) as Promise<void>
+  },
+  profile: {
+    get: (kbId: string) => ipcRenderer.invoke(IPC.PROFILE_GET, kbId) as Promise<UserProfile>,
+    save: (kbId: string, profile: UserProfile) => ipcRenderer.invoke(IPC.PROFILE_SAVE, kbId, profile) as Promise<UserProfile>,
+    reset: (kbId: string) => ipcRenderer.invoke(IPC.PROFILE_RESET, kbId) as Promise<UserProfile>
   },
   win: {
     maximizeToggle: () => ipcRenderer.invoke(IPC.WIN_MAXIMIZE_TOGGLE) as Promise<void>,

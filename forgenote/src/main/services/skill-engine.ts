@@ -2,6 +2,7 @@
 // 每个 AISkill = 一段声明式能力单元；新增一个 AI 能力只需在此注册，无需改主进程 / IPC / 渲染骨架。
 // AIHub 按 skill.id 路由到对应 handler，并由 SessionStore 自动挂载多轮上下文（stateful Skill）。
 import { aiService } from './ai-service';
+import { profileService } from './profile-service';
 import { retrieve } from './rag-service';
 import { searchService } from './search-service';
 import { KB_TOOLS, executeTool, type ToolActivity } from './tool-runtime';
@@ -156,6 +157,7 @@ export async function runTimeSummary(
         .join('\n')}`
     : '';
   const sys = `你是锦囊笔记的总结助手。用户的问题是按时间维度（${tr.label}）总结知识库笔记。
+【当前真实日期】${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}（用户所问的"今天"即此日期；不要凭历史会话或旧记忆猜测）。
 下方已为你筛选出该时间窗口内【${refs.length} 篇】相关笔记的分块内容，请基于内容做结构化总结：
 - 提炼出该时间段的核心主题/灵感/行动项
 - 若用户要求"今天/本周"汇总，用日期顺序或主题聚类组织
@@ -316,7 +318,25 @@ export const SKILLS: Record<string, AISkill> = {
     useTools: ['kb_diagnose'],
     run: async ({ kbId }) => {
       const report = await executeTool({ name: 'kb_diagnose', args: {} }, { kbId: kbId || '' });
-      return txt(report);
+      const reportText = typeof report === 'string' ? report : JSON.stringify(report, null, 2);
+      // 阶段 C：若已建立画像，围绕用户目标做个性化解读（失败则回退原报告）
+      if (kbId) {
+        try {
+          const p = await profileService.getProfile(kbId);
+          if (p.confidence > 0) {
+            const focus = [...p.interests.map((t) => t.name), ...(p.basics.goals ?? [])].slice(0, 8).join('、');
+            const sys =
+              '你是锦囊笔记的知识库顾问。下面是一份结构化诊断报告。请结合用户的关注目标，'
+              + `用简短的一段话点出：这份报告中最值得用户优先处理的问题（如果用户的目标是「${focus || '—'}」）。`
+              + '不要重复罗列所有问题，只给 2-3 条最相关的优先建议。';
+            const tips = await aiService.chat(reportText.slice(0, 2500), sys);
+            return txt(`${reportText}\n\n【围绕你的目标，建议优先处理】\n${tips}`);
+          }
+        } catch {
+          /* 忽略，回退原报告 */
+        }
+      }
+      return txt(reportText);
     }
   },
 
@@ -326,7 +346,22 @@ export const SKILLS: Record<string, AISkill> = {
     description: '基于知识库生成今日灵感。',
     run: async ({ kbId, input }) => {
       const prompt = input.text || '今天有什么值得记录的灵感？';
-      const sys = '你是锦囊笔记的灵感引擎，基于用户的知识库给出醍醐灌顶、可执行的认知。';
+      let sys = '你是锦囊笔记的灵感引擎，基于用户的知识库给出醍醐灌顶、可执行的认知。';
+      // 阶段 C：注入画像，让灵感贴合用户兴趣/偏好
+      if (kbId) {
+        try {
+          const p = await profileService.getProfile(kbId);
+          if (p.confidence > 0) {
+            const parts: string[] = [];
+            if (p.interests.length) parts.push(`用户近期关注：${p.interests.slice(0, 6).map((t) => t.name).join('、')}`);
+            if (p.recentFocus.length) parts.push(`用户最近聚焦：${p.recentFocus.slice(0, 4).map((r) => r.topic).join('、')}`);
+            parts.push(`回答风格：${p.preferences.tone}`);
+            sys += `\n请结合以下用户画像生成灵感（自然融入，不显式提及画像）：\n${parts.join('\n')}`;
+          }
+        } catch {
+          /* 忽略，用默认 sys */
+        }
+      }
       return txt(await aiService.chat(prompt, sys));
     }
   }

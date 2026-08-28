@@ -5,7 +5,7 @@ import { getKB, getConfig, setConfig, saveAIPreset, getAIPresets } from './store
 import { safeJoin, atomicWrite } from '../utils/fs';
 import { eventBus } from '../utils/event-bus';
 import { fsService } from './fs-service';
-import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult, AIPrompts } from '@shared/types';
+import type { AIModelConfig, DirSuggestion, LinkInfo, CardDraft, QuickNoteResult, AIPrompts, ProfileExtractResult } from '@shared/types';
 import { DEFAULT_AI_PROMPTS, normalizeAIModelConfig } from '@shared/types/ai';
 import type { AIRefHit } from '@shared/types/ai';
 import type { SearchResult } from '@shared/types';
@@ -15,6 +15,7 @@ import { searchService } from './search-service';
 import { retrieve, rerankHits } from './rag-service';
 import { KB_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
 import { listExternalTools, executeExternalTool } from './mcp-client';
+import { profileService } from './profile-service';
 
 const BASE_SYSTEM = `你是「锦囊笔记 ForgeNote」内置的本地 AI 知识管家，遵循以下铁律：
 1. 所有回答必须基于用户提供的笔记内容与知识库上下文，不编造信息。
@@ -23,6 +24,23 @@ const BASE_SYSTEM = `你是「锦囊笔记 ForgeNote」内置的本地 AI 知识
 4. 当本地资料不足时，明确告知用户「本地未找到相关内容」，不要凭通用知识补全。`;
 
 class AIService {
+  /** 在 BASE_SYSTEM 后追加用户画像长期上下文（阶段 A 注入，doc/用户画像实现方案.md §5.1） */
+  private async systemWithProfile(kbId: string | undefined, extra = ''): Promise<string> {
+    let block = '';
+    if (kbId) {
+      try {
+        const p = await profileService.getProfile(kbId);
+        block = profileService.renderProfileBlock(p);
+      } catch {
+        /* 画像读取失败不影响主对话 */
+      }
+    }
+    // 注入当前真实日期（防止 AI 把"今天"误读成历史会话的旧日期）
+    const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+    const timeHint = `\n\n【当前真实日期】${today}。用户所问的"今天/本周/本月"即对应此日期，请据此判定时间窗口，不要凭历史会话或旧记忆猜测。`;
+    return `${BASE_SYSTEM}${timeHint}${block ? '\n\n' + block : ''}${extra ? '\n\n' + extra : ''}`;
+  }
+
   private configCache: AIModelConfig | null = null;
 
   async getConfig(): Promise<AIModelConfig> {
@@ -322,7 +340,8 @@ class AIService {
     // 3) 若用户问的是"某个目录下整体内容"，整目录读取作为上下文
     const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
 
-    const sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 若问题涉及"归纳/总结/进展/整体情况"，请基于【目录结构 + 目录整体内容】做归纳，引用具体笔记用 [[笔记名]]\n- 若问题涉及"如何使用某目录/目录是否合理"，请基于目录说明（README）和已有笔记分布给出建议\n- 引用时优先用 [[笔记名]] 形式标注`;
+    const extra = `${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 若问题涉及"归纳/总结/进展/整体情况"，请基于【目录结构 + 目录整体内容】做归纳，引用具体笔记用 [[笔记名]]\n- 若问题涉及"如何使用某目录/目录是否合理"，请基于目录说明（README）和已有笔记分布给出建议\n- 引用时优先用 [[笔记名]] 形式标注`;
+    const sys = await this.systemWithProfile(kbId, extra);
     return this.chat(question, sys);
   }
 
@@ -342,11 +361,15 @@ class AIService {
           .join('\n')}`
       : '';
     if (!kbId) {
-      // 无知识库上下文时，仅做纯多轮对话
-      return { text: await this.chat(question + historyBlock, BASE_SYSTEM), refs: [] };
+      // 无知识库上下文时，仅做纯多轮对话（仍注入画像若有）
+      const sys0 = await this.systemWithProfile(undefined, `请基于以下历史继续对话：${historyBlock}`);
+      return { text: await this.chat(question, sys0), refs: [] };
     }
     const kb = getKB(kbId);
-    if (!kb) return { text: await this.chat(question + historyBlock, BASE_SYSTEM), refs: [] };
+    if (!kb) {
+      const sys0 = await this.systemWithProfile(kbId, `请基于以下历史继续对话：${historyBlock}`);
+      return { text: await this.chat(question, sys0), refs: [] };
+    }
     const { hits, refs } = await retrieve(kbId, question, { templateDirIds: opts?.templateDirIds, topK: 12 });
     const hitContext = hits
       .map((h) => {
@@ -356,7 +379,8 @@ class AIService {
       .join('\n\n');
     const dirTree = await this.buildDirOverview(kb.rootPath, kbId);
     const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
-    const sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 基于【目录结构 + 检索片段 + 此前后文】回答，引用具体笔记用 [[笔记名]]\n- 若用户是在确认/采纳上一轮建议，请直接基于前文执行，不要重新罗列建议${historyBlock}`;
+    const extra = `${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 基于【目录结构 + 检索片段 + 此前后文】回答，引用具体笔记用 [[笔记名]]\n- 若用户是在确认/采纳上一轮建议，请直接基于前文执行，不要重新罗列建议${historyBlock}`;
+    const sys = await this.systemWithProfile(kbId, extra);
     return { text: await this.chat(question, sys), refs };
   }
 
@@ -376,7 +400,7 @@ class AIService {
           .join('\n')}`
       : '';
     let refs: AIRefHit[] = [];
-    let sys = BASE_SYSTEM + historyBlock;
+    let sys = await this.systemWithProfile(kbId, historyBlock);
     if (kbId) {
       const kb = getKB(kbId);
       if (kb) {
@@ -390,7 +414,8 @@ class AIService {
           .join('\n\n');
         const dirTree = await this.buildDirOverview(kb.rootPath, kbId);
         const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
-        sys = `${BASE_SYSTEM}\n\n${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 基于【目录结构 + 检索片段 + 此前后文】回答，引用具体笔记用 [[笔记名]]\n- 若用户是在确认/采纳上一轮建议，请直接基于前文执行，不要重新罗列建议${historyBlock}`;
+        const extra = `${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 基于【目录结构 + 检索片段 + 此前后文】回答，引用具体笔记用 [[笔记名]]\n- 若用户是在确认/采纳上一轮建议，请直接基于前文执行，不要重新罗列建议${historyBlock}`;
+        sys = await this.systemWithProfile(kbId, extra);
       }
     }
     let first = true;
@@ -559,6 +584,64 @@ class AIService {
     const raw = await this.chat(content.slice(0, 4000), sys);
     // 后处理
     return this.sanitizeSummary(raw);
+  }
+
+  /**
+   * 阶段 B：用户画像抽取。给定本轮 user/assistant 文本与当前画像，
+   * 让模型输出「相对当前画像的增量」。失败/未配置时返回空结果（绝不影响主对话）。
+   */
+  async extractProfile(
+    kbId: string,
+    userText: string,
+    assistantText: string,
+    currentProfile: unknown
+  ): Promise<ProfileExtractResult> {
+    const kb = getKB(kbId);
+    if (!kb) return { updates: [], confidence: 0 };
+    const sys = `${BASE_SYSTEM}\n\n你是「用户画像抽取器」。给定【当前画像】与【一次交互（用户提问 + AI 回答）】，`
+      + '只输出相对当前画像的【增量】更新（新增/增强证据/修正），不要重复已有内容。\n'
+      + '严格只输出 JSON，不要任何解释或 Markdown 代码块。结构：\n'
+      + '{\n'
+      + '  "updates": [ { "field": "interests"|"expertise"|"preferences"|"basics"|"goals"|"persona"|"recentFocus", "op": "add"|"merge"|"set"|"patch", "value": <对应结构> } ],\n'
+      + '  "personaPatch": "可选，一句话补充画像简述",\n'
+      + '  "confidence": 0~1\n'
+      + '}\n'
+      + '字段取值约定：\n'
+      + '- interests.value = [{ "name": "主题", "weight": 0.2, "evidence": "证据", "source": "chat" }]\n'
+      + '- expertise.value = { "领域": 0~5 }\n'
+      + '- preferences.value = { "tone": "concise|detailed|socratic|casual", "depth": "intro|intermediate|expert", "proactivity": "passive|balanced|proactive" }（仅在交互中明显体现出偏好时才输出）\n'
+      + '- basics.value = { "role": "...", "domains": [...], "goals": [...] }\n'
+      + '- goals.value = ["目标1","目标2"]\n'
+      + '- recentFocus.value = [{ "topic": "主题", "weight": 0.2 }]\n'
+      + '不要输出与当前画像完全一致的内容；无新增时 updates 为空数组、confidence 取 0。';
+    const prompt =
+      `【当前画像】\n${JSON.stringify(currentProfile).slice(0, 2000)}\n\n` +
+      `【用户提问】\n${userText.slice(0, 1500)}\n\n` +
+      `【AI 回答】（用于判断用户关注点与深度）\n${assistantText.slice(0, 1500)}\n\n` +
+      `请输出画像增量 JSON：`;
+    try {
+      const raw = await this.chat(prompt, sys);
+      const json = this.stripJson(raw);
+      const parsed = JSON.parse(json) as { updates?: unknown[]; personaPatch?: string; confidence?: number };
+      return {
+        updates: (Array.isArray(parsed.updates) ? parsed.updates : []) as ProfileExtractResult['updates'],
+        personaPatch: parsed.personaPatch,
+        confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0
+      };
+    } catch {
+      return { updates: [], confidence: 0 };
+    }
+  }
+
+  /** 抽取 JSON（剥离可能的代码块 / 前后文本） */
+  private stripJson(raw: string): string {
+    let s = raw.trim();
+    const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence) s = fence[1].trim();
+    const start = s.indexOf('{');
+    const end = s.lastIndexOf('}');
+    if (start >= 0 && end > start) s = s.slice(start, end + 1);
+    return s;
   }
 
   /**

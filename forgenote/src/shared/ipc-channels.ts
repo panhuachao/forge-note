@@ -107,7 +107,12 @@ export const IPC = {
   APP_UPDATE_INSTALL: 'app:updateInstall',
   APP_UPDATE_QUIT_INSTALL: 'app:updateQuitInstall',
   APP_UPDATE_ENABLE_AUTO: 'app:updateEnableAuto',
-  EV_APP_UPDATE: 'ev:appUpdate'
+  EV_APP_UPDATE: 'ev:appUpdate',
+
+  // User Profile（用户画像，doc/用户画像实现方案.md）
+  PROFILE_GET: 'profile:get',
+  PROFILE_SAVE: 'profile:save',
+  PROFILE_RESET: 'profile:reset'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

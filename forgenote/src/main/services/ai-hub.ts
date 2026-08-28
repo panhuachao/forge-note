@@ -4,6 +4,7 @@
 import { getSkill, SKILLS, runTimeSummary, routeSkill, compressHistory, type AISkillCtx } from './skill-engine';
 import { sessionStore } from './session-store';
 import { aiService } from './ai-service';
+import { profileService } from './profile-service';
 import type { AIRequest, AIResponse, AITurn, AIRefHit, AIUsage, ToolActivity } from '@shared/types/ai';
 
 /** 从统一 AIResponse 取出纯文本（用于会话落盘） */
@@ -53,6 +54,7 @@ class AIHub {
       }
     }
     this.afterRun(skill, sessionId, resp, t0);
+    this.scheduleProfileExtract(req, skill, resp, sessionId);
     return resp;
   }
 
@@ -90,7 +92,7 @@ class AIHub {
 
     if (skill.id === 'ask' && skill.stateful) {
       // 时间维度问题（「今天/本周/最近 N 天」）先走专门路径；命中则基于 mtime 筛出的笔记正文总结。
-      const ts = await runTimeSummary(req.kbId, String(input.text ?? ''), history, onToken, onActivity);
+      const ts = await runTimeSummary(req.kbId ?? '', String(input.text ?? ''), history, onToken, onActivity);
       if (ts) {
         full = ts.text;
         refs = ts.refs;
@@ -123,6 +125,7 @@ class AIHub {
 
     const resp: AIHubResult = { kind: 'text', text: full, sessionId, refs, usage };
     this.afterRun(skill, sessionId, resp, t0);
+    this.scheduleProfileExtract(req, skill, resp, sessionId);
     return resp;
   }
 
@@ -156,6 +159,30 @@ class AIHub {
     }
     const u = resp.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0, ms: Date.now() - t0 };
     void aiService.recordUsage(skill?.id ?? 'unknown', { promptTokens: u.promptTokens, completionTokens: u.completionTokens, ms: u.ms });
+  }
+
+  /**
+   * 阶段 B：交互后异步抽取用户画像增量（fire-and-forget，绝不阻塞/影响主响应）。
+   * 仅对文本交互类 Skill（ask / diagnose 等）触发；未配置 AI 时静默跳过。
+   */
+  private scheduleProfileExtract(req: AIRequest, skill: ReturnType<typeof getSkill>, resp: AIHubResult, _sessionId?: string): void {
+    const id = skill?.id;
+    if (id !== 'ask' && id !== 'diagnose') return; // 仅对问答/诊断这类文本交互抽取
+    if (!req.kbId) return;
+    const userText = String(req.input?.text ?? req.input?.question ?? '');
+    const assistantText = textOf(resp);
+    if (!userText.trim() && !assistantText.trim()) return;
+    // 异步执行，吞掉所有错误
+    void (async () => {
+      try {
+        const current = await profileService.getProfile(req.kbId!);
+        const result = await aiService.extractProfile(req.kbId!, userText, assistantText, current);
+        if (result.updates.length === 0) return;
+        await profileService.mergeExtract(req.kbId!, result, id);
+      } catch {
+        /* 画像抽取失败不影响主流程 */
+      }
+    })();
   }
 
   /** 列出所有已注册 Skill（供设置/调试查看可扩展能力） */

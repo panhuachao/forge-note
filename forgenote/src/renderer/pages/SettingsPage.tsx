@@ -6,6 +6,7 @@ import type { AIModelConfig, AIPrompts, InspirationModePrompt, AIServiceProvider
 import { DEFAULT_AI_PROMPTS, AI_SERVICE_DEFAULTS, AI_SERVICE_MODELS } from '@shared/types/ai';
 import type { UpdateStatus } from '@shared/ipc-channels';
 import { PageHeader } from '../components/PageHeader';
+import { UserProfilePanel } from '../components/UserProfilePanel';
 
 type SettingsTab = 'basic' | 'advanced';
 
@@ -271,6 +272,8 @@ export function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <UserProfilePanel />
 
         <section className="bg-content rounded-xl border border-border-soft p-5">
           <h2 className="font-semibold mb-1">AI 模型配置</h2>
