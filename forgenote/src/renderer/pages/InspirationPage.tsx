@@ -1,10 +1,23 @@
 // 灵感页面：基于当前知识库，提供补充/完善思路、补全思维缺陷、延伸案例，
 // 帮助用户发现自己没想到的角度，了解更多。
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { Icon } from '../components/Icon';
 import { PageHeader } from '../components/PageHeader';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
+
+// 隔离动态 markdown DOM 的子组件：以 html 作为 key，使 React 在内容变化时
+// 整体卸载/重建该子树，避免 dangerouslySetInnerHTML 内容被浏览器重排后
+// 与 React 虚拟树不一致，引发 removeChild 报错。
+function MarkdownBlock({ html }: { html: string }) {
+  return (
+    <div
+      key={html}
+      className="markdown-preview inspiration-md w-full"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 // 灵感方向：每种模式对应一组侧重提示
 interface InspirationMode {
@@ -25,8 +38,6 @@ export function InspirationPage() {
   const [modes, setModes] = useState<InspirationMode[]>([]);
   const [dailyInsightPrompt, setDailyInsightPrompt] = useState('');
   const [lastAction, setLastAction] = useState<'generate' | 'dailyInsight' | null>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-
   // 从高级设置读取固定的灵感提示词（持久化配置）
   useEffect(() => {
     window.forge.ai.getPrompts().then((p) => {
@@ -36,22 +47,18 @@ export function InspirationPage() {
     });
   }, []);
 
+  // 渲染结果 Markdown（与笔记预览一致）。用 dangerouslySetInnerHTML 交由 React 管理
+  // DOM 生命周期，避免手动 innerHTML 与 React 协调冲突导致 removeChild 报错。
+  const resultHtml = useMemo(
+    () => renderMarkdownPreview(result || '', activeKb?.id || '', ''),
+    [result, activeKb?.id]
+  );
+
   const mode = useMemo(
     () => modes.find((m) => m.key === modeKey) ?? modes[0],
     [modes, modeKey]
   );
   const aiEnabled = activeKb && aiConfig && aiConfig.provider !== 'none' && !!aiConfig.model;
-
-  // 渲染结果 Markdown（与笔记预览一致）
-  useEffect(() => {
-    if (!previewRef.current) return;
-    const html = renderMarkdownPreview(
-      result || '',
-      activeKb?.id || '',
-      ''
-    );
-    previewRef.current.innerHTML = html;
-  }, [result, activeKb?.id]);
 
   const buildPrompt = () => {
     const scope = topic.trim()
@@ -70,7 +77,9 @@ export function InspirationPage() {
     setLoading(true);
     setError('');
     try {
-      const ans = await window.forge.ai.ask(activeKb.id, buildPrompt());
+      // 阶段 C：走 inspirer Agent（跨域 / 反常识 / 知识库缝隙 / 历史去重）
+      const resp = await window.forge.ai.runAgent(activeKb.id, 'inspirer', buildPrompt(), { mode: mode.key });
+      const ans = typeof resp === 'string' ? resp : (resp?.text ?? resp?.content ?? '');
       setResult(ans || '（AI 未返回内容）');
     } catch (e) {
       setError(String(e));
@@ -106,7 +115,9 @@ export function InspirationPage() {
     setLoading(true);
     setError('');
     try {
-      const ans = await window.forge.ai.ask(activeKb.id, buildDailyInsightQuestion());
+      // 阶段 C：走 daily-muse Agent（禁母题 / 历史去重 / 跨域 / 高温度）
+      const resp = await window.forge.ai.runAgent(activeKb.id, 'daily-muse', buildDailyInsightQuestion());
+      const ans = typeof resp === 'string' ? resp : (resp?.text ?? resp?.content ?? '');
       setResult(ans || '（AI 未返回内容）');
     } catch (e) {
       setError(String(e));
@@ -211,7 +222,7 @@ export function InspirationPage() {
           )}
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {result ? (
-              <div className="w-full max-w-4xl mx-auto">
+              <div key="insp-result" className="w-full max-w-4xl mx-auto">
                 {/* 内容卡片 */}
                 <div className="rounded-2xl border border-border-soft bg-content shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
                   {/* 头部：徽章 + mode + 字数 + 保存 */}
@@ -240,10 +251,7 @@ export function InspirationPage() {
                   </div>
                   {/* 正文 */}
                   <div className="px-8 py-6">
-                    <div
-                      ref={previewRef}
-                      className="markdown-preview inspiration-md w-full"
-                    />
+                    <MarkdownBlock html={resultHtml} />
                   </div>
                 </div>
                 {/* 底部：操作提示 */}
@@ -252,7 +260,7 @@ export function InspirationPage() {
                 </div>
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center px-8">
+              <div key="insp-empty" className="h-full flex flex-col items-center justify-center text-center px-8">
                 <div className="relative mb-6">
                   <div className="absolute inset-0 rounded-3xl bg-brand/10 blur-xl" />
                   <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-brand to-brand-hover flex items-center justify-center shadow-[0_8px_24px_-8px_rgba(220,38,38,0.4)]">

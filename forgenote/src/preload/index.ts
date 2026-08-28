@@ -108,6 +108,13 @@ const api = {
     refineNote: (kbId: string, p: string, reply: string, content?: string) =>
       ipcRenderer.invoke(IPC.AI_REFINE_NOTE, kbId, p, reply, content) as Promise<string>,
     hubRun: (req: AIRequest) => ipcRenderer.invoke(IPC.AI_HUB_RUN, req) as Promise<AIResponse & { sessionId?: string }>,
+    // 多 Agent 方案（§3.5）：按 agentId 直接调用专家角色
+    runAgent: (kbId: string, agentId: string, text: string, extra?: Record<string, unknown>) =>
+      ipcRenderer.invoke(IPC.AI_RUN_AGENT, kbId, agentId, text, extra) as Promise<AIResponse>,
+    // 阶段 C3：读取 / 保存 Agent 用户覆写（app_config['ai:agents']）
+    getAgentOverrides: () => ipcRenderer.invoke(IPC.AI_AGENT_OVERRIDES) as Promise<import('@shared/types/ai').AgentOverridesLike>,
+    setAgentOverrides: (ov: import('@shared/types/ai').AgentOverridesLike) =>
+      ipcRenderer.invoke(IPC.AI_AGENT_OVERRIDES, ov) as Promise<void>,
     hubRunStream: (req: AIRequest & { streamId?: string }) =>
       ipcRenderer.invoke(IPC.AI_HUB_STREAM, req) as Promise<AIResponse & { sessionId?: string; refs?: AIRefHit[]; usage?: AIUsage }>,
     onAIStream: (cb: (chunk: { streamId: string; delta: string }) => void) => {

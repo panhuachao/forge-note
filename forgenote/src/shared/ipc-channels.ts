@@ -49,6 +49,8 @@ export const IPC = {
   AI_QUICK_NOTE: 'ai:quickNote',
   AI_HUB_RUN: 'ai:hubRun',
   AI_HUB_STREAM: 'ai:hubStream',
+  AI_RUN_AGENT: 'ai:runAgent',
+  AI_AGENT_OVERRIDES: 'ai:agentOverrides',
   AI_STREAM_CHUNK: 'ai:streamChunk',
   AI_TOOL_ACTIVITY: 'ai:toolActivity',
   AI_GET_USAGE: 'ai:getUsage',

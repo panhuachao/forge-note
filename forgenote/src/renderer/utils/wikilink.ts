@@ -5,13 +5,15 @@ import { useKBStore } from '../stores/kb-store';
 export async function resolveWikiLink(name: string): Promise<string | null> {
   const { activeKb } = useKBStore.getState();
   if (!activeKb) return null;
+  // 规范化：去掉可能残留的 .md 后缀（AI 输出常带后缀），统一按"无后缀名"比对。
+  const target = name.replace(/\.md$/i, '').trim();
   try {
     const tree = await window.forge.fs.listTree(activeKb.id);
     let hit: string | null = null;
     const walk = (nodes: any[]) => {
       for (const n of nodes) {
         if (hit) return;
-        if (n.kind === 'file' && n.name.replace(/\.md$/i, '') === name) {
+        if (n.kind === 'file' && n.name.replace(/\.md$/i, '').trim() === target) {
           hit = n.path;
           return;
         }

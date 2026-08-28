@@ -8,6 +8,7 @@ import { registerIpcHandlers } from './ipc';
 import { startWatching, stopAll, bootstrapIndex } from './services/watcher';
 import { kbService } from './services/kb-service';
 import { initAutoUpdater } from './services/updater';
+import { registerBuiltInAgents } from './services/agents/register';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -229,6 +230,14 @@ app.whenReady().then(async () => {
       `<div style="font-family:-apple-system,'PingFang SC',sans-serif;padding:32px;color:#b91c1c"><h2>配置数据库初始化失败</h2><pre style="white-space:pre-wrap">${msg}</pre><p style="color:#334155">${hint}</p></div>`
     )}`;
     mainWindow?.loadURL(html);
+  }
+
+  // 多 Agent 方案：注册内置 Agent + 叠加用户覆写（app_config['ai:agents']）
+  // 必须在 initStore 之后，因为注册时会读取 app_config 用户覆写。
+  try {
+    registerBuiltInAgents();
+  } catch (err) {
+    console.error('[agents] 注册内置 Agent 失败', err);
   }
 
   // 自动更新：启动后自动检查（仅在打包环境生效）

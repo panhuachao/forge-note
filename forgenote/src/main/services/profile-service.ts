@@ -208,30 +208,39 @@ export async function resetProfile(kbId: string): Promise<UserProfile> {
   return p;
 }
 
-/** 把画像渲染为注入 system 提示词的文本块（§5.1） */
-export function renderProfileBlock(p: UserProfile): string {
+/** 把画像渲染为注入 system 提示词的文本块（§5.1）。
+ *  fields 指定时只渲染对应字段（多 Agent 方案中不同 Agent 可强调不同画像维度）。 */
+export function renderProfileBlock(p: UserProfile, fields?: Array<'basics' | 'interests' | 'preferences' | 'recentFocus' | 'longTerm'>): string {
   if (!p || p.confidence <= 0) return '';
+  // 字段映射：longTerm = basics + expertise + persona
+  const want = (f: string) => !fields || fields.includes(f as never);
   const lines: string[] = [];
   lines.push('【用户画像 · 长期上下文】');
-  if (p.basics.role) lines.push(`- 身份：${p.basics.role}`);
-  if (p.basics.domains?.length) lines.push(`- 长期关注领域：${p.basics.domains.join('、')}`);
-  if (p.basics.goals?.length) lines.push(`- 当前目标：${p.basics.goals.join('、')}`);
-  const pref = p.preferences;
-  lines.push(
-    `- 协作偏好：风格=${pref.tone}，深度=${pref.depth}，主动度=${pref.proactivity}，` +
-      `引用来源=${pref.citeSources ? '要求' : '不要求'}，结构化=${pref.preferStructured ? '偏好' : '不偏好'}`
-  );
-  if (p.interests.length) {
+  if (want('basics')) {
+    if (p.basics.role) lines.push(`- 身份：${p.basics.role}`);
+    if (p.basics.domains?.length) lines.push(`- 长期关注领域：${p.basics.domains.join('、')}`);
+    if (p.basics.goals?.length) lines.push(`- 当前目标：${p.basics.goals.join('、')}`);
+  }
+  if (want('preferences')) {
+    const pref = p.preferences;
+    lines.push(
+      `- 协作偏好：风格=${pref.tone}，深度=${pref.depth}，主动度=${pref.proactivity}，` +
+        `引用来源=${pref.citeSources ? '要求' : '不要求'}，结构化=${pref.preferStructured ? '偏好' : '不偏好'}`
+    );
+  }
+  if (want('interests') && p.interests.length) {
     const top = p.interests.slice(0, 8).map((t) => `${t.name}(${t.weight.toFixed(2)})`);
     lines.push(`- 兴趣主题：${top.join('、')}`);
   }
-  if (p.recentFocus.length) {
+  if (want('recentFocus') && p.recentFocus.length) {
     const top = p.recentFocus.slice(0, 5).map((r) => r.topic);
     lines.push(`- 近期聚焦：${top.join('、')}`);
   }
-  const exp = Object.entries(p.expertise).filter(([, v]) => v > 0);
-  if (exp.length) lines.push(`- 领域熟练度：${exp.map(([k, v]) => `${k}=${v}`).join('、')}`);
-  if (p.persona) lines.push(`- 用户画像简述：${p.persona}`);
+  if (want('longTerm')) {
+    const exp = Object.entries(p.expertise).filter(([, v]) => v > 0);
+    if (exp.length) lines.push(`- 领域熟练度：${exp.map(([k, v]) => `${k}=${v}`).join('、')}`);
+    if (p.persona) lines.push(`- 用户画像简述：${p.persona}`);
+  }
   lines.push('（以上为你的长期记忆，请在回答中自然运用，不要显式复述"根据您的画像"）');
   return lines.join('\n');
 }

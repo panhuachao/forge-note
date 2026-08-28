@@ -1,7 +1,7 @@
 // 统一 AI 调用入口（方案 §4 · 防腐层 + 会话上下文 + Skill 路由）
 // 渲染层 / IPC 一律只调 aiHub.run(req)，由它：按 skill 路由 → 挂载多轮 SessionStore → 调用 Skill。
 // 流式场景调用 aiHub.runStream(req, onToken)（方案 §三.1）。旧 window.forge.ai.* 业务方法保留兼容。
-import { getSkill, SKILLS, runTimeSummary, routeSkill, compressHistory, type AISkillCtx } from './skill-engine';
+import { getSkill, SKILLS, runTimeSummary, routeSkill, compressHistory, resolveAgentId, type AISkillCtx } from './skill-engine';
 import { sessionStore } from './session-store';
 import { aiService } from './ai-service';
 import { profileService } from './profile-service';
@@ -37,7 +37,8 @@ class AIHub {
       input,
       history,
       pendingDraft: req.confirm ? req.draft : undefined,
-      onActivity: req.onActivity
+      onActivity: req.onActivity,
+      agentId: resolveAgentId(skill.id, req.agentId)
     };
 
     const t0 = Date.now();
@@ -110,7 +111,7 @@ class AIHub {
       }
     } else {
       // 非流式技能：一次性执行后推送整段
-      const ctx: AISkillCtx = { kbId: req.kbId, input, history, pendingDraft: req.confirm ? req.draft : undefined, onActivity: req.onActivity ?? onActivity };
+      const ctx: AISkillCtx = { kbId: req.kbId, input, history, pendingDraft: req.confirm ? req.draft : undefined, onActivity: req.onActivity ?? onActivity, agentId: resolveAgentId(skill.id, req.agentId) };
       let r: AIResponse & { refs?: AIRefHit[]; usage?: AIUsage };
       try {
         r = await skill.run(ctx);

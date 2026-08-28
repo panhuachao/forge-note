@@ -288,6 +288,10 @@ export interface AIRequest {
   skill: string; // 'ask' | 'quick-note' | 'forge-card' | ...
   input: Record<string, unknown>; // 结构化入参（由 Skill 约束）
   kbId?: string;
+  /** 多 Agent 方案：指定 Agent 角色；缺省时按 SKILL_TO_AGENT 映射（doc/多Agent技术实现方案.md §3.5） */
+  agentId?: string;
+  /** 透传给 Agent 的额外参数（如 inspirer 的 mode） */
+  extra?: Record<string, unknown>;
   stream?: boolean;
   signal?: AbortSignal;
   modelOverride?: string;
@@ -342,4 +346,15 @@ export interface AIServiceLike {
   ) => Promise<string>;
   getConfig: () => AIModelConfig;
   isReady: () => boolean;
+}
+
+/** 多 Agent 方案（doc/多Agent技术实现方案.md §4.6.2）：用户覆写结构，落库 app_config['ai:agents'] */
+export interface AgentOverridesLike {
+  [agentId: string]: {
+    systemPrompt?: string;
+    sampling?: Partial<{ temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number }>;
+    retrieval?: Partial<{ enabled?: boolean; topK?: number; includeDirTree?: boolean; includeOrphans?: boolean }>;
+    profileFields?: Array<'basics' | 'interests' | 'preferences' | 'recentFocus' | 'longTerm'>;
+    extraSystem?: string;
+  };
 }

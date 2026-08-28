@@ -14,7 +14,9 @@ import { aiHub } from './services/ai-hub';
 import { searchService } from './services/search-service';
 import { auditService } from './services/audit-service';
 import { profileService } from './services/profile-service';
+import { agentRegistry } from './services/agents/registry';
 import type { UserProfile } from '@shared/types/profile';
+import type { AIPrompts } from '@shared/types/ai';
 import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
 
 export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
@@ -135,6 +137,28 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   );
   // 统一 AI 调用入口（Skill 路由 + 会话上下文）
   ipcMain.handle(IPC.AI_HUB_RUN, async (_e, req: import('@shared/types/ai').AIRequest) => aiHub.run(req));
+  // 多 Agent 方案（§3.5）：渲染层直接按 agentId 调用，无需关心 skill 路由
+  ipcMain.handle(IPC.AI_RUN_AGENT, async (_e, kbId: string, agentId: string, text: string, extra?: Record<string, unknown>) => {
+    const skill = agentId === 'daily-muse' ? 'daily-insight' : agentId === 'inspirer' ? 'inspiration' : agentId;
+    return aiHub.run({ skill, agentId, input: { text }, kbId, extra });
+  });
+  // 阶段 C3：读取 / 保存 Agent 用户覆写（app_config['ai:agents']）；含旧 dailyInsight 迁移
+  ipcMain.handle(IPC.AI_AGENT_OVERRIDES, async (_e, overrides?: import('@shared/types/ai').AgentOverridesLike) => {
+    if (overrides) {
+      agentRegistry.saveOverrides(overrides);
+      return null;
+    }
+    // 迁移：旧 ai:prompts.dailyInsight → ai:agents['daily-muse'].systemPrompt（仅当未设置过）
+    const existing = agentRegistry.loadOverrides();
+    if (!existing['daily-muse'] && getConfig) {
+      const prompts = getConfig<AIPrompts>('ai:prompts', null as any);
+      if (prompts?.dailyInsight) {
+        existing['daily-muse'] = { systemPrompt: prompts.dailyInsight };
+        agentRegistry.saveOverrides(existing);
+      }
+    }
+    return existing;
+  });
   // 流式 AI 调用（逐 token 推送，方案 §三.1）：每片通过 AI_STREAM_CHUNK 事件回传 {streamId, delta}
   ipcMain.handle(IPC.AI_HUB_STREAM, async (event, req: import('@shared/types/ai').AIRequest) => {
     const streamId = (req as any).streamId as string | undefined;
@@ -161,7 +185,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
   ipcMain.handle(IPC.AI_ASK_NOTE, async (_e, kbId: string, p: string, q: string) => aiService.askAboutNote(kbId, p, q));
   ipcMain.handle(IPC.AI_REFINE_NOTE, async (_e, kbId: string, p: string, reply: string, content?: string) =>
-    aiService.refineNote(kbId, p, reply, content));
+    // 阶段 B：用 refiner Agent 人格完善笔记（替代 BASE_SYSTEM 的 refineNote）
+    aiService.refineNoteWithAgent(kbId, p, reply, content));
 
   // Template
   ipcMain.handle(IPC.TPL_LIST, async () => templateService.list());

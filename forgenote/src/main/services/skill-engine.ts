@@ -8,6 +8,26 @@ import { searchService } from './search-service';
 import { KB_TOOLS, executeTool, type ToolActivity } from './tool-runtime';
 import type { AIResponse, AITurn, AIRefHit, AIUsage } from '@shared/types/ai';
 
+/**
+ * Skill → Agent 默认映射（多 Agent 方案 §3.5）。
+ * 渲染层若不显式传 agentId，则按此表路由到对应专家角色。
+ */
+export const SKILL_TO_AGENT: Record<string, string> = {
+  ask: 'conversationalist',
+  agent: 'conversationalist',
+  diagnose: 'diagnostician',
+  'quick-note': 'refiner',
+  'refine-note': 'refiner',
+  'forge-card': 'card-smith',
+  'daily-insight': 'daily-muse',
+  inspiration: 'inspirer'
+};
+
+/** 解析本次请求的 Agent：显式 agentId 优先，否则按 SKILL_TO_AGENT 兜底到 conversationalist */
+export function resolveAgentId(skillId: string, explicit?: string): string {
+  return explicit || SKILL_TO_AGENT[skillId] || 'conversationalist';
+}
+
 /** Skill 运行上下文（由 AIHub 注入） */
 export interface AISkillCtx {
   kbId?: string;
@@ -17,6 +37,8 @@ export interface AISkillCtx {
   /** 会话草稿（awaitConfirm Skill 确认后回传） */
   pendingDraft?: unknown;
   onActivity?: (a: ToolActivity) => void;
+  /** 多 Agent 方案：当前请求指定的 Agent 角色（已由 AIHub 解析，含 SKILL_TO_AGENT 兜底） */
+  agentId?: string;
 }
 
 /** 统一 Skill 声明（本地类型，避免与 shared/types/ai.ts 的 Skill 冲突） */
@@ -292,9 +314,10 @@ export const SKILLS: Record<string, AISkill> = {
     id: 'forge-card',
     title: '知识卡片锻造',
     description: '将笔记提炼为四铁律知识卡片。',
-    run: async ({ kbId, input }) => {
-      const card = await aiService.forgeCard(kbId!, input.text);
-      return structured(card);
+    run: async ({ kbId, input, agentId }) => {
+      // 阶段 B：用 card-smith Agent 人格锻造（agentId 由 AIHub 解析为 card-smith）
+      const card = await aiService.forgeCardWithAgent(kbId!, String(input.text ?? ''));
+      return structured(card) as AIResponse & { refs?: AIRefHit[]; usage?: AIUsage };
     }
   },
 
@@ -304,8 +327,8 @@ export const SKILLS: Record<string, AISkill> = {
     description: '生成纯文本摘要 + 标签。',
     run: async ({ kbId, input }) => {
       const [summary, tags] = await Promise.all([
-        aiService.summarize(kbId!, input.text),
-        aiService.generateTags(kbId!, input.text)
+        aiService.summarize(kbId!, String(input.text ?? '')),
+        aiService.generateTags(kbId!, String(input.text ?? ''))
       ]);
       return structured({ summary, tags });
     }
@@ -316,22 +339,18 @@ export const SKILLS: Record<string, AISkill> = {
     title: '知识库诊断',
     description: '诊断失效链接、空目录、重复标题等健康问题。',
     useTools: ['kb_diagnose'],
-    run: async ({ kbId }) => {
+    run: async ({ kbId, agentId }) => {
       const report = await executeTool({ name: 'kb_diagnose', args: {} }, { kbId: kbId || '' });
       const reportText = typeof report === 'string' ? report : JSON.stringify(report, null, 2);
-      // 阶段 C：若已建立画像，围绕用户目标做个性化解读（失败则回退原报告）
+      // 阶段 B：用 diagnostician Agent 严谨解读（已内置"引用路径 / 量化 / 知识体系"人格 + 采样 0.2）
       if (kbId) {
         try {
-          const p = await profileService.getProfile(kbId);
-          if (p.confidence > 0) {
-            const focus = [...p.interests.map((t) => t.name), ...(p.basics.goals ?? [])].slice(0, 8).join('、');
-            const sys =
-              '你是锦囊笔记的知识库顾问。下面是一份结构化诊断报告。请结合用户的关注目标，'
-              + `用简短的一段话点出：这份报告中最值得用户优先处理的问题（如果用户的目标是「${focus || '—'}」）。`
-              + '不要重复罗列所有问题，只给 2-3 条最相关的优先建议。';
-            const tips = await aiService.chat(reportText.slice(0, 2500), sys);
-            return txt(`${reportText}\n\n【围绕你的目标，建议优先处理】\n${tips}`);
-          }
+          const tips = await aiService.runAgent({
+            agentId: agentId || 'diagnostician',
+            kbId,
+            userMessage: `以下是一份结构化诊断报告，请基于你的诊断专家角色解读，并按严重度给出优先处理建议：\n\n${reportText.slice(0, 4000)}`
+          });
+          return txt(`${reportText}\n\n【围绕你的目标，建议优先处理】\n${tips}`);
         } catch {
           /* 忽略，回退原报告 */
         }
@@ -344,27 +363,17 @@ export const SKILLS: Record<string, AISkill> = {
     id: 'daily-insight',
     title: '每日灵感一现',
     description: '基于知识库生成今日灵感。',
-    run: async ({ kbId, input }) => {
-      const prompt = input.text || '今天有什么值得记录的灵感？';
-      let sys = '你是锦囊笔记的灵感引擎，基于用户的知识库给出醍醐灌顶、可执行的认知。';
-      // 阶段 C：注入画像，让灵感贴合用户兴趣/偏好
-      if (kbId) {
-        try {
-          const p = await profileService.getProfile(kbId);
-          if (p.confidence > 0) {
-            const parts: string[] = [];
-            if (p.interests.length) parts.push(`用户近期关注：${p.interests.slice(0, 6).map((t) => t.name).join('、')}`);
-            if (p.recentFocus.length) parts.push(`用户最近聚焦：${p.recentFocus.slice(0, 4).map((r) => r.topic).join('、')}`);
-            parts.push(`回答风格：${p.preferences.tone}`);
-            sys += `\n请结合以下用户画像生成灵感（自然融入，不显式提及画像）：\n${parts.join('\n')}`;
-          }
-        } catch {
-          /* 忽略，用默认 sys */
-        }
-      }
-      return txt(await aiService.chat(prompt, sys));
+    run: async ({ kbId, input, agentId }) => {
+      const prompt = typeof input.text === 'string' ? input.text : '给我今天的灵光一现。';
+      // 阶段 C：用 daily-muse Agent（禁母题 / 跨域 / 历史去重 / 高 temperature / 画像自然融入）
+      const r = await aiService.runAgent({
+        agentId: agentId || 'daily-muse',
+        kbId,
+        userMessage: prompt
+      });
+      return txt(r);
     }
-  }
+  },
 };
 
 /** 按 id 取 Skill；未知 skill 由 AIHub 处理降级 */

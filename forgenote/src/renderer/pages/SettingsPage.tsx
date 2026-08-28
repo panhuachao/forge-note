@@ -18,6 +18,9 @@ export function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>('basic');
   const [prompts, setPrompts] = useState<AIPrompts>(DEFAULT_AI_PROMPTS);
   const [promptsSaving, setPromptsSaving] = useState(false);
+  // 阶段 C3：Agent 用户覆写（app_config['ai:agents']）
+  const [agentOverride, setAgentOverride] = useState<string>(''); // daily-muse 的 systemPrompt 覆写
+  const [agentOverrideSaving, setAgentOverrideSaving] = useState(false);
 
   // 应用更新状态
   const [version, setVersion] = useState('');
@@ -151,9 +154,12 @@ export function SettingsPage() {
     }
   }
 
-  // 加载高级设置中的固定提示词
+  // 加载高级设置中的固定提示词 + Agent 覆写（含旧 dailyInsight 迁移）
   useEffect(() => {
     window.forge.ai.getPrompts().then(setPrompts).catch(() => {});
+    window.forge.ai.getAgentOverrides().then((ov) => {
+      if (ov && ov['daily-muse']?.systemPrompt) setAgentOverride(ov['daily-muse'].systemPrompt);
+    }).catch(() => {});
   }, []);
 
   function patchPrompt(p: Partial<AIPrompts>) {
@@ -682,15 +688,38 @@ export function SettingsPage() {
             </p>
 
             <div className="space-y-5 text-sm">
-              {/* 每天灵感一现 */}
+              {/* 每天灵感一现（多 Agent 覆写：daily-muse Agent 的 systemPrompt） */}
               <div>
-                <label className="text-xs text-fg-muted">每天灵感一现（灵感工坊）</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-fg-muted">每天灵感一现 · 灵光一现 Agent 人设（多 Agent 覆写）</label>
+                  <button
+                    onClick={async () => {
+                      setAgentOverrideSaving(true);
+                      try {
+                        await window.forge.ai.setAgentOverrides({ 'daily-muse': { systemPrompt: agentOverride } });
+                        pushToast({ level: 'success', text: '灵光一现 Agent 人设已保存' });
+                      } catch (e) {
+                        pushToast({ level: 'error', text: String(e) });
+                      } finally {
+                        setAgentOverrideSaving(false);
+                      }
+                    }}
+                    disabled={agentOverrideSaving}
+                    className="btn text-xs"
+                  >
+                    {agentOverrideSaving ? '保存中…' : '保存 Agent 人设'}
+                  </button>
+                </div>
                 <textarea
-                  value={prompts.dailyInsight}
-                  onChange={(e) => patchPrompt({ dailyInsight: e.target.value })}
-                  rows={4}
+                  value={agentOverride}
+                  onChange={(e) => setAgentOverride(e.target.value)}
+                  rows={6}
+                  placeholder="留空则使用内置默认人设（禁鸡汤母题 / 跨域联想 / 历史去重）"
                   className="input mt-1.5 w-full resize-y"
                 />
+                <p className="text-[11px] text-fg-faint mt-1">
+                  该配置覆盖内置「灵光一现（daily-muse）」Agent 的 systemPrompt，优先级：用户覆写 &gt; 内置默认。
+                </p>
               </div>
 
               {/* 灵感方向 */}

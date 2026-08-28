@@ -16,6 +16,10 @@ import { retrieve, rerankHits } from './rag-service';
 import { KB_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
 import { listExternalTools, executeExternalTool } from './mcp-client';
 import { profileService } from './profile-service';
+import { agentRegistry } from './agents/registry';
+import { composeAgentSystem } from './agents/compose';
+import { mergeSampling } from './agents/sampling';
+import type { AgentRunCtx, AgentProfile } from './agents/types';
 
 const BASE_SYSTEM = `你是「锦囊笔记 ForgeNote」内置的本地 AI 知识管家，遵循以下铁律：
 1. 所有回答必须基于用户提供的笔记内容与知识库上下文，不编造信息。
@@ -89,7 +93,7 @@ class AIService {
   /**
    * 通用聊天（流式）。本项目为简化实现，主进程一次性返回；渲染层用 chunked 渲染。
    */
-  async chat(prompt: string, sysPrompt: string): Promise<string> {
+  async chat(prompt: string, sysPrompt: string, sampling?: { temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number }): Promise<string> {
     const cfg = await this.getConfig();
     if (!this.isEnabled(cfg)) {
       // 降级：本地规则引擎
@@ -97,7 +101,7 @@ class AIService {
     }
     if (cfg.provider === 'ollama') {
       const c: AIModelConfig = { ...cfg, baseUrl: cfg.baseUrl || 'http://127.0.0.1:11434', model: cfg.model || 'qwen2.5:7b' };
-      return this.callOllama(c, sysPrompt, prompt);
+      return this.callOllama(c, sysPrompt, prompt, sampling);
     }
     if (cfg.provider === 'openai') {
       // 提供合理默认值，避免用户漏填 model/baseUrl 直接降级
@@ -106,7 +110,7 @@ class AIService {
         baseUrl: cfg.baseUrl || 'https://api.deepseek.com/v1',
         model: cfg.model || 'deepseek-chat'
       };
-      return this.callOpenAI(c, sysPrompt, prompt);
+      return this.callOpenAI(c, sysPrompt, prompt, sampling);
     }
     return this.localFallback(prompt, sysPrompt);
   }
@@ -138,7 +142,7 @@ class AIService {
   async *streamChat(
     prompt: string,
     sysPrompt: string,
-    opts?: { signal?: AbortSignal }
+    opts?: { signal?: AbortSignal; sampling?: { temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number } }
   ): AsyncGenerator<{ delta: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
     const cfg = await this.getConfig();
     const start = Date.now();
@@ -203,7 +207,12 @@ class AIService {
             messages: [
               { role: 'system', content: sysPrompt },
               { role: 'user', content: prompt }
-            ]
+            ],
+            temperature: opts?.sampling?.temperature ?? 0.3,
+            ...(opts?.sampling?.top_p !== undefined ? { top_p: opts.sampling.top_p } : {}),
+            ...(opts?.sampling?.presence_penalty !== undefined ? { presence_penalty: opts.sampling.presence_penalty } : {}),
+            ...(opts?.sampling?.frequency_penalty !== undefined ? { frequency_penalty: opts.sampling.frequency_penalty } : {}),
+            ...(opts?.sampling?.max_tokens !== undefined ? { max_tokens: opts.sampling.max_tokens } : {})
           }),
           signal: opts?.signal
         });
@@ -244,7 +253,7 @@ class AIService {
     void t0;
   }
 
-  private async callOllama(cfg: AIModelConfig, sys: string, user: string): Promise<string> {
+  private async callOllama(cfg: AIModelConfig, sys: string, user: string, sampling?: { temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number }): Promise<string> {
     const base = cfg.baseUrl || 'http://127.0.0.1:11434';
     const r = await fetch(`${base}/api/chat`, {
       method: 'POST',
@@ -255,7 +264,8 @@ class AIService {
         messages: [
           { role: 'system', content: sys },
           { role: 'user', content: user }
-        ]
+        ],
+        ...(sampling && sampling.temperature !== undefined ? { options: { temperature: sampling.temperature, presence_penalty: sampling.presence_penalty ?? 0, frequency_penalty: sampling.frequency_penalty ?? 0 } } : {})
       })
     });
     if (!r.ok) throw new Error(`Ollama 调用失败: ${r.status} ${await r.text()}`);
@@ -263,7 +273,7 @@ class AIService {
     return data.message.content || '';
   }
 
-  private async callOpenAI(cfg: AIModelConfig, sys: string, user: string): Promise<string> {
+  private async callOpenAI(cfg: AIModelConfig, sys: string, user: string, sampling?: { temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number }): Promise<string> {
     const base = cfg.baseUrl || 'https://api.openai.com/v1';
     const r = await fetch(`${base}/chat/completions`, {
       method: 'POST',
@@ -277,7 +287,11 @@ class AIService {
           { role: 'system', content: sys },
           { role: 'user', content: user }
         ],
-        temperature: 0.3
+        temperature: sampling?.temperature ?? 0.3,
+        ...(sampling?.top_p !== undefined ? { top_p: sampling.top_p } : {}),
+        ...(sampling?.presence_penalty !== undefined ? { presence_penalty: sampling.presence_penalty } : {}),
+        ...(sampling?.frequency_penalty !== undefined ? { frequency_penalty: sampling.frequency_penalty } : {}),
+        ...(sampling?.max_tokens !== undefined ? { max_tokens: sampling.max_tokens } : {})
       })
     });
     if (!r.ok) throw new Error(`OpenAI 调用失败: ${r.status} ${await r.text()}`);
@@ -343,6 +357,35 @@ class AIService {
     const extra = `${dirTree}\n\n${fullDirContext ? `# 目录整体内容（与问题强相关）\n${fullDirContext}\n\n` : ''}# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}\n\n回答要求：\n- 若问题涉及"归纳/总结/进展/整体情况"，请基于【目录结构 + 目录整体内容】做归纳，引用具体笔记用 [[笔记名]]\n- 若问题涉及"如何使用某目录/目录是否合理"，请基于目录说明（README）和已有笔记分布给出建议\n- 引用时优先用 [[笔记名]] 形式标注`;
     const sys = await this.systemWithProfile(kbId, extra);
     return this.chat(question, sys);
+  }
+
+  /**
+   * 统一的「检索上下文构建」入口，供多 Agent 方案复用（doc/多Agent技术实现方案.md §4.3.2）。
+   * 根据 AgentRetrieval 策略决定：是否召回、topK、是否附带目录树、是否读取整目录内容。
+   */
+  async buildRetrievalContext(
+    kbId: string,
+    question: string,
+    retrieval?: { enabled?: boolean; topK?: number; includeDirTree?: boolean; includeOrphans?: boolean }
+  ): Promise<string> {
+    if (!retrieval?.enabled) return '';
+    const kb = getKB(kbId);
+    if (!kb) return '';
+    const topK = retrieval.topK ?? 12;
+    const { hits } = await retrieve(kbId, question, { topK });
+    const hitContext = hits
+      .map((h) => {
+        const anchor = h.heading ? `[[${h.noteName}#${h.heading}]]` : `[[${h.noteName}]]`;
+        return `### ${anchor}${h.startLine ? ` (行 ${h.startLine})` : ''}\n路径: ${h.notePath}\n片段: ${h.snippet}`;
+      })
+      .join('\n\n');
+    const dirTree = retrieval.includeDirTree ? await this.buildDirOverview(kb.rootPath, kbId) : '';
+    const fullDirContext = await this.maybeReadFullDir(kb.rootPath, kbId, question, hits);
+    const parts: string[] = [];
+    if (dirTree) parts.push(dirTree);
+    if (fullDirContext) parts.push(`# 目录整体内容（与问题强相关）\n${fullDirContext}`);
+    parts.push(`# 关键词检索片段（top ${hits.length}）\n${hitContext || '（未检索到与问题关键词精确匹配的片段）'}`);
+    return parts.join('\n\n');
   }
 
   /**
@@ -1080,6 +1123,47 @@ class AIService {
     return cleaned;
   }
 
+  /** 阶段 B：用 refiner Agent 人格完善笔记（替代 BASE_SYSTEM 的 refineNote） */
+  async refineNoteWithAgent(kbId: string, notePath: string, aiReply: string, currentContent?: string): Promise<string> {
+    const kb = getKB(kbId);
+    if (!kb) return currentContent || '';
+    const base = currentContent ?? (await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => ''));
+    const sys = await composeAgentSystem(agentRegistry.get('refiner')!, {
+      kbId,
+      input: { text: aiReply },
+      extra: {}
+    });
+    const refined = await this.chat(aiReply, sys);
+    const cleaned = refined
+      .replace(/^```(?:markdown)?\s*\n?/i, '')
+      .replace(/\n?```\s*$/, '')
+      .trim();
+    return cleaned;
+  }
+
+  /** 阶段 B：用 card-smith Agent 人格锻造知识卡片（返回结构化对象） */
+  async forgeCardWithAgent(kbId: string, text: string): Promise<{ title: string; body: string; links: string[]; hook: string; reuse: string }> {
+    const sys = await composeAgentSystem(agentRegistry.get('card-smith')!, {
+      kbId,
+      input: { text },
+      extra: {}
+    });
+    const merged = `${sys}\n\n# 待锻造内容\n${text}\n\n请严格以 JSON 输出：{"title":..., "body":..., "links":[...], "hook":..., "reuse":...}`;
+    const raw = await this.chat(merged, sys);
+    try {
+      const json = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim());
+      return {
+        title: json.title || '未命名卡片',
+        body: json.body || '',
+        links: Array.isArray(json.links) ? json.links : [],
+        hook: json.hook || '',
+        reuse: json.reuse || ''
+      };
+    } catch {
+      return { title: '未命名卡片', body: raw, links: [], hook: '', reuse: '' };
+    }
+  }
+
   /**
    * 智能体对话：模型可主动调用知识库 MCP 工具（检索/读写/诊断）。
    * 实现 ReAct 循环：模型生成 tool_calls → 执行 → 结果回灌 → 再次推理，直到无 tool_calls。
@@ -1163,6 +1247,73 @@ class AIService {
       function: { name: tc.function?.name, arguments: JSON.stringify(tc.function?.arguments || {}) }
     }));
     return { content: msg.content || '', toolCalls };
+  }
+
+  /**
+   * 多 Agent 统一执行入口（doc/多Agent技术实现方案.md §3.4）。
+   * 根据 agentId 组装 system prompt（人格 + 画像 + 检索 + 附加指引），
+   * 用该 Agent 的采样参数调用模型，并触发 postRun（如灵感历史持久化）。
+   */
+  async runAgent(opts: {
+    agentId: string;
+    kbId?: string;
+    userMessage: string;
+    extra?: Record<string, unknown>;
+    input?: Record<string, unknown>;
+    history?: unknown[];
+  }): Promise<string> {
+    const agent = agentRegistry.get(opts.agentId);
+    if (!agent) throw new Error(`未知 Agent: ${opts.agentId}`);
+    const ctx: AgentRunCtx = {
+      kbId: opts.kbId,
+      input: opts.input ?? { text: opts.userMessage },
+      history: opts.history,
+      extra: opts.extra
+    };
+    if (agent.preRun) await agent.preRun(ctx);
+    const sys = await composeAgentSystem(agent, ctx);
+    const sampling = mergeSampling(agent.sampling);
+    const text = await this.chat(opts.userMessage, sys, sampling);
+    const result = { kind: 'text' as const, text };
+    if (agent.postRun) await agent.postRun(ctx, result);
+    return text;
+  }
+
+  /**
+   * 流式版 runAgent（供 hubRunStream 使用）。
+   */
+  async *runAgentStream(opts: {
+    agentId: string;
+    kbId?: string;
+    userMessage: string;
+    extra?: Record<string, unknown>;
+    input?: Record<string, unknown>;
+    history?: unknown[];
+    signal?: AbortSignal;
+  }): AsyncGenerator<{ delta: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
+    const agent = agentRegistry.get(opts.agentId);
+    if (!agent) throw new Error(`未知 Agent: ${opts.agentId}`);
+    const ctx: AgentRunCtx = {
+      kbId: opts.kbId,
+      input: opts.input ?? { text: opts.userMessage },
+      history: opts.history,
+      extra: opts.extra
+    };
+    if (agent.preRun) await agent.preRun(ctx);
+    const sys = await composeAgentSystem(agent, ctx);
+    const sampling = mergeSampling(agent.sampling);
+    let full = '';
+    const capture: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
+    for await (const chunk of this.streamChat(opts.userMessage, sys, { signal: opts.signal, sampling })) {
+      full += chunk.delta;
+      if (chunk.usage) {
+        capture.promptTokens = chunk.usage.promptTokens;
+        capture.completionTokens = chunk.usage.completionTokens;
+      }
+      yield chunk;
+    }
+    const result = { kind: 'text' as const, text: full };
+    if (agent.postRun) await agent.postRun(ctx, result);
   }
 }
 
