@@ -17,6 +17,14 @@ export interface OpenTab {
   dirty?: boolean;
 }
 
+// 关注项：目录或笔记。按 kbId 隔离，存于 localStorage。
+export interface FollowedItem {
+  type: 'file' | 'dir';
+  path: string; // 目录用 path；笔记也用 path
+  name: string; // 用于显示
+  addedAt: number;
+}
+
 interface LayoutState {
   // 主菜单列当前选中
   mainView: MainView;
@@ -45,6 +53,8 @@ interface LayoutState {
   lineHeight: LineHeightKey;
   // 外观样式：主题色（持久化）
   themeColor: ThemeColorKey;
+  // 关注列表（按 kbId 隔离，持久化）
+  followed: Record<string, FollowedItem[]>;
   // actions
   setMainView: (v: MainView) => void;
   setTreeView: (v: TreeView) => void;
@@ -64,6 +74,8 @@ interface LayoutState {
   closeTab: (id: string) => void;
   closeTabByPath: (notePath: string) => void;
   pruneStaleTabs: (tree: TreeNode | null) => void;
+  toggleFollow: (kbId: string, item: Omit<FollowedItem, 'addedAt'>) => void;
+  removeFollow: (kbId: string, path: string) => void;
   setActiveTab: (id: string) => void;
   markTabDirty: (id: string, dirty: boolean) => void;
   closeAllTabs: () => void;
@@ -81,6 +93,7 @@ interface PersistedLayout {
   fontSize: FontSizeKey;
   lineHeight: LineHeightKey;
   themeColor: ThemeColorKey;
+  followed?: Record<string, FollowedItem[]>;
 }
 
 function loadPersisted(): PersistedLayout {
@@ -102,7 +115,8 @@ function loadPersisted(): PersistedLayout {
       sortMode: v.sortMode ?? 'name',
       fontSize: (v.fontSize === 'md' || v.fontSize === 'lg' ? v.fontSize : 'sm') as FontSizeKey,
       lineHeight: (v.lineHeight === 'md' || v.lineHeight === 'lg' ? v.lineHeight : 'sm') as LineHeightKey,
-      themeColor: (['red', 'blue', 'green', 'purple', 'amber', 'teal'].includes(v.themeColor) ? v.themeColor : 'red') as ThemeColorKey
+      themeColor: (['red', 'blue', 'green', 'purple', 'amber', 'teal'].includes(v.themeColor) ? v.themeColor : 'red') as ThemeColorKey,
+      followed: (v.followed && typeof v.followed === 'object') ? v.followed : {}
     };
   } catch {
     return def;
@@ -128,7 +142,8 @@ function persistAll(get: () => LayoutState) {
     sortMode: s.sortMode,
     fontSize: s.fontSize,
     lineHeight: s.lineHeight,
-    themeColor: s.themeColor
+    themeColor: s.themeColor,
+    followed: s.followed
   });
 }
 
@@ -151,6 +166,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
     fontSize: persisted.fontSize,
     lineHeight: persisted.lineHeight,
     themeColor: persisted.themeColor,
+    followed: persisted.followed ?? {},
     setMainView: (v) => set({ mainView: v }),
     setSelectedTag: (tag) => set({ selectedTag: tag }),
     setChatWithNote: (v) => set({ chatWithNote: v }),
@@ -273,6 +289,26 @@ export const useLayoutStore = create<LayoutState>((set, get) => {
         tabs: get().tabs.map((t) => (t.id === id ? { ...t, dirty } : t))
       });
     },
-    closeAllTabs: () => set({ tabs: [], activeTabId: null })
+    closeAllTabs: () => set({ tabs: [], activeTabId: null }),
+    toggleFollow: (kbId, item) => {
+      const cur = get().followed[kbId] ?? [];
+      const exists = cur.findIndex((x) => x.path === item.path && x.type === item.type);
+      let nextList: FollowedItem[];
+      if (exists >= 0) {
+        nextList = cur.filter((_, i) => i !== exists);
+      } else {
+        nextList = [...cur, { ...item, addedAt: Date.now() }];
+      }
+      const followed = { ...get().followed, [kbId]: nextList };
+      set({ followed });
+      persistAll(get);
+    },
+    removeFollow: (kbId, path) => {
+      const cur = get().followed[kbId] ?? [];
+      const nextList = cur.filter((x) => x.path !== path);
+      const followed = { ...get().followed, [kbId]: nextList };
+      set({ followed });
+      persistAll(get);
+    }
   };
 });

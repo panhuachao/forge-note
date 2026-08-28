@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useKBStore } from '../stores/kb-store';
+import { useLayoutStore } from '../stores/layout-store';
 import { Icon } from './Icon';
 
 // 文件树右键菜单请求事件。节点通过自定义事件把"打开菜单"的请求广播到全局，
@@ -16,6 +17,8 @@ export const TREE_CTX_EVENT = 'forgenote:tree_ctx';
 
 export function TreeContextMenuRoot() {
   const { activeKb, pushToast, setTree } = useKBStore();
+  const followed = useLayoutStore((s) => s.followed);
+  const toggleFollow = useLayoutStore((s) => s.toggleFollow);
   const [menu, setMenu] = useState<TreeCtxDetail | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
@@ -116,6 +119,26 @@ export function TreeContextMenuRoot() {
             e.stopPropagation();
           }}
         >
+          {(() => {
+            const isRoot = menu.type === 'dir' && menu.path === '';
+            if (isRoot) return null;
+            const list = (activeKb && followed[activeKb.id]) || [];
+            const isFollowed = list.some((f) => f.path === menu.path && f.type === menu.type);
+            return (
+              <button
+                className="w-full text-left px-3 py-1.5 hover:bg-hover-bg text-fg flex items-center gap-2"
+                onClick={() => {
+                  if (!activeKb) return;
+                  toggleFollow(activeKb.id, { type: menu.type, path: menu.path, name: menu.name });
+                  setMenu(null);
+                  pushToast({ level: 'success', text: isFollowed ? '已取消关注' : '已加入关注' });
+                }}
+              >
+                <Icon name="bookmark" className={`w-4 h-4 ${isFollowed ? 'text-brand' : ''}`} />
+                {isFollowed ? '取消关注' : '关注'}
+              </button>
+            );
+          })()}
           <button
             className="w-full text-left px-3 py-1.5 hover:bg-hover-bg text-red-500 flex items-center gap-2"
             onClick={handleDelete}

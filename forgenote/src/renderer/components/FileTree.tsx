@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { TreeNode } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
-import { useLayoutStore, SortMode } from '../stores/layout-store';
+import { useLayoutStore, SortMode, type FollowedItem } from '../stores/layout-store';
 import { Icon } from './Icon';
 import { TREE_CTX_EVENT, type TreeCtxDetail } from './TreeContextMenuRoot';
 
@@ -159,6 +159,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
     return (
       <div
         data-tree
+        data-tree-path={node.path || node.id}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -223,6 +224,37 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
             title="AI 诊断知识库"
           ><Icon name="viewfinder-circle" className="w-4 h-4" /></button>
         </div>
+        {/* 关注列表：已关注的目录 / 笔记，可直接跳转或展开 */}
+        <FollowedList
+          tree={node}
+          onOpenFile={(p) => {
+            onOpenNote(p);
+            setMainView('note');
+          }}
+          onFocusDir={(p) => {
+            // 展开该目录及所有祖先
+            setExpanded((s) => {
+              const ns = new Set(s);
+              const ancestors: string[] = [];
+              let cur: TreeNode | undefined = node;
+              const findAndMark = (n: TreeNode, target: string, trail: string[]): boolean => {
+                if (n.path === target) { ancestors.push(...trail, n.path); return true; }
+                if (n.children) for (const c of n.children) {
+                  if (findAndMark(c, target, [...trail, n.path])) return true;
+                }
+                return false;
+              };
+              findAndMark(node, p, []);
+              ancestors.forEach((a) => ns.add(a));
+              return ns;
+            });
+            // 等待渲染后滚动定位到目标目录
+            setTimeout(() => {
+              const el = document.querySelector(`[data-tree-path="${CSS.escape(p)}"]`);
+              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
+          }}
+        />
         {sortedChildren.map((c) => (
           <FileTree
             key={c.id}
@@ -241,7 +273,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
     const isOpen = expanded.has(node.id);
     const indent = { paddingLeft: 8 + depth * 12 };
     return (
-      <div>
+      <div data-tree-path={node.path}>
         <div
           className="group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-xl hover:bg-hover-bg text-sm cursor-pointer transition-colors"
           style={indent}
@@ -364,6 +396,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
   const isEditing = editing?.path === node.path;
   return (
     <div
+      data-tree-path={node.path}
       className={`group flex items-center gap-1 py-1 pr-2 mx-1.5 rounded-xl text-sm cursor-pointer transition-colors ${
         node.path === activeTabId
           ? 'bg-brand-soft/50 shadow-[inset_2px_0_0_var(--brand)] text-brand font-medium'
@@ -415,6 +448,83 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
         >
           {fileName}
         </span>
+      )}
+    </div>
+  );
+}
+
+// 在知识库目录树顶部渲染的"关注列表"：把已关注的目录 / 笔记平铺展示。
+// 点击文件直接打开；点击目录交给 FileTree 处理（展开 + 滚动定位）。
+interface FollowedListProps {
+  tree: TreeNode;
+  onOpenFile: (path: string) => void;
+  onFocusDir: (path: string) => void;
+}
+function FollowedList({ tree, onOpenFile, onFocusDir }: FollowedListProps) {
+  const { activeKb } = useKBStore();
+  const followed = useLayoutStore((s) => s.followed);
+  const removeFollow = useLayoutStore((s) => s.removeFollow);
+  const [collapsed, setCollapsed] = useState(false);
+  const list: FollowedItem[] = (activeKb && followed[activeKb.id]) || [];
+  // 校验关注项是否还存在于 tree 中
+  const livePaths = useMemo(() => {
+    const set = new Set<string>();
+    const walk = (n: TreeNode) => {
+      if (n.kind === 'file' || n.kind === 'dir') set.add(n.path);
+      n.children?.forEach(walk);
+    };
+    walk(tree);
+    return set;
+  }, [tree]);
+  const valid = list.filter((it) => livePaths.has(it.path));
+
+  if (valid.length === 0) return null;
+
+  return (
+    <div className="border-b border-border-soft bg-panel-soft/30">
+      <button
+        onClick={() => setCollapsed((v) => !v)}
+        className="w-full h-7 px-2 flex items-center gap-1 text-[11px] text-fg-secondary hover:bg-hover-bg"
+        title={collapsed ? '展开关注列表' : '折叠关注列表'}
+      >
+        <Icon
+          name={collapsed ? 'chevron-right' : 'chevron-down'}
+          className="w-3 h-3 text-fg-muted"
+        />
+        <Icon name="bookmark" className="w-3 h-3 text-brand" />
+        <span className="font-medium">关注</span>
+        <span className="text-fg-faint">{valid.length}</span>
+      </button>
+      {!collapsed && (
+        <div className="pb-1">
+          {valid.map((it) => (
+            <div
+              key={`${it.type}::${it.path}`}
+              className="group flex items-center gap-1 pl-4 pr-2 py-0.5 mx-1.5 rounded-md text-xs text-fg-secondary hover:bg-hover-bg cursor-pointer"
+              onClick={() => {
+                if (it.type === 'file') onOpenFile(it.path);
+                else onFocusDir(it.path);
+              }}
+              title={it.path}
+            >
+              <Icon
+                name={it.type === 'dir' ? 'folder' : 'document'}
+                className="w-3.5 h-3.5 text-fg-muted shrink-0"
+              />
+              <span className="truncate flex-1">{it.name}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (activeKb) removeFollow(activeKb.id, it.path);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-fg-faint hover:text-red-500"
+                title="取消关注"
+              >
+                <Icon name="x-mark" className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
