@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { TreeNode } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
 import { useLayoutStore, SortMode } from '../stores/layout-store';
@@ -22,18 +22,25 @@ interface Props {
 
 function sortNodes(nodes: TreeNode[] | undefined, mode: SortMode): TreeNode[] {
   if (!nodes) return [];
-  const dirs = nodes.filter((n) => n.kind === 'dir');
-  const files = nodes.filter((n) => n.kind !== 'dir');
-  const cmp = (a: TreeNode, b: TreeNode) => {
-    if (mode === 'mtime' || mode === 'created') {
-      const av = a.mtime ?? 0;
-      const bv = b.mtime ?? 0;
-      return bv - av;
+  // 按修改/创建时间时：目录与文件一起按时间倒序混排（用户原话：把目录也纳入排序范围）
+  // 按名称时：保持目录在前的视觉习惯（与原 walkDir 默认顺序一致）
+  const cmp = (a: TreeNode, b: TreeNode): number => {
+    if (mode === 'mtime') {
+      return (b.mtime ?? 0) - (a.mtime ?? 0);
     }
-    // name: 中文 + 英文
+    if (mode === 'created') {
+      return (b.ctime ?? 0) - (a.ctime ?? 0);
+    }
+    // name：中文 + 英文
     return a.name.localeCompare(b.name, 'zh-CN');
   };
-  return [...dirs.sort(cmp), ...files.sort(cmp)];
+  if (mode === 'name') {
+    const dirs = nodes.filter((n) => n.kind === 'dir');
+    const files = nodes.filter((n) => n.kind !== 'dir');
+    return [...dirs.sort(cmp), ...files.sort(cmp)];
+  }
+  // mtime/created：目录与文件一并按时间倒序
+  return [...nodes].sort(cmp);
 }
 
 export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, setExpanded: setExpandedProp }: Props) {
@@ -45,6 +52,9 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
   const setExpanded = depth === 0 ? setLocalExpanded : (setExpandedProp ?? setLocalExpanded);
   // 顶部“全部展开/折叠”按钮的状态：false=折叠（默认），true=展开
   const [allExpanded, setAllExpanded] = useState(false);
+  // 排序下拉：改为点击切换 + 点击外部关闭，避免 group-hover 在按钮与下拉间隙失效导致面板瞬间消失
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortWrapRef = useRef<HTMLDivElement>(null);
   // 重命名 / 新建后内联编辑态：{ path, name, kind }
   const [editing, setEditing] = useState<{ path: string; name: string; kind: 'dir' | 'file' } | null>(null);
 
@@ -98,6 +108,18 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
   useEffect(() => {
     if (depth === 0) setExpanded((s) => new Set([...s, node.id]));
   }, [node.id, depth]);
+
+  // 排序下拉：点击外部关闭（仅根实例挂监听，避免子目录实例冗余监听）
+  useEffect(() => {
+    if (depth !== 0) return;
+    if (!sortOpen) return;
+    function onDocMouseDown(e: MouseEvent) {
+      const wrap = sortWrapRef.current;
+      if (wrap && !wrap.contains(e.target as Node)) setSortOpen(false);
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [sortOpen, depth]);
 
   // 监听全局折叠/展开/排序事件
   useEffect(() => {
@@ -156,12 +178,13 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
             className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
             title="新建目录"
           ><Icon name="folder-plus" className="w-4 h-4" /></button>
-          <div className="relative group">
+          <div className="relative" ref={sortWrapRef}>
             <button
-              className="h-10 w-10 flex items-center justify-center text-fg-secondary hover:bg-hover-bg rounded-xl transition-colors"
+              onClick={() => setSortOpen((v) => !v)}
+              className={`h-10 w-10 flex items-center justify-center rounded-xl transition-colors ${sortOpen ? 'bg-hover-bg text-brand' : 'text-fg-secondary hover:bg-hover-bg'}`}
               title="排序方式"
             ><Icon name="arrows-up-down" className="w-4 h-4" /></button>
-            <div className="absolute left-0 top-full mt-1 bg-content border border-border-soft rounded-xl shadow-lg z-30 hidden group-hover:block min-w-[120px] overflow-hidden">
+            <div className={`absolute left-0 top-full mt-1 bg-content border border-border-soft rounded-xl shadow-lg z-30 min-w-[120px] overflow-hidden ${sortOpen ? 'block' : 'hidden'}`}>
               {([
                 { v: 'name', l: '按名称' },
                 { v: 'mtime', l: '按修改时间' },
@@ -172,6 +195,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
                   onClick={() => {
                     useLayoutStore.getState().setSortMode(s.v);
                     window.dispatchEvent(new CustomEvent('forgenote:sort', { detail: s.v }));
+                    setSortOpen(false);
                   }}
                   className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-hover-bg ${
                     sortMode === s.v ? 'text-brand bg-brand-soft/30' : 'text-fg-secondary'

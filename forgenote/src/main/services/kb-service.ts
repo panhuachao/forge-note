@@ -115,12 +115,15 @@ class KBService {
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       const childAbs = join(abs, e.name);
       if (e.isDirectory()) {
+        const dirStat = await fs.stat(childAbs).catch(() => null);
         const dirNode: TreeNode = {
           id: childRel,
           name: e.name,
           path: childRel,
           kind: 'dir',
-          children: []
+          children: [],
+          mtime: dirStat?.mtimeMs,
+          ctime: dirStat?.birthtimeMs ?? dirStat?.ctimeMs
         };
         // 模板目录
         for (const [id, dirName] of idToDir) {
@@ -146,7 +149,8 @@ class KBService {
           name: e.name,
           path: childRel,
           kind: 'file',
-          mtime: stat.mtimeMs
+          mtime: stat.mtimeMs,
+          ctime: stat.birthtimeMs ?? stat.ctimeMs
         });
       }
     }

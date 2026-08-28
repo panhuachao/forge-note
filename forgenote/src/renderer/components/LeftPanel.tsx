@@ -190,7 +190,7 @@ function TagsView() {
 
   return (
     <div className="relative h-full">
-      <div ref={scrollRef} className="h-full overflow-y-auto pb-2 px-2">
+      <div ref={scrollRef} className="h-full overflow-y-auto pb-2 pl-2 pr-7">
         {keys.map((key) => (
           <div
             key={key}
@@ -234,13 +234,13 @@ function TagsView() {
           </div>
         ))}
       </div>
-      {/* 右侧索引条 */}
-      <div className="absolute top-2 right-1.5 flex flex-col items-center gap-0.5 max-h-full overflow-hidden text-[10px] text-fg-faint select-none">
+      {/* 右侧索引条：字母自适应均分容器高度，避免字母过多时被裁；z-20 保证浮在滚动内容之上 */}
+      <div className="absolute top-2 bottom-2 right-1.5 z-20 flex flex-col items-center text-[10px] text-fg-faint select-none">
         {keys.map((key) => (
           <button
             key={key}
             onClick={() => scrollTo(key)}
-            className="w-5 h-5 leading-none hover:text-brand hover:bg-hover-bg rounded-md transition-colors"
+            className="w-5 flex-1 min-h-[18px] leading-none opacity-50 hover:opacity-100 hover:text-brand hover:bg-hover-bg rounded-md transition-colors"
             title={key}
           >
             {key}

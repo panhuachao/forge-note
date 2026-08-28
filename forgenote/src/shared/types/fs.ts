@@ -14,6 +14,7 @@ export interface TreeNode {
   special?: 'readme' | 'ai_config' | 'note_template' | 'meta';
   noteCount?: number;
   mtime?: number;
+  ctime?: number;
 }
 
 export interface NoteInfo {
