@@ -108,6 +108,24 @@ const api = {
     refineNote: (kbId: string, p: string, reply: string, content?: string) =>
       ipcRenderer.invoke(IPC.AI_REFINE_NOTE, kbId, p, reply, content) as Promise<string>,
     hubRun: (req: AIRequest) => ipcRenderer.invoke(IPC.AI_HUB_RUN, req) as Promise<AIResponse & { sessionId?: string }>,
+    // 执行后验证 / 回滚（doc/AI智能管家重构方案.md §6.3 P2-3）
+    verifyAction: (action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
+      ipcRenderer.invoke(IPC.AI_ACTION_VERIFY, action, kbId) as Promise<{ ok: boolean; message: string }>,
+    rollbackAction: (action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
+      ipcRenderer.invoke(IPC.AI_ACTION_ROLLBACK, action, kbId) as Promise<{ ok: boolean; message: string }>,
+    // 直接执行一个已注册的确认操作（巡检建议等本地规则生成的 action，无需模型）
+    executeAction: (action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
+      ipcRenderer.invoke(IPC.AI_ACTION_EXECUTE, action, kbId) as Promise<{ ok: boolean; message: string }>,
+    // 知识库巡检（P2-1）：规则类检查不依赖模型
+    runPatrol: (kbId: string, force?: boolean) =>
+      ipcRenderer.invoke(IPC.AI_PATROL_RUN, kbId, force) as Promise<import('@shared/types/ai').PatrolReport>,
+    getPatrolReport: (kbId: string) =>
+      ipcRenderer.invoke(IPC.AI_PATROL_LATEST, kbId) as Promise<import('@shared/types/ai').PatrolReport | null>,
+    // 主动建议与节流（P2-5）
+    getPatrolSuggestions: (kbId: string) =>
+      ipcRenderer.invoke(IPC.AI_PATROL_SUGGEST, kbId) as Promise<import('@shared/types/ai').PatrolFinding[]>,
+    markPatrolShown: (kbId: string, keys: string[]) =>
+      ipcRenderer.invoke(IPC.AI_PATROL_MARK_SHOWN, kbId, keys) as Promise<void>,
     // 多 Agent 方案（§3.5）：按 agentId 直接调用专家角色
     runAgent: (kbId: string, agentId: string, text: string, extra?: Record<string, unknown>) =>
       ipcRenderer.invoke(IPC.AI_RUN_AGENT, kbId, agentId, text, extra) as Promise<AIResponse>,

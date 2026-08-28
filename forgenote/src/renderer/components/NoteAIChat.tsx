@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Icon } from './Icon';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
 import { isAIConfigured } from '../stores/kb-store';
+import { useAISession } from '../stores/useAISession';
+import { ActionVerifyBar } from './ActionVerifyBar';
 import { ConfirmableActionCard } from './ConfirmableActionCard';
 import type { ConfirmableAction, ToolActivity } from '@shared/types/ai';
 
@@ -27,7 +29,7 @@ const SUGGESTIONS = [
 
 /**
  * 围绕当前笔记的 AI 聊天面板。
- * - 普通模式：主进程 askAboutNote 注入笔记上下文（快、只读）。
+ * - 普通模式：经 AIHub 的 ask skill 注入笔记上下文（快、只读）。
  * - 智能体模式：走 AIHub 的 agent skill，AI 可主动调用知识库 MCP 工具；
  *   涉及修改时只产出「待确认建议」，用户确认后才写盘（doc/MCP技术实现方案.md）。
  */
@@ -40,14 +42,15 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   // 智能体模式：开启后 AI 可调用工具，修改类操作走「建议 → 确认 → 执行」
   const [agentMode, setAgentMode] = useState(false);
-  // AI 会话 id（多轮上下文，与 ChatPage 的 convSessionMap 同思路）
-  const sessionRef = useRef<string | undefined>(undefined);
-  // 流式输出缓冲 + 工具调用活动
+  // 统一 AI 会话：多轮上下文、流式、工具活动、确认执行均由 useAISession 托管（P1-4）
+  const ai = useAISession({ skill: 'agent', kbId, notePath });
+  // 流式输出缓冲（工具活动由 ai.tools 提供）
   const [streaming, setStreaming] = useState('');
-  const [liveTools, setLiveTools] = useState<ToolActivity[]>([]);
-  // 待确认操作
-  const [pendingAction, setPendingAction] = useState<ConfirmableAction | null>(null);
+  const liveTools = ai.tools;
+  const pendingAction = ai.pendingAction;
   const [actionBusy, setActionBusy] = useState(false);
+  // 最近一次执行过的 action（供验证失败时回滚，P2-3）
+  const lastActionRef = useRef<ConfirmableAction | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,12 +58,9 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
 
   // 切换笔记时重置会话与未处理的建议
   useEffect(() => {
-    sessionRef.current = undefined;
+    ai.reset();
     setMessages([]);
-    setPendingAction(null);
   }, [notePath]);
-
-  const genStreamId = () => `s_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
   /** 当用户只回复「继续」等词时，追加指令让模型直接生成预览，而不是再次询问 */
   const withContinueDirective = (q: string) => {
@@ -73,58 +73,37 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
   /** 智能体模式：走 AIHub agent skill */
   const sendAgent = async (question: string) => {
     const directed = withContinueDirective(question);
-    const streamId = genStreamId();
     let acc = '';
+    // 工具活动用本地数组累积：state 更新是异步的，回调里读到的是最新快照
     const toolActs: ToolActivity[] = [];
-    setLiveTools([]);
-    const off = window.forge.ai.onAIStream((chunk) => {
-      if (chunk.streamId !== streamId) return;
-      acc += chunk.delta;
-      setStreaming(acc);
-    });
-    const offAct = window.forge.ai.onToolActivity?.((chunk) => {
-      if (chunk.streamId !== streamId) return;
-      toolActs.push(chunk.activity as ToolActivity);
-      setLiveTools([...toolActs]);
-    });
-    try {
-      const res = (await window.forge.ai.hubRunStream({
+    const res = await ai.runStream(
+      { text: directed, question: directed },
+      (delta) => {
+        acc += delta;
+        setStreaming(acc);
+      },
+      {
         skill: 'agent',
-        input: { text: directed, question: directed, notePath },
-        kbId,
-        sessionId: sessionRef.current,
-        streamId
-      } as any)) as any;
-      off();
-      offAct?.();
-      if (res?.sessionId) sessionRef.current = res.sessionId;
-      // 待确认建议：渲染确认卡片，不落为普通消息
-      if (res?.kind === 'structured' && res.pending && res.data) {
-        setStreaming('');
-        setPendingAction(res.data as ConfirmableAction);
-        return;
+        onActivity: (list) => {
+          toolActs.length = 0;
+          toolActs.push(...list);
+        }
       }
-      const text = res?.kind === 'text' ? res.text : acc || '（AI 未返回内容）';
-      setStreaming('');
-      setMessages((m) => [...m, { role: 'ai', text, toolActivity: toolActs.length ? toolActs : undefined }]);
-    } catch (e) {
-      off();
-      offAct?.();
-      setStreaming('');
-      setMessages((m) => [...m, { role: 'ai', text: '出错了：' + String(e) }]);
-    } finally {
-      setLiveTools([]);
-    }
+    );
+    setStreaming('');
+    if (!res) return;
+    // 待确认建议：useAISession 已把 pending 写入 pendingAction 并渲染确认卡片，不落为普通消息
+    if (res.kind === 'structured' && res.pending) return;
+    const text = res.kind === 'text' ? res.text : acc || '（AI 未返回内容）';
+    setMessages((m) => [...m, { role: 'ai', text, toolActivity: toolActs.length ? [...toolActs] : undefined }]);
   };
 
-  /** 普通模式：主进程注入笔记上下文后单次问答 */
+  /** 普通模式：经 AIHub 的 ask skill 注入笔记上下文后问答（非流式） */
   const sendPlain = async (question: string) => {
-    try {
-      const ans = await window.forge.ai.askAboutNote(kbId, notePath, question);
-      setMessages((m) => [...m, { role: 'ai', text: ans || '（无回答）' }]);
-    } catch (e) {
-      setMessages((m) => [...m, { role: 'ai', text: '出错了：' + String(e) }]);
-    }
+    const res = await ai.run({ text: question, question }, { skill: 'ask' });
+    if (!res) return;
+    const text = res.kind === 'text' ? res.text : '（无回答）';
+    setMessages((m) => [...m, { role: 'ai', text }]);
   };
 
   async function send(q?: string) {
@@ -153,38 +132,32 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
 
   /** 用户确认执行 AI 建议（doc/MCP技术实现方案.md §5.3） */
   const confirmPendingAction = async (action: ConfirmableAction) => {
-    setPendingAction(null);
     setActionBusy(true);
     setLoading(true);
-    const streamId = genStreamId();
-    let acc = '';
-    const off = window.forge.ai.onAIStream((chunk) => {
-      if (chunk.streamId !== streamId) return;
-      acc += chunk.delta;
-      setStreaming(acc);
-    });
+    // 记住本次执行的 action：验证未通过时用于回滚（P2-3）
+    lastActionRef.current = action;
     try {
-      const res = (await window.forge.ai.hubRunStream({
-        skill: 'agent',
-        input: { text: '确认执行上述修改', question: '确认执行上述修改', notePath },
-        kbId,
-        sessionId: sessionRef.current,
-        confirm: true,
-        draft: action,
-        streamId
-      } as any)) as any;
-      off();
-      if (res?.sessionId) sessionRef.current = res.sessionId;
-      const text = res?.kind === 'text' ? res.text : acc || '（已执行）';
-      setStreaming('');
+      const res = await ai.confirmDraft(action, { skill: 'agent' });
+      const text = res?.kind === 'text' ? res.text : '（已执行）';
       setMessages((m) => [...m, { role: 'ai', text }]);
     } catch (e) {
-      off();
-      setStreaming('');
       setMessages((m) => [...m, { role: 'ai', text: '执行失败：' + String(e) }]);
     } finally {
       setActionBusy(false);
       setLoading(false);
+    }
+  };
+
+  /** 回滚上一次执行（验证未通过时） */
+  const rollbackLast = async () => {
+    const action = lastActionRef.current;
+    if (!action) return;
+    const r = await ai.rollback(action);
+    if (r?.ok) {
+      setMessages((m) => [...m, { role: 'ai', text: `已回滚：${r.message}` }]);
+      lastActionRef.current = null;
+      // 笔记内容已变：通知外部刷新（编辑器会重新读盘）
+      window.dispatchEvent(new CustomEvent('forgenote:note-changed', { detail: notePath }));
     }
   };
 
@@ -326,9 +299,17 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
             action={pendingAction}
             busy={actionBusy}
             onConfirm={() => confirmPendingAction(pendingAction)}
-            onCancel={() => setPendingAction(null)}
+            onCancel={() => ai.dismissPending()}
           />
         )}
+
+        {/* 执行后验证结果：未通过时可一键回滚（P2-3） */}
+        <ActionVerifyBar
+          verify={ai.verifyResult}
+          busy={ai.actionBusy}
+          onRollback={rollbackLast}
+          onDismiss={() => ai.clearVerify()}
+        />
         <div ref={endRef} />
       </div>
 

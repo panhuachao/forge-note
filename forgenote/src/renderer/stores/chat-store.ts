@@ -27,6 +27,13 @@ export interface ChatConversation {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  /**
+   * 关联的主进程 AI 会话 id（doc/AI智能管家重构方案.md §5.3 P1-3）。
+   * 此前该映射由 ChatPage 的 convSessionMap（内存 ref）持有，刷新即丢失，
+   * 导致重开对话后多轮上下文断裂。改为持久化在会话对象上后：
+   * 主进程 session-store 亦已落盘，二者配合可实现跨重启续接。
+   */
+  sessionId?: string;
 }
 
 interface ChatState {
@@ -46,6 +53,8 @@ interface ChatState {
   deleteConversation: (convId: string) => void;
   clearAll: () => void;
   setActive: (id: string | null) => void;
+  /** 绑定主进程 AI 会话 id（多轮上下文持久化用） */
+  setConversationSession: (convId: string, sessionId: string) => void;
   /** ChatPage 消费待发送标记：返回当前 pendingAutoSendId 并清空 */
   consumeAutoSend: () => string | null;
 }
@@ -115,6 +124,11 @@ export const useChatStore = create<ChatState>()(
       clearAll: () => set({ conversations: [], activeId: null, pendingAutoSendId: null }),
 
       setActive: (id) => set({ activeId: id }),
+
+      setConversationSession: (convId, sessionId) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) => (c.id === convId ? { ...c, sessionId } : c)),
+        })),
 
       /** ChatPage 挂载时调用：取走待发送标记，避免重复触发 */
       consumeAutoSend: () => {

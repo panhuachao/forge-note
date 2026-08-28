@@ -6,8 +6,11 @@ import { useLayoutStore } from '../stores/layout-store';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { NotePane } from './NotePane';
 import { ForgeCardModal } from './ForgeCardModal';
+import { ConfirmableActionCard } from './ConfirmableActionCard';
 import { Icon } from './Icon';
+import { hubConfirm, hubRun, hubStructured, hubText } from '../utils/ai-hub';
 import type { LinkInfo, DirSuggestion, CardDraft } from '@shared/types';
+import type { ConfirmableAction } from '@shared/types/ai';
 
 export function MultiNoteEditor() {
   const { activeKb, setTree, pushToast } = useKBStore();
@@ -29,9 +32,13 @@ export function MultiNoteEditor() {
   const [dirSuggestions, setDirSuggestions] = useState<DirSuggestion[]>([]);
   const [summary, setSummary] = useState<string | null>(null);
   const [forgeDraft, setForgeDraft] = useState<CardDraft | null>(null);
+  // 待确认的 AI 写操作（Confirm-then-Act，doc/MCP技术实现方案.md §5.2）
+  const [pendingAction, setPendingAction] = useState<ConfirmableAction | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     setLinkSuggestions([]);
+    setPendingAction(null);
     setDirSuggestions([]);
     setSummary(null);
     setForgeDraft(null);
@@ -72,9 +79,14 @@ export function MultiNoteEditor() {
     if (!activeKb) return [];
     if (!requireAI()) return [];
     try {
-      const r = await window.forge.ai.suggestLinks(activeKb.id, notePath);
-      setLinkSuggestions(r);
-      return r;
+      const r = await hubStructured<LinkInfo[]>({
+        skill: 'suggest-links',
+        input: { text: notePath, notePath },
+        kbId: activeKb.id
+      });
+      const list = r ?? [];
+      setLinkSuggestions(list);
+      return list;
     } catch (e) {
       pushToast({ level: 'error', text: String(e) });
       return [];
@@ -85,9 +97,14 @@ export function MultiNoteEditor() {
     if (!activeKb) return [];
     if (!requireAI()) return [];
     try {
-      const r = await window.forge.ai.suggestDir(activeKb.id, notePath);
-      setDirSuggestions(r);
-      return r;
+      const r = await hubStructured<DirSuggestion[]>({
+        skill: 'suggest-dir',
+        input: { text: notePath, notePath },
+        kbId: activeKb.id
+      });
+      const list = r ?? [];
+      setDirSuggestions(list);
+      return list;
     } catch (e) {
       pushToast({ level: 'error', text: String(e) });
       return [];
@@ -97,7 +114,7 @@ export function MultiNoteEditor() {
   const handleSummarize = useCallback(async (notePath: string) => {
     if (!activeKb) return '';
     if (!requireAI()) return '';
-    const r = await window.forge.ai.summarize(activeKb.id, notePath);
+    const r = await hubText({ skill: 'summarize', input: { text: notePath, notePath }, kbId: activeKb.id });
     setSummary(r);
     return r;
   }, [activeKb]);
@@ -106,7 +123,11 @@ export function MultiNoteEditor() {
   const handleGenerateTags = useCallback(async (notePath: string) => {
     if (!activeKb) return [];
     if (!requireAI()) return [];
-    const generated = await window.forge.ai.generateTags(activeKb.id, notePath);
+    const generated = await hubStructured<string[]>({
+      skill: 'generate-tags',
+      input: { text: notePath, notePath },
+      kbId: activeKb.id
+    });
     // 重新读取笔记以获取最新 tags + frontmatter
     const fresh = await window.forge.fs.readNote(activeKb.id, notePath);
     setCurrentInfo({
@@ -156,15 +177,62 @@ export function MultiNoteEditor() {
   const handleForgeCard = useCallback(async (notePath: string) => {
     if (!activeKb) throw new Error('无知识库');
     if (!requireAI()) throw new Error('请先配置 AI 模型');
-    const d = await window.forge.ai.forgeCard(activeKb.id, notePath);
+    const d = await hubStructured<CardDraft>({
+      skill: 'forge-card',
+      input: { text: notePath, notePath },
+      kbId: activeKb.id
+    });
     setForgeDraft(d);
   }, [activeKb]);
 
-  const handleInsertLinks = useCallback(async (notePath: string, targets: string[]) => {
-    if (!activeKb) return;
-    await window.forge.ai.insertLinks(activeKb.id, notePath, targets);
-    setLinkSuggestions([]);
-  }, [activeKb]);
+  /**
+   * 插入双链：先经 AIHub 生成修改预览（pending），渲染确认卡片，用户确认后才写盘。
+   * 改造前直接调用 window.forge.ai.insertLinks 落盘，无任何确认环节
+   * （P0 安全收敛 · doc/AI智能管家重构方案.md §5.1）。
+   */
+  const handleInsertLinks = useCallback(
+    async (notePath: string, targets: string[]) => {
+      if (!activeKb || targets.length === 0) return;
+      if (!requireAI()) return;
+      try {
+        const res = await hubRun({
+          skill: 'insert-links',
+          input: { text: notePath, notePath, targets },
+          kbId: activeKb.id
+        });
+        if (res.kind === 'structured' && res.pending && res.data) {
+          setPendingAction(res.data as ConfirmableAction);
+          return;
+        }
+        // 未产出待确认建议（如链接已全部存在），按提示处理
+        pushToast({ level: 'info', text: res.kind === 'text' ? res.text : '无需插入' });
+      } catch (e) {
+        pushToast({ level: 'error', text: String(e) });
+      }
+    },
+    [activeKb, pushToast]
+  );
+
+  /** 用户确认执行待确认操作：走主进程 actionService，执行的是预览过的那一版 */
+  const confirmPending = useCallback(async () => {
+    const action = pendingAction;
+    const notePath = activeTab?.notePath ?? '';
+    if (!activeKb || !action) return;
+    setActionBusy(true);
+    try {
+      const res = await hubConfirm(
+        { skill: 'insert-links', input: { text: notePath, notePath }, kbId: activeKb.id },
+        action
+      );
+      pushToast({ level: 'success', text: res.kind === 'text' ? res.text : '已应用修改' });
+      setPendingAction(null);
+      setLinkSuggestions([]);
+    } catch (e) {
+      pushToast({ level: 'error', text: '执行失败：' + String(e) });
+    } finally {
+      setActionBusy(false);
+    }
+  }, [activeKb, activeTab?.notePath, pendingAction, pushToast]);
 
   const handleMoveTo = useCallback(async (notePath: string, dir: string) => {
     if (!activeKb) return notePath;
@@ -222,6 +290,16 @@ export function MultiNoteEditor() {
         onApplyDir={handleMoveTo}
         onCloseSummary={() => setSummary(null)}
       />
+      {pendingAction && (
+        <div className="border-t border-fg-faint/20 bg-canvas p-3">
+          <ConfirmableActionCard
+            action={pendingAction}
+            busy={actionBusy}
+            onConfirm={confirmPending}
+            onCancel={() => setPendingAction(null)}
+          />
+        </div>
+      )}
       {forgeDraft && (
         <ForgeCardModal
           draft={forgeDraft}

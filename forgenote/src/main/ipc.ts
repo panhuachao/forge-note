@@ -16,6 +16,12 @@ import { auditService } from './services/audit-service';
 import { profileService } from './services/profile-service';
 import { agentRegistry } from './services/agents/registry';
 import { actionService } from './services/confirmable-action-service';
+import {
+  runPatrol,
+  getCachedReport,
+  getPendingSuggestions,
+  markSuggestionsShown
+} from './services/patrol-service';
 import type { UserProfile } from '@shared/types/profile';
 import type { AIPrompts } from '@shared/types/ai';
 import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
@@ -154,7 +160,36 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // 多 Agent 方案（§3.5）：渲染层直接按 agentId 调用，无需关心 skill 路由。
   // agentId 优先在 aiHub.run 内解析（agentRegistry 为一等数据源），找不到时回退 skill 路由。
   ipcMain.handle(IPC.AI_RUN_AGENT, async (_e, kbId: string, agentId: string, text: string, extra?: Record<string, unknown>) => {
-    return aiHub.run({ agentId, input: { text }, kbId, extra });
+    // skill 留空：AIHub 内 agentId 优先，会解析为对应 Agent 的临时 Skill
+    return aiHub.run({ skill: '', agentId, input: { text }, kbId, extra });
+  });
+  // 执行后验证 / 回滚（doc/AI智能管家重构方案.md §6.3 P2-3）：
+  // 确认 → 执行 之后自动校验修改是否生效，未达预期时用户可一键回滚。
+  ipcMain.handle(
+    IPC.AI_ACTION_VERIFY,
+    async (_e, action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
+      actionService.verify(action, { kbId })
+  );
+  ipcMain.handle(
+    IPC.AI_ACTION_ROLLBACK,
+    async (_e, action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
+      actionService.rollback(action, { kbId })
+  );
+  // 直接执行已注册的确认操作：供「巡检建议」这类本地规则生成的 action 使用，
+  // 不经过 AIHub，因此无需模型参与（P2-1 / P2-5）。
+  ipcMain.handle(
+    IPC.AI_ACTION_EXECUTE,
+    async (_e, action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
+      actionService.execute(action, { kbId })
+  );
+  // 知识库巡检（P2-1）：规则类检查不依赖模型，未配置 AI 也能体检
+  ipcMain.handle(IPC.AI_PATROL_RUN, async (_e, kbId: string, force?: boolean) => runPatrol(kbId, !!force));
+  ipcMain.handle(IPC.AI_PATROL_LATEST, async (_e, kbId: string) => getCachedReport(kbId));
+  // 主动建议（P2-5）：取「未在静默期内展示过」的问题，展示后调用 mark 进入 7 天静默
+  ipcMain.handle(IPC.AI_PATROL_SUGGEST, async (_e, kbId: string) => getPendingSuggestions(kbId));
+  ipcMain.handle(IPC.AI_PATROL_MARK_SHOWN, async (_e, kbId: string, keys: string[]) => {
+    markSuggestionsShown(kbId, keys ?? []);
+    return null;
   });
   // 阶段 C3：读取 / 保存 Agent 用户覆写（app_config['ai:agents']）；含旧 dailyInsight 迁移
   ipcMain.handle(IPC.AI_AGENT_OVERRIDES, async (_e, overrides?: import('@shared/types/ai').AgentOverridesLike) => {

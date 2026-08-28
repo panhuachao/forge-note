@@ -33,7 +33,8 @@ class AIHub {
       text: String(req.input?.text ?? req.input?.question ?? ''),
       question: req.input?.question ? String(req.input.question) : undefined,
       dirId: req.input?.dirId ? String(req.input.dirId) : undefined,
-      notePath: req.input?.notePath ? String(req.input.notePath) : undefined
+      notePath: req.input?.notePath ? String(req.input.notePath) : undefined,
+      targets: Array.isArray(req.input?.targets) ? (req.input!.targets as unknown[]).map((t) => String(t)) : undefined
     };
 
     const { sessionId, history } = this.resolveSession(skill, req);
@@ -89,7 +90,8 @@ class AIHub {
       text: String(req.input?.text ?? req.input?.question ?? ''),
       question: req.input?.question ? String(req.input.question) : undefined,
       dirId: req.input?.dirId ? String(req.input.dirId) : undefined,
-      notePath: req.input?.notePath ? String(req.input.notePath) : undefined
+      notePath: req.input?.notePath ? String(req.input.notePath) : undefined,
+      targets: Array.isArray(req.input?.targets) ? (req.input!.targets as unknown[]).map((t) => String(t)) : undefined
     };
     const { sessionId, history } = this.resolveSession(skill, req);
     if (sessionId && input.text) sessionStore.append(sessionId, { role: 'user', text: input.text, ts: Date.now() });
@@ -99,7 +101,9 @@ class AIHub {
     let refs: AIRefHit[] | undefined;
     let usage: AIUsage | undefined;
 
-    if (skill.id === 'ask' && skill.stateful) {
+    // 聚焦单篇笔记时（input.notePath）不走 RAG 流式分支：
+    // 该笔记全文即上下文，交由 skill.run 内的 askAboutNote 处理。
+    if (skill.id === 'ask' && skill.stateful && !input.notePath) {
       // 时间维度问题（「今天/本周/最近 N 天」）先走专门路径；命中则基于 mtime 筛出的笔记正文总结。
       const ts = await runTimeSummary(req.kbId ?? '', String(input.text ?? ''), history, onToken, onActivity);
       if (ts) {
@@ -178,7 +182,8 @@ class AIHub {
     let sessionId = req.sessionId;
     let history: AITurn[] = req.history ?? [];
     if (sessionId) {
-      const s = sessionStore.get(sessionId);
+      // 传入 kbId：内存未命中时按知识库目录惰性恢复（重启后仍能续接上下文）
+      const s = sessionStore.get(sessionId, req.kbId);
       if (s) history = s.turns;
     } else {
       const seed = (req.history ?? []).map((t) => ({ ...t }));

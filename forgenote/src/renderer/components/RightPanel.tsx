@@ -11,6 +11,7 @@ import { EVT_ACTIVE_HEADING } from './NotePane';
 import { useLayoutStore } from '../stores/layout-store';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { NoteAIChat } from './NoteAIChat';
+import { hubStructured } from '../utils/ai-hub';
 
 interface LinkInfo {
   target: string;
@@ -193,7 +194,11 @@ export function RightPanel() {
       if (actions?.generateTags) {
         generated = await actions.generateTags(notePath);
       } else {
-        generated = await window.forge.ai.generateTags(activeKb.id, notePath);
+        generated = await hubStructured<string[]>({
+          skill: 'generate-tags',
+          input: { text: notePath, notePath },
+          kbId: activeKb.id
+        });
       }
       // 合并去重（已有 + 新生成，最多 8 个）
       const merged = Array.from(new Set([...localTags, ...generated])).slice(0, 8);

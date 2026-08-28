@@ -10,7 +10,10 @@ import { tags as t } from '@lezer/highlight';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
 import { Icon } from './Icon';
+import { ConfirmableActionCard } from './ConfirmableActionCard';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
+import { hubConfirm, hubRun } from '../utils/ai-hub';
+import type { ConfirmableAction } from '@shared/types/ai';
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -66,9 +69,19 @@ export function NotePane(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // 最近一次由「本编辑器自己」写盘的内容：用于区分自己的自动保存与真正的外部/AI 修改。
+  // 若不加区分，自动保存产生的 fs:change 会反过来触发文档全量覆盖，光标被弹回开头。
+  const lastSelfWriteRef = useRef<string | null>(null);
+  // 最近一次确认已落盘的笔记内容：用于判断用户此刻是否有未保存的编辑输入
+  const lastDiskContentRef = useRef<string | null>(null);
   // 分屏滚动同步：防止两侧滚动事件互相触发形成回环
   const syncingRef = useRef(false);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 待确认的 AI 润色操作（Confirm-then-Act：先出 diff 预览，用户确认才写盘）
+  const [pendingAction, setPendingAction] = useState<ConfirmableAction | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  // 事件监听器内需要读到最新 action，用 ref 避免频繁重建监听
+  const pendingRef = useRef<ConfirmableAction | null>(null);
 
   // 监听「AI 聊天面板追加回复到笔记」事件：调用 AI 结合回复与现有笔记全文，
   // 重写完善整篇笔记后整体替换文档，触发 docChanged → 自动保存。
@@ -82,17 +95,25 @@ export function NotePane(props: Props) {
       if (!reply) return;
       pushToast({ level: 'info', text: 'AI 正在完善笔记…' });
       try {
-        const current = view.state.doc.toString();
-        const refined = await window.forge.ai.refineNote(activeKb.id, props.notePath, reply, current);
-        if (!refined) {
-          pushToast({ level: 'error', text: '完善失败：返回为空' });
+        // 先把编辑器内容落盘：服务端 Patch 以磁盘内容为基线，
+        // 既保证「预览所见」==「实际所改」，也避免丢失未保存编辑。
+        const flushed = view.state.doc.toString();
+        lastSelfWriteRef.current = flushed;
+        lastDiskContentRef.current = flushed;
+        await window.forge.fs.writeNote(activeKb.id, props.notePath, flushed);
+        const res = await hubRun({
+          skill: 'refine-note',
+          input: { text: reply, notePath: props.notePath },
+          kbId: activeKb.id
+        });
+        // 产出待确认建议：渲染确认卡片，用户确认后才写盘
+        if (res.kind === 'structured' && res.pending && res.data) {
+          const action = res.data as ConfirmableAction;
+          pendingRef.current = action;
+          setPendingAction(action);
           return;
         }
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: refined },
-          selection: { anchor: refined.length }
-        });
-        pushToast({ level: 'success', text: '已完善并写入笔记' });
+        pushToast({ level: 'info', text: res.kind === 'text' ? res.text : 'AI 未产出修改' });
       } catch (err) {
         pushToast({ level: 'error', text: '完善失败：' + String(err) });
       }
@@ -139,6 +160,8 @@ export function NotePane(props: Props) {
         setNote(info);
         setLiveContent(c.content);
         setLoadedPath(props.notePath);
+        lastDiskContentRef.current = c.content;
+        lastSelfWriteRef.current = null;
         props.onContentChange?.(info);
       } catch (e) {
         if (cancelled) return;
@@ -167,18 +190,46 @@ export function NotePane(props: Props) {
             ctime: c.ctime,
             frontmatter: c.frontmatter
           };
+          const view = viewRef.current;
+          const currentDoc = view ? view.state.doc.toString() : null;
+          // 用户此刻是否有尚未落盘的输入（据此判断能否安全覆盖文档）
+          const hasUnsavedEdit =
+            currentDoc !== null && lastDiskContentRef.current !== null && currentDoc !== lastDiskContentRef.current;
+
+          // 先更新元数据与预览（不影响编辑器文档，因此不会打断输入）
           setNote(info);
           setLiveContent(c.content);
           setLoadedPath(props.notePath);
           props.onContentChange?.(info);
-          // 若当前处于编辑态，同步 CodeMirror 文档（仅在内容确实变化时，避免覆盖未保存的本地编辑）
-          const view = viewRef.current;
-          if (view && view.state.doc.toString() !== c.content) {
-            view.dispatch({
-              changes: { from: 0, to: view.state.doc.length, insert: c.content },
-              selection: { anchor: 0 }
-            });
+
+          // ① 自己的自动保存回环：磁盘内容就是自己刚写的那份，
+          //    只读回元信息即可，绝不能反过来覆盖编辑器（否则光标被弹回开头、输入被回滚）。
+          if (lastSelfWriteRef.current !== null && lastSelfWriteRef.current === c.content) {
+            lastSelfWriteRef.current = null;
+            lastDiskContentRef.current = c.content;
+            return;
           }
+          lastSelfWriteRef.current = null;
+
+          if (!view || currentDoc === null) return;
+          if (currentDoc === c.content) {
+            lastDiskContentRef.current = c.content;
+            return;
+          }
+
+          // ② 用户有未保存的编辑 → 不覆盖文档，避免打断输入、丢失刚敲进去的内容。
+          //    外部/AI 的修改会在用户下次自动保存后随事件再次到达，届时再同步。
+          if (hasUnsavedEdit) return;
+
+          // ③ 真正的外部修改（AI 改笔记 / 其它窗口编辑）：替换文档，但保留光标位置。
+          //    这里不能把 selection 硬编码为 0，否则光标会跳到第一行。
+          lastDiskContentRef.current = c.content;
+          const anchor = Math.min(view.state.selection.main.anchor, c.content.length);
+          const head = Math.min(view.state.selection.main.head, c.content.length);
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: c.content },
+            selection: { anchor, head }
+          });
         } catch (e) {
           pushToast({ level: 'error', text: '刷新笔记失败：' + String(e) });
         }
@@ -240,6 +291,10 @@ export function NotePane(props: Props) {
             saveTimer = setTimeout(async () => {
               if (activeKb && note) {
                 const newContent = v.state.doc.toString();
+                // 标记这次写盘是自己发起的：随后到达的 fs:change 据此跳过文档覆盖，
+                // 避免「自动保存 → 文件变更事件 → 回读覆盖编辑器」把光标弹回开头。
+                lastSelfWriteRef.current = newContent;
+                lastDiskContentRef.current = newContent;
                 await window.forge.fs.writeNote(activeKb.id, props.notePath, newContent);
                 markTabDirty(props.notePath, false);
                 const c = await window.forge.fs.readNote(activeKb.id, props.notePath);
@@ -386,6 +441,37 @@ export function NotePane(props: Props) {
     }, 80);
   };
 
+  /** 用户确认 AI 润色建议：执行预览过的 Patch，再把结果同步回编辑器 */
+  async function confirmPending() {
+    const action = pendingRef.current;
+    const kbId = activeKb?.id;
+    if (!kbId || !action) return;
+    setActionBusy(true);
+    try {
+      const res = await hubConfirm(
+        { skill: 'refine-note', input: { text: '', notePath: props.notePath }, kbId },
+        action
+      );
+      pendingRef.current = null;
+      setPendingAction(null);
+      // 重新读盘并把新内容同步回编辑器（光标保持在合法范围内）
+      const fresh = await window.forge.fs.readNote(kbId, props.notePath);
+      const view = viewRef.current;
+      if (view) {
+        const pos = Math.min(view.state.selection.main.head, fresh.content.length);
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: fresh.content },
+          selection: { anchor: pos }
+        });
+      }
+      pushToast({ level: 'success', text: res.kind === 'text' ? res.text : '已完善并写入笔记' });
+    } catch (e) {
+      pushToast({ level: 'error', text: '应用失败：' + String(e) });
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   if (!note) {
     return <div className="flex-1 flex items-center justify-center text-fg-muted">加载中…</div>;
   }
@@ -436,6 +522,21 @@ export function NotePane(props: Props) {
           </div>
         )}
       </div>
+
+      {/* AI 润色建议：展示 diff 预览，确认后才写盘 */}
+      {pendingAction && (
+        <div className="border-t border-fg-faint/20 bg-canvas p-3 max-h-[45%] overflow-auto">
+          <ConfirmableActionCard
+            action={pendingAction}
+            busy={actionBusy}
+            onConfirm={confirmPending}
+            onCancel={() => {
+              pendingRef.current = null;
+              setPendingAction(null);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

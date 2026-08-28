@@ -3,7 +3,7 @@
 // 用户确认后由主进程 actionService 执行。新增操作类型只需在此加一个分支。
 import { useState } from 'react';
 import { Icon } from './Icon';
-import type { ConfirmableAction, NotePatchPreview } from '@shared/types/ai';
+import type { BatchPatchPreview, ConfirmableAction, NotePatchPreview } from '@shared/types/ai';
 
 interface CardProps {
   action: ConfirmableAction;
@@ -17,13 +17,19 @@ const TYPE_LABEL: Record<string, string> = {
   settingUpdate: '更新设置',
   openDialog: '打开弹窗',
   moveNote: '移动笔记',
-  createNote: '新建笔记'
+  createNote: '新建笔记',
+  // 批量任务（doc/AI智能管家重构方案.md §6.2 P2-4）
+  batchPatch: '批量修改',
+  batchMove: '批量移动',
+  batchRetag: '批量打标签'
 };
 
 export function ConfirmableActionCard({ action, onConfirm, onCancel, busy }: CardProps) {
   switch (action.type) {
     case 'notePatch':
       return <NotePatchCard action={action} onConfirm={onConfirm} onCancel={onCancel} busy={busy} />;
+    case 'batchPatch':
+      return <BatchPatchCard action={action} onConfirm={onConfirm} onCancel={onCancel} busy={busy} />;
     default:
       return <GenericActionCard action={action} onConfirm={onConfirm} onCancel={onCancel} busy={busy} />;
   }
@@ -140,7 +146,50 @@ function NotePatchCard({ action, onConfirm, onCancel, busy }: CardProps) {
   );
 }
 
-/** 其它类型（更新设置 / 打开弹窗 / 未来扩展）：展示结构化参数 */
+/**
+ * 批量修改（P2-4）：逐条列出每篇笔记的 diff 摘要。
+ * 一次整理几十篇笔记时，逐篇确认会让用户点到崩溃，这里聚合为一次确认。
+ */
+function BatchPatchCard({ action, onConfirm, onCancel, busy }: CardProps) {
+  const pv = action.preview as BatchPatchPreview | undefined;
+  const items = pv?.items ?? [];
+  const applicable = pv?.applicable ?? items.filter((i) => i.canApply).length;
+  const blocked = items.length > 0 && applicable === 0;
+
+  return (
+    <Shell
+      title={action.title || `批量修改 ${items.length} 篇笔记`}
+      badge={TYPE_LABEL.batchPatch}
+      confirmLabel={`确认修改 ${applicable} 篇`}
+      busy={busy}
+      copyText={items.map((i) => i.diff).filter(Boolean).join('\n\n')}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    >
+      {action.description && <div className="text-[11px] text-fg-secondary mb-1.5 leading-relaxed">{action.description}</div>}
+      <div className="flex items-center gap-2 text-[10px] text-fg-faint mb-1.5">
+        <span>共 {items.length} 篇</span>
+        <span>· 可安全应用 {applicable} 篇</span>
+        {items.length !== applicable && <span className="text-amber-600">· {items.length - applicable} 篇将跳过</span>}
+      </div>
+      {blocked && <div className="mb-1.5 text-[11px] text-red-500">所有修改都无法安全应用，请让 AI 重新生成建议。</div>}
+      <div className="max-h-48 overflow-auto space-y-1">
+        {items.slice(0, 30).map((it, idx) => (
+          <div key={`${it.notePath}_${idx}`} className="flex items-start gap-2 text-[11px]">
+            <span className={it.canApply ? 'text-emerald-600' : 'text-red-500'}>
+              {it.canApply ? '✓' : '✕'}
+            </span>
+            <span className="font-mono text-fg-secondary truncate flex-1">{it.notePath}</span>
+            <span className="text-fg-faint shrink-0">{it.affectedLines} 处</span>
+          </div>
+        ))}
+        {items.length > 30 && <div className="text-[10px] text-fg-faint">…其余 {items.length - 30} 篇未列出</div>}
+      </div>
+    </Shell>
+  );
+}
+
+/** 其它类型（更新设置 / 打开弹窗 / 批量移动 / 批量标签 / 未来扩展）：展示结构化参数 */
 function GenericActionCard({ action, onConfirm, onCancel, busy }: CardProps) {
   const label = TYPE_LABEL[action.type] || action.type;
   const paramsText = (() => {

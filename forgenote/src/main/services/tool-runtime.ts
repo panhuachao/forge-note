@@ -6,6 +6,7 @@ import { linkIndex } from './link-index';
 import { aiService } from './ai-service';
 import { auditService } from './audit-service';
 import { getKB } from './store';
+import { readFrontmatter } from '../utils/markdown';
 import { previewNotePatch, applyNotePatch, normalizeOps } from './note-patch';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -148,6 +149,63 @@ export const KB_TOOLS: MCPTool[] = [
     name: 'kb_diagnose',
     description: '对知识库做健康诊断（失效链接、空目录、重复标题等）。',
     input_schema: { type: 'object', properties: {} }
+  },
+
+  /* ==== 知识库级只读工具（doc/AI智能管家重构方案.md §5.2 P2-2）====
+   * 让 AI 具备「全局视角」：统计、查重、孤儿、标签体系、结构评审、过期内容。
+   * 全部只读，不进 WRITE_TOOLS，无需用户确认。 */
+  {
+    name: 'kb_stats',
+    description:
+      '知识库整体统计：笔记数、目录数、标签数、链接数、总字数、平均篇幅、近 30 天更新量。用于回答「我的知识库有多大 / 增长如何」这类全局问题。',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'kb_duplicates',
+    description:
+      '检测可能重复的笔记：标题相同或正文高度相似（字符 3-gram Jaccard）。返回可疑配对与相似度，供合并去重决策。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        threshold: { type: 'number', description: '正文相似度阈值 0~1，默认 0.75' },
+        limit: { type: 'number', description: '最多返回多少对，默认 10' }
+      }
+    }
+  },
+  {
+    name: 'kb_orphans',
+    description:
+      '找出孤立笔记：既无出链、又无入链、且没有标签的笔记。这类笔记通常未融入知识体系，是整理的重点对象。',
+    input_schema: {
+      type: 'object',
+      properties: { limit: { type: 'number', description: '最多返回多少条，默认 30' } }
+    }
+  },
+  {
+    name: 'kb_tag_tree',
+    description:
+      '标签体系分析：各标签使用次数、稀疏标签（仅 1 篇使用）、无标签笔记数。用于标签治理（合并同义标签、补全标签）。',
+    input_schema: {
+      type: 'object',
+      properties: { limit: { type: 'number', description: '最多列出多少个标签，默认 40' } }
+    }
+  },
+  {
+    name: 'kb_structure_review',
+    description:
+      '目录结构评审：目录数、最大层级深度、空目录、笔记最集中的目录、过深目录。用于判断知识库结构是否合理。',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'kb_stale',
+    description: '找出长期未更新的笔记（默认超过 180 天），便于归档或回顾。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: { type: 'number', description: '未更新天数阈值，默认 180' },
+        limit: { type: 'number', description: '最多返回多少条，默认 30' }
+      }
+    }
   }
 ];
 
@@ -209,6 +267,113 @@ function walkRecentNotes(
       if (out.length >= limit) return;
     }
   }
+}
+
+/* ==================== 知识库级扫描（doc/AI智能管家重构方案.md §5.2 P2-2） ==================== */
+// 现有 9 个工具全部是「笔记级」操作，AI 无法对知识库全局把脉。
+// 这里提供一次全库扫描，供 kb_stats / kb_duplicates / kb_orphans / kb_tag_tree /
+// kb_structure_review / kb_stale 六个只读工具共用，也被巡检服务复用。
+
+/** 单篇笔记的轻量元数据（不持有全文，content 仅保留截断片段用于相似度计算） */
+export interface NoteMeta {
+  path: string;
+  /** 不含 .md 的文件名 */
+  name: string;
+  /** 所属目录相对路径，根目录为空串 */
+  dir: string;
+  title: string;
+  tags: string[];
+  outlinks: string[];
+  inlinks: string[];
+  mtime: number;
+  /** 正文字符数 */
+  size: number;
+  /** 正文截断片段（默认 2000 字），用于正文相似度计算 */
+  content: string;
+}
+
+/** 扫描上限：超过则只取前 N 篇，避免大库全量读盘卡死 */
+const SCAN_LIMIT = 3000;
+
+/**
+ * 全库扫描，返回每篇笔记的元数据。
+ * 直接读盘解析 frontmatter，**不走 fsService.readNote**——
+ * 后者有「惰性回填 createdAt 并写盘」的副作用，只读工具不应产生写入。
+ */
+export function scanNotes(kbId: string, limit = SCAN_LIMIT, snippetLen = 2000): NoteMeta[] {
+  const kb = getKB(kbId);
+  if (!kb) return [];
+  const paths: string[] = [];
+  walkNotes(kb.rootPath, '', paths, limit);
+  const out: NoteMeta[] = [];
+  for (const p of paths) {
+    try {
+      const abs = path.join(kb.rootPath, p);
+      const raw = fs.readFileSync(abs, 'utf-8');
+      const { data, content } = readFrontmatter(raw);
+      const fm = (data || {}) as Record<string, unknown>;
+      const title =
+        String(fm.title || '').trim() ||
+        (content.split('\n')[0] || '').replace(/^#\s*/, '').trim() ||
+        path.basename(p, '.md');
+      const tags = Array.isArray(fm.tags) ? fm.tags.map((t) => String(t).trim()).filter(Boolean) : [];
+      let mtime = 0;
+      try {
+        mtime = fs.statSync(abs).mtimeMs;
+      } catch {
+        /* 取不到时间就按 0 处理 */
+      }
+      out.push({
+        path: p,
+        name: path.basename(p, '.md'),
+        dir: path.dirname(p) === '.' ? '' : path.dirname(p),
+        title,
+        tags,
+        outlinks: linkIndex.getOutlinks(kbId, p),
+        inlinks: linkIndex.getBacklinks(kbId, p),
+        mtime,
+        size: content.length,
+        content: content.slice(0, snippetLen)
+      });
+    } catch {
+      /* 跳过无法读取的笔记 */
+    }
+  }
+  return out;
+}
+
+/** 递归收集所有目录（相对路径，不含根目录），跳过隐藏目录 */
+function walkDirs(root: string, dir: string, out: string[]): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith('.') || !e.isDirectory()) continue;
+    const rel = dir ? `${dir}/${e.name}` : e.name;
+    out.push(rel);
+    walkDirs(root, rel, out);
+  }
+}
+
+/** 字符 n-gram 集合（用于正文相似度，中文无需分词） */
+function charGrams(text: string, n = 3): Set<string> {
+  const s = text.replace(/\s+/g, '');
+  const set = new Set<string>();
+  if (s.length < n) return set;
+  for (let i = 0; i + n <= s.length; i++) set.add(s.slice(i, i + n));
+  return set;
+}
+
+/** Jaccard 相似度 */
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const g of a) if (b.has(g)) inter++;
+  const union = a.size + b.size - inter;
+  return union ? inter / union : 0;
 }
 
 /** 执行一个工具调用，返回面向模型的文本结果 */
@@ -341,6 +506,159 @@ export async function executeTool(call: ToolCall, ctx: ToolCtx): Promise<string>
         }
         return `笔记总数: ${all.size}\n链接总数: ${linkCount}\n失效链接: ${broken}`;
       }
+
+      /* ==================== 知识库级只读工具 ==================== */
+      case 'kb_stats': {
+        const notes = scanNotes(kbId);
+        if (!notes.length) return '知识库为空，暂无统计数据。';
+        const dirs = new Set(notes.map((n) => n.dir).filter(Boolean));
+        const tagSet = new Set<string>();
+        let chars = 0;
+        let links = 0;
+        let untagged = 0;
+        for (const n of notes) {
+          n.tags.forEach((t) => tagSet.add(t));
+          if (!n.tags.length) untagged++;
+          chars += n.size;
+          links += n.outlinks.length;
+        }
+        const since30 = Date.now() - 30 * 86400_000;
+        const recent = notes.filter((n) => n.mtime >= since30).length;
+        return [
+          `笔记总数: ${notes.length}`,
+          `目录数: ${dirs.size}`,
+          `标签数: ${tagSet.size}`,
+          `链接总数: ${links}`,
+          `正文总字数: ${chars}`,
+          `平均篇幅: ${Math.round(chars / notes.length)} 字`,
+          `无标签笔记: ${untagged} 篇`,
+          `近 30 天更新: ${recent} 篇`
+        ].join('\n');
+      }
+
+      case 'kb_duplicates': {
+        const threshold = Number(call.args.threshold) || 0.75;
+        const limit = Number(call.args.limit) || 10;
+        const notes = scanNotes(kbId, 600);
+        const pairs: { a: string; b: string; score: number; reason: string }[] = [];
+
+        // 1) 标题相同（最可靠的重复信号）
+        const byTitle = new Map<string, string[]>();
+        for (const n of notes) {
+          const key = n.title.trim().toLowerCase();
+          if (!key) continue;
+          const list = byTitle.get(key);
+          if (list) list.push(n.path);
+          else byTitle.set(key, [n.path]);
+        }
+        for (const [, ps] of byTitle) {
+          for (let i = 0; i < ps.length - 1 && pairs.length < limit; i++) {
+            for (let j = i + 1; j < ps.length && pairs.length < limit; j++) {
+              pairs.push({ a: ps[i], b: ps[j], score: 1, reason: '标题相同' });
+            }
+          }
+        }
+
+        // 2) 正文相似（字符 3-gram Jaccard）
+        const grams = new Map<string, Set<string>>();
+        for (const n of notes) {
+          const g = charGrams(n.content);
+          if (g.size >= 20) grams.set(n.path, g);
+        }
+        const keys = Array.from(grams.keys());
+        for (let i = 0; i < keys.length && pairs.length < limit; i++) {
+          for (let j = i + 1; j < keys.length && pairs.length < limit; j++) {
+            const score = jaccard(grams.get(keys[i])!, grams.get(keys[j])!);
+            if (score >= threshold) pairs.push({ a: keys[i], b: keys[j], score, reason: '正文高度相似' });
+          }
+        }
+
+        if (!pairs.length) return '未发现明显重复的笔记。';
+        return pairs
+          .slice(0, limit)
+          .map((p) => `- ${p.a}  <->  ${p.b}\n  相似度 ${p.score.toFixed(2)}（${p.reason}）`)
+          .join('\n');
+      }
+
+      case 'kb_orphans': {
+        const limit = Number(call.args.limit) || 30;
+        const notes = scanNotes(kbId);
+        const orphans = notes.filter((n) => n.outlinks.length === 0 && n.inlinks.length === 0 && n.tags.length === 0);
+        if (!orphans.length) return '未发现孤立笔记。';
+        const shown = orphans.slice(0, limit);
+        return `孤立笔记 ${orphans.length} 篇（无出链、无入链、无标签）：\n${shown
+          .map((n) => `- ${n.path}（${n.size} 字）`)
+          .join('\n')}${orphans.length > limit ? `\n…其余 ${orphans.length - limit} 篇未列出` : ''}`;
+      }
+
+      case 'kb_tag_tree': {
+        const limit = Number(call.args.limit) || 40;
+        const notes = scanNotes(kbId);
+        const counter = new Map<string, number>();
+        let untagged = 0;
+        for (const n of notes) {
+          if (!n.tags.length) {
+            untagged++;
+            continue;
+          }
+          for (const t of n.tags) counter.set(t, (counter.get(t) || 0) + 1);
+        }
+        if (!counter.size) return `共 ${notes.length} 篇笔记，全部没有标签。`;
+        const sorted = Array.from(counter.entries()).sort((a, b) => b[1] - a[1]);
+        const sparse = sorted.filter(([, c]) => c === 1);
+        return [
+          `标签总数: ${counter.size}`,
+          `无标签笔记: ${untagged} 篇`,
+          '',
+          '使用最多的标签：',
+          ...sorted.slice(0, limit).map(([t, c]) => `- ${t}：${c} 篇`),
+          '',
+          `稀疏标签（仅 1 篇使用）：${sparse.length} 个${sparse.length ? ' —— ' + sparse.slice(0, 15).map(([t]) => t).join('、') : ''}`
+        ].join('\n');
+      }
+
+      case 'kb_structure_review': {
+        const kb = getKB(kbId);
+        if (!kb) return '知识库不存在';
+        const notes = scanNotes(kbId);
+        const allDirs: string[] = [];
+        walkDirs(kb.rootPath, '', allDirs);
+        const countByDir = new Map<string, number>();
+        for (const n of notes) {
+          const d = n.dir || '（根目录）';
+          countByDir.set(d, (countByDir.get(d) || 0) + 1);
+        }
+        const emptyDirs = allDirs.filter((d) => !countByDir.has(d));
+        const maxDepth = allDirs.reduce((m, d) => Math.max(m, d.split('/').length), 0);
+        const deepDirs = allDirs.filter((d) => d.split('/').length >= 4);
+        const sorted = Array.from(countByDir.entries()).sort((a, b) => b[1] - a[1]);
+        const rootCount = countByDir.get('（根目录）') || 0;
+        return [
+          `笔记总数: ${notes.length}`,
+          `目录数: ${allDirs.length}`,
+          `最大层级深度: ${maxDepth}`,
+          `空目录: ${emptyDirs.length} 个${emptyDirs.length ? ' —— ' + emptyDirs.slice(0, 10).join('、') : ''}`,
+          `根目录下散落笔记: ${rootCount} 篇`,
+          `过深目录（≥4 层）: ${deepDirs.length} 个${deepDirs.length ? ' —— ' + deepDirs.slice(0, 8).join('、') : ''}`,
+          '',
+          '笔记分布（前 15）：',
+          ...sorted.slice(0, 15).map(([d, c]) => `- ${d}：${c} 篇`)
+        ].join('\n');
+      }
+
+      case 'kb_stale': {
+        const days = Number(call.args.days) || 180;
+        const limit = Number(call.args.limit) || 30;
+        const notes = scanNotes(kbId);
+        const ts = Date.now() - days * 86400_000;
+        const stale = notes.filter((n) => n.mtime > 0 && n.mtime < ts).sort((a, b) => a.mtime - b.mtime);
+        if (!stale.length) return `没有超过 ${days} 天未更新的笔记。`;
+        return `${stale.length} 篇笔记超过 ${days} 天未更新：\n${stale
+          .slice(0, limit)
+          .map((n) => `- ${n.path}（最后更新 ${new Date(n.mtime).toLocaleDateString('zh-CN')}）`)
+          .join('\n')}${stale.length > limit ? `\n…其余 ${stale.length - limit} 篇未列出` : ''}`;
+      }
+
       default:
         return `未知工具: ${call.name}`;
     }

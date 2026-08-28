@@ -1,8 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { PageHeader } from '../components/PageHeader';
 import { Icon } from '../components/Icon';
+import { hubRun, hubText, hubConfirm, hubExecute, hubVerify, hubRollback } from '../utils/ai-hub';
+import { PatrolReportCard } from '../components/PatrolReportCard';
 import type { TreeNode } from '@shared/types';
+import type { ConfirmableAction, PatrolReport } from '@shared/types/ai';
 
 type DiagType =
   | 'missing_link' // 缺少双链
@@ -22,8 +25,10 @@ interface DiagItem {
   target?: string; // 双链目标路径 或 应归属目录路径
   dirName?: string; // 新建目录名（missing_dir）
   action: string; // AI 建议的修正动作（自然语言）
-  status?: 'idle' | 'doing' | 'done' | 'error';
+  status?: 'idle' | 'doing' | 'confirming' | 'done' | 'error';
   msg?: string;
+  /** 待确认的写操作（Confirm-then-Act：应用前先出预览，用户确认才落盘） */
+  pending?: ConfirmableAction;
 }
 
 const TYPE_META: Record<DiagType, { label: string; color: string; icon: any }> = {
@@ -85,6 +90,73 @@ export function DiagnosePage() {
   const [progress, setProgress] = useState('');
   const cancelledRef = useRef(false);
 
+  // 知识库体检（P2-1）：规则类检查，不依赖 AI 模型
+  const [patrol, setPatrol] = useState<PatrolReport | null>(null);
+  const [patrolBusy, setPatrolBusy] = useState(false);
+  const [patrolVerify, setPatrolVerify] = useState<{ ok: boolean; message: string } | null>(null);
+  const lastPatrolActionRef = useRef<ConfirmableAction | null>(null);
+
+  /** 读取缓存报告（24h 内有效）；force 时强制重新扫描 */
+  const loadPatrol = useCallback(
+    async (force: boolean) => {
+      if (!activeKb) return;
+      setPatrolBusy(true);
+      try {
+        const r = force
+          ? await window.forge.ai.runPatrol(activeKb.id, true)
+          : await window.forge.ai.getPatrolReport(activeKb.id);
+        setPatrol(r ?? null);
+      } catch (e) {
+        pushToast({ level: 'error', text: '体检失败：' + String(e) });
+      } finally {
+        setPatrolBusy(false);
+      }
+    },
+    [activeKb, pushToast]
+  );
+
+  // 切换知识库时载入缓存报告（不自动重新扫描，避免大库卡顿）
+  useEffect(() => {
+    setPatrol(null);
+    setPatrolVerify(null);
+    if (activeKb) void loadPatrol(false);
+  }, [activeKb?.id]);
+
+  /** 确认执行巡检建议：直接走 actionService，不需要模型参与 */
+  const applyPatrolSuggestion = async (action: ConfirmableAction) => {
+    if (!activeKb) return;
+    setPatrolBusy(true);
+    setPatrolVerify(null);
+    lastPatrolActionRef.current = action;
+    try {
+      const r = await hubExecute(action, activeKb.id);
+      pushToast({ level: r?.ok ? 'success' : 'error', text: r?.message ?? '已执行' });
+      if (r?.ok) {
+        // 执行后自动验证（P2-3）
+        const v = await hubVerify(action, activeKb.id);
+        setPatrolVerify(v);
+      }
+    } catch (e) {
+      pushToast({ level: 'error', text: '执行失败：' + String(e) });
+    } finally {
+      setPatrolBusy(false);
+    }
+  };
+
+  /** 回滚上一次巡检修复 */
+  const rollbackPatrol = async () => {
+    const action = lastPatrolActionRef.current;
+    if (!activeKb || !action) return;
+    setPatrolBusy(true);
+    try {
+      const r = await hubRollback(action, activeKb.id);
+      pushToast({ level: r?.ok ? 'success' : 'error', text: r?.message });
+      if (r?.ok) lastPatrolActionRef.current = null;
+    } finally {
+      setPatrolBusy(false);
+    }
+  };
+
   const stats = useMemo(() => {
     const byType: Record<string, number> = {};
     for (const it of items) byType[it.type] = (byType[it.type] || 0) + 1;
@@ -124,7 +196,7 @@ export function DiagnosePage() {
       if (cancelledRef.current) return;
       setProgress('AI 正在分析知识库结构…');
       const prompt = buildPrompt(notes);
-      const raw = await window.forge.ai.ask(activeKb.id, prompt);
+      const raw = await hubText({ skill: 'ask', input: { text: prompt, question: prompt }, kbId: activeKb.id });
       const parsed = parseDiag(raw);
       setItems(parsed);
       setProgress('');
@@ -150,7 +222,29 @@ export function DiagnosePage() {
     setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, status: 'doing', msg: '' } : p)));
     try {
       if (it.type === 'missing_link' && it.note && it.target) {
-        await window.forge.ai.insertLinks(activeKb.id, it.note, [it.target]);
+        // 写操作先出预览（Confirm-then-Act），用户确认后才写盘
+        // AI 返回的 target 形如 [[标题]]，这里剥掉外层括号，避免与工具内的 [[]] 包装重复
+        const target = it.target.replace(/^\[\[|\]\]$/g, '').trim();
+        const res = await hubRun({
+          skill: 'insert-links',
+          input: { text: it.note, notePath: it.note, targets: [target] },
+          kbId: activeKb.id
+        });
+        if (res.kind === 'structured' && res.pending && res.data) {
+          setItems((prev) =>
+            prev.map((p, i) =>
+              i === idx ? { ...p, status: 'confirming', msg: '', pending: res.data as ConfirmableAction } : p
+            )
+          );
+          return;
+        }
+        // 未产出待确认建议（如该链接已存在），按提示处理
+        setItems((prev) =>
+          prev.map((p, i) =>
+            i === idx ? { ...p, status: 'done', msg: res.kind === 'text' ? res.text : '无需修改' } : p
+          )
+        );
+        return;
       } else if (it.type === 'wrong_dir' && it.note && it.target) {
         const currentTree = tree || (await window.forge.fs.listTree(activeKb.id));
         const dest = resolveTargetDir(currentTree, it.target);
@@ -179,6 +273,33 @@ export function DiagnosePage() {
       setItems((prev) =>
         prev.map((p, i) => (i === idx ? { ...p, status: 'error', msg: String(e) } : p))
       );
+      pushToast({ level: 'error', text: '应用失败：' + String(e) });
+    }
+  }
+
+  /** 用户确认后执行待确认的写操作（Confirm-then-Act 第二轮） */
+  async function confirmApply(idx: number) {
+    if (!activeKb) return;
+    const it = items[idx];
+    if (!it?.pending) return;
+    const notePath = it.note ?? '';
+    setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, status: 'doing', msg: '' } : p)));
+    try {
+      const res = await hubConfirm(
+        { skill: 'insert-links', input: { text: notePath, notePath }, kbId: activeKb.id },
+        it.pending
+      );
+      setItems((prev) =>
+        prev.map((p, i) =>
+          i === idx
+            ? { ...p, status: 'done', msg: res.kind === 'text' ? res.text : '已应用', pending: undefined }
+            : p
+        )
+      );
+      setTree(await window.forge.fs.listTree(activeKb.id));
+      pushToast({ level: 'success', text: '已应用修正' });
+    } catch (e) {
+      setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, status: 'error', msg: String(e) } : p)));
       pushToast({ level: 'error', text: '应用失败：' + String(e) });
     }
   }
@@ -213,6 +334,20 @@ export function DiagnosePage() {
 
       <div className="flex-1 overflow-y-auto pt-14">
         <div className="w-full max-w-4xl mx-auto p-6">
+          {/* 知识库体检：规则类检查，无需 AI 模型即可运行（P2-1） */}
+          {activeKb && (
+            <div className="mb-5">
+              <PatrolReportCard
+                report={patrol}
+                busy={patrolBusy}
+                onRefresh={loadPatrol}
+                onApply={applyPatrolSuggestion}
+                onRollback={rollbackPatrol}
+                verify={patrolVerify}
+                onDismissVerify={() => setPatrolVerify(null)}
+              />
+            </div>
+          )}
           {!activeKb ? (
             <EmptyState text="请先在「首页」选择知识库" />
           ) : items.length === 0 && !loading ? (
@@ -271,6 +406,8 @@ export function DiagnosePage() {
                   const sv = SEV_LABEL[it.severity] || SEV_LABEL.low;
                   const done = it.status === 'done';
                   const err = it.status === 'error';
+                  const confirming = it.status === 'confirming';
+                  const pv = it.pending?.preview as { affectedLines?: number } | undefined;
                   return (
                     <div
                       key={idx}
@@ -306,10 +443,33 @@ export function DiagnosePage() {
                               {it.msg}
                             </div>
                           )}
+                          {confirming && (
+                            <div className="mt-2 text-[11px] text-fg-muted">
+                              确认后将写入「<code className="text-fg-muted">{it.note}</code>」
+                              {pv?.affectedLines ? `，影响 ${pv.affectedLines} 处` : ''}
+                            </div>
+                          )}
                         </div>
                         {/* 操作 */}
                         <div className="shrink-0 flex flex-col gap-1.5">
-                          {done ? (
+                          {confirming ? (
+                            <>
+                              <button
+                                onClick={() => confirmApply(idx)}
+                                className="inline-flex items-center gap-1 px-2.5 h-7 rounded-lg text-xs bg-brand text-brand-fg hover:bg-brand-hover"
+                              >
+                                <Icon name="check" className="w-3 h-3" />
+                                确认修改
+                              </button>
+                              <button
+                                onClick={() => dismissItem(idx)}
+                                className="inline-flex items-center gap-1 px-2.5 h-7 rounded-lg text-xs border border-border-soft text-fg-muted hover:bg-hover-bg"
+                              >
+                                <Icon name="x-mark" className="w-3 h-3" />
+                                放弃
+                              </button>
+                            </>
+                          ) : done ? (
                             <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
                               <Icon name="check" className="w-3.5 h-3.5" />
                               {err ? '失败' : '已处理'}

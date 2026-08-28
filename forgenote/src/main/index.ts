@@ -9,6 +9,7 @@ import { startWatching, stopAll, bootstrapIndex } from './services/watcher';
 import { kbService } from './services/kb-service';
 import { initAutoUpdater } from './services/updater';
 import { registerBuiltInAgents } from './services/agents/register';
+import { sessionStore } from './services/session-store';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -263,6 +264,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async () => {
+  // 先落盘所有待写的 AI 会话（防抖队列中可能还有未写入的 turns），再关库
+  await sessionStore.flushAll();
   await stopAll();
   closeStore();
 });

@@ -1,7 +1,9 @@
 // 全局状态：知识库 + 当前笔记 + 主题 + Toast
 import { create } from 'zustand';
 import { useLayoutStore } from './layout-store';
+import { hubStructured } from '../utils/ai-hub';
 import type { KBSummary, KnowledgeBase, ToastMessage, TreeNode, NoteContent, AppliedTemplate, AIModelConfig } from '@shared/types';
+import type { QuickNoteResult } from '@shared/types/ai';
 
 interface KBState {
   kbs: KBSummary[];
@@ -100,7 +102,12 @@ export const useKBStore = create<KBState>((set) => ({
     }
     try {
       // 1) 调大模型一键产出：标题 / 摘要 / 归属目录 / 标签 / 链接
-      const plan = await window.forge.ai.quickNote(kb.id, content, dirId ? { dirId } : undefined);
+      // 走 AIHub 的 quick-note skill，获得统一的用量埋点与降级能力
+      const plan = await hubStructured<QuickNoteResult>({
+        skill: 'quick-note',
+        input: { text: content, dirId },
+        kbId: kb.id
+      });
 
       // 2) 在推荐目录下创建笔记
       const note = await window.forge.fs.createNote(kb.id, plan.dirName, {

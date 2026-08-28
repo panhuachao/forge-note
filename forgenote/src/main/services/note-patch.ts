@@ -274,22 +274,22 @@ export async function applyNotePatch(
   notePath: string,
   ops: NotePatchOp[],
   previewId?: string
-): Promise<{ ok: boolean; message: string; affected: number }> {
+): Promise<{ ok: boolean; message: string; affected: number; ops: NotePatchOp[] }> {
   prunePreviews();
   const stored = previewId ? previewStore.get(previewId) : undefined;
   const finalOps = stored?.ops?.length ? stored.ops : ops;
-  if (!finalOps.length) return { ok: false, message: '没有可应用的修改操作', affected: 0 };
+  if (!finalOps.length) return { ok: false, message: '没有可应用的修改操作', affected: 0, ops: [] };
 
   const raw = await fsService.readText(kbId, notePath);
   if (stored && stored.beforeHash !== sha1(raw)) {
-    return { ok: false, message: '笔记在预览之后已被改动，请重新生成修改建议', affected: 0 };
+    return { ok: false, message: '笔记在预览之后已被改动，请重新生成修改建议', affected: 0, ops: finalOps };
   }
   if (stored && stored.notePath !== notePath) {
-    return { ok: false, message: '预览与目标笔记不一致，已拒绝应用', affected: 0 };
+    return { ok: false, message: '预览与目标笔记不一致，已拒绝应用', affected: 0, ops: finalOps };
   }
 
   const res = applyPatchOps(raw, finalOps);
-  if (!res.ok) return { ok: false, message: res.message || '修改无法应用', affected: 0 };
+  if (!res.ok) return { ok: false, message: res.message || '修改无法应用', affected: 0, ops: finalOps };
 
   await fsService.writeText(kbId, notePath, res.raw);
   // 同步检索索引与 SQLite（writeText 只落盘 + 发事件，不含索引同步）
@@ -297,5 +297,107 @@ export async function applyNotePatch(
   auditService.record(kbId, 'aiPatch', { notePath, ops: finalOps, previewId: previewId ?? null, by: 'ai' });
   if (previewId) previewStore.delete(previewId);
 
-  return { ok: true, message: `已应用修改：${notePath}`, affected: res.affected };
+  // 回传实际生效的 ops：供执行后验证（verify）使用。
+  // 只带 previewId 的调用在预览被消费后已拿不到 ops，这里补回。
+  return { ok: true, message: `已应用修改：${notePath}`, affected: res.affected, ops: finalOps };
+}
+
+/* ==================== 回滚快照与执行后验证（方案 §6.3 · P2-3） ====================
+ * 此前确认流的生命周期是「确认 → 执行 → 结束」，执行后既不校验也不支持撤销。
+ * 补齐后可形成完整闭环：确认 → 执行 → 自动验证 → （未达预期）一键回滚。
+ */
+
+interface StoredSnapshot {
+  kbId: string;
+  notePath: string;
+  /** 应用修改前的完整原文（含 frontmatter） */
+  raw: string;
+  at: number;
+}
+
+const snapshotStore = new Map<string, StoredSnapshot>();
+/** 快照保留时长 */
+const SNAPSHOT_TTL = 60 * 60_000;
+
+function pruneSnapshots(): void {
+  const now = Date.now();
+  for (const [id, s] of snapshotStore) {
+    if (now - s.at > SNAPSHOT_TTL) snapshotStore.delete(id);
+  }
+}
+
+/** 保存笔记当前内容作为回滚点，返回 snapshotId（失败返回 null，不阻断主流程） */
+export async function saveSnapshot(kbId: string, notePath: string): Promise<string | null> {
+  try {
+    const raw = await fsService.readText(kbId, notePath);
+    const id = `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    snapshotStore.set(id, { kbId, notePath, raw, at: Date.now() });
+    pruneSnapshots();
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+/** 按快照恢复笔记内容（回滚） */
+export async function restoreSnapshot(snapshotId: string): Promise<{ ok: boolean; message: string }> {
+  pruneSnapshots();
+  const s = snapshotStore.get(snapshotId);
+  if (!s) return { ok: false, message: '回滚快照已过期或不存在' };
+  try {
+    await fsService.writeText(s.kbId, s.notePath, s.raw);
+    await fsService.syncIndex(s.kbId, s.notePath);
+    auditService.record(s.kbId, 'aiPatch', { notePath: s.notePath, snapshotId, rollback: true, by: 'user' });
+    snapshotStore.delete(snapshotId);
+    return { ok: true, message: `已回滚到修改前：${s.notePath}` };
+  } catch (e) {
+    return { ok: false, message: `回滚失败：${String(e)}` };
+  }
+}
+
+/**
+ * 执行后验证：回读笔记，逐条校验 Patch 是否真的生效。
+ * 未达预期时渲染层可提示用户回滚。
+ */
+export async function verifyPatch(
+  kbId: string,
+  notePath: string,
+  ops: NotePatchOp[]
+): Promise<{ ok: boolean; message: string }> {
+  const note = await fsService.readNote(kbId, notePath).catch(() => null);
+  if (!note) return { ok: false, message: `读取笔记失败：${notePath}` };
+  const body = note.content;
+  const fm = (note.frontmatter || {}) as Record<string, unknown>;
+
+  for (const op of ops) {
+    switch (op.op) {
+      case 'replace':
+        if (op.oldText && body.includes(op.oldText)) {
+          return { ok: false, message: '被替换的原文仍然存在，替换可能未生效' };
+        }
+        if (op.newText?.trim() && !body.includes(op.newText.trim().slice(0, 200))) {
+          return { ok: false, message: '新内容未出现在笔记中，替换可能未生效' };
+        }
+        break;
+      case 'append':
+        if (op.text?.trim() && !body.trimEnd().endsWith(op.text.trim())) {
+          return { ok: false, message: '追加内容未出现在笔记末尾' };
+        }
+        break;
+      case 'insert_after':
+        if (op.text?.trim() && !body.includes(op.text.trim())) {
+          return { ok: false, message: '插入内容未出现在笔记中' };
+        }
+        break;
+      case 'set_frontmatter':
+        if (op.key && JSON.stringify(fm[op.key]) !== JSON.stringify(op.value)) {
+          return { ok: false, message: `frontmatter 字段 ${op.key} 未更新为目标值` };
+        }
+        break;
+      case 'delete_lines':
+        // 删除后无法用内容特征反查，跳过精确校验
+        break;
+    }
+  }
+  return { ok: true, message: '修改已生效' };
 }

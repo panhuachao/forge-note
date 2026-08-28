@@ -381,6 +381,89 @@ export interface ConfirmableAction<P = unknown, V = unknown> {
 /** 便捷别名：笔记修改类 action */
 export type NotePatchAction = ConfirmableAction<NotePatchPayload, NotePatchPreview>;
 
+// ===================== 批量任务（doc/AI智能管家重构方案.md §6.2 P2-4） =====================
+// 一次整理几十篇笔记时，需要进度、部分失败重试与整体回滚，
+// 逐篇确认会让用户点到崩溃，因此单独抽象「批量」确认类型。
+
+/** 批量执行结果 */
+export interface BatchResult {
+  batchId: string;
+  total: number;
+  succeeded: number;
+  failed: { item: unknown; reason: string }[];
+  /** 所有成功项都有快照时才能整体回滚 */
+  canRollback: boolean;
+}
+
+/** batchPatch 的 payload */
+export interface BatchPatchPayload {
+  items: NotePatchPayload[];
+}
+
+/** batchPatch 的预览 */
+export interface BatchPatchPreview {
+  items: NotePatchPreview[];
+  /** 可安全应用的数量（其余会在执行时跳过） */
+  applicable: number;
+}
+
+/** batchMove 的 payload */
+export interface BatchMovePayload {
+  items: { fromPath: string; toDirPath: string; autoCreateDir?: boolean }[];
+}
+
+/** batchRetag 的 payload */
+export interface BatchRetagPayload {
+  items: { notePath: string; tags: string[] }[];
+}
+
+// ===================== 知识库巡检（doc/AI智能管家重构方案.md §5.2 P2-1） =====================
+// 规则类检查项完全不依赖模型：未配置 AI 时也能完成基础体检。
+
+export type PatrolSeverity = 'high' | 'medium' | 'low';
+
+export type PatrolCategory =
+  | 'broken-link'
+  | 'duplicate'
+  | 'orphan'
+  | 'empty-dir'
+  | 'sparse-tag'
+  | 'structure'
+  | 'stale';
+
+export interface PatrolFinding {
+  id: string;
+  severity: PatrolSeverity;
+  category: PatrolCategory;
+  title: string;
+  detail: string;
+  /** 受影响的笔记 / 目录 / 标签 */
+  affected: string[];
+  /** 可一键执行的建议动作（走 confirmable-action 框架）；无则仅提示 */
+  suggestion?: ConfirmableAction;
+  /** 去重键：用于主动建议节流 */
+  dedupeKey: string;
+}
+
+export interface PatrolStats {
+  noteCount: number;
+  dirCount: number;
+  tagCount: number;
+  linkCount: number;
+  brokenLinkCount: number;
+  orphanCount: number;
+  untaggedCount: number;
+}
+
+export interface PatrolReport {
+  kbId: string;
+  at: number;
+  stats: PatrolStats;
+  findings: PatrolFinding[];
+  /** 综合健康分 0-100 */
+  score: number;
+}
+
 /** Skill 声明（能力单元） */
 export interface Skill {
   id: string;

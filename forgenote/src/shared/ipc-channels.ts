@@ -55,6 +55,17 @@ export const IPC = {
   AI_TOOL_ACTIVITY: 'ai:toolActivity',
   AI_GET_USAGE: 'ai:getUsage',
   AI_RESET_USAGE: 'ai:resetUsage',
+  // 执行后验证与回滚（doc/AI智能管家重构方案.md §6.3 P2-3）
+  AI_ACTION_VERIFY: 'ai:actionVerify',
+  AI_ACTION_ROLLBACK: 'ai:actionRollback',
+  // 直接执行一个已注册的确认操作（巡检建议由本地规则生成，无需模型参与）
+  AI_ACTION_EXECUTE: 'ai:actionExecute',
+  // 知识库巡检（doc/AI智能管家重构方案.md §5.2 P2-1）
+  AI_PATROL_RUN: 'ai:patrolRun',
+  AI_PATROL_LATEST: 'ai:patrolLatest',
+  // 主动建议与节流（P2-5）
+  AI_PATROL_SUGGEST: 'ai:patrolSuggest',
+  AI_PATROL_MARK_SHOWN: 'ai:patrolMarkShown',
 
   // Media（多媒体：图片/音频资源统一存于 KB 根 .assets/，按内容 hash 去重）
   MEDIA_SAVE_IMAGE: 'media:saveImage',

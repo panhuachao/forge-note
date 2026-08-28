@@ -7,12 +7,26 @@ import { retrieve } from './rag-service';
 import { searchService } from './search-service';
 import { KB_TOOLS, executeTool, type ToolActivity } from './tool-runtime';
 import { actionService } from './confirmable-action-service';
-import { getStoredPreview } from './note-patch';
-import type { AIResponse, AITurn, AIRefHit, AIUsage, ConfirmableAction, NotePatchPayload, NotePatchPreview } from '@shared/types/ai';
+import { getStoredPreview, previewNotePatch } from './note-patch';
+import { fsService } from './fs-service';
+import type {
+  AIResponse,
+  AITurn,
+  AIRefHit,
+  AIUsage,
+  ConfirmableAction,
+  NotePatchOp,
+  NotePatchPayload,
+  NotePatchPreview
+} from '@shared/types/ai';
 
 /**
  * Skill → Agent 默认映射（多 Agent 方案 §3.5）。
  * 渲染层若不显式传 agentId，则按此表路由到对应专家角色。
+ *
+ * 注意：纯 Agent 包装的能力（如 inspiration / wander）**不在此登记**，
+ * 它们通过 AIHub 的 agentId 通道直接运行（见 ai-hub.agentAsSkill），
+ * 避免"映射表有、SKILLS 无实现"的漂移。本表键集合应与 SKILLS 保持一致。
  */
 export const SKILL_TO_AGENT: Record<string, string> = {
   ask: 'conversationalist',
@@ -20,9 +34,11 @@ export const SKILL_TO_AGENT: Record<string, string> = {
   diagnose: 'diagnostician',
   'quick-note': 'refiner',
   'refine-note': 'refiner',
+  'insert-links': 'refiner',
+  'generate-tags': 'refiner',
+  summarize: 'refiner',
   'forge-card': 'card-smith',
-  'daily-insight': 'daily-muse',
-  inspiration: 'inspirer'
+  'daily-insight': 'daily-muse'
 };
 
 /** 解析本次请求的 Agent：显式 agentId 优先，否则按 SKILL_TO_AGENT 兜底到 conversationalist */
@@ -33,7 +49,7 @@ export function resolveAgentId(skillId: string, explicit?: string): string {
 /** Skill 运行上下文（由 AIHub 注入） */
 export interface AISkillCtx {
   kbId?: string;
-  input: { text: string; question?: string; dirId?: string; notePath?: string };
+  input: { text: string; question?: string; dirId?: string; notePath?: string; targets?: string[] };
   /** 已注入的多轮历史（stateful Skill 才有） */
   history: AITurn[];
   /** 会话草稿（awaitConfirm Skill 确认后回传） */
@@ -279,7 +295,12 @@ function buildFallbackNotePatchAction(
 const AGENT_PLAN_SYS = `你是锦囊笔记的智能体，可以调用知识库工具来检索、阅读和分析笔记。
 
 【重要：你当前处于「建议模式」，不允许直接修改任何笔记】
-可用工具：kb_search / kb_read_note / kb_list_notes / kb_link_graph / kb_diagnose / kb_suggest_dir / kb_preview_patch。
+可用工具：
+- 笔记级：kb_search / kb_read_note / kb_list_notes / kb_link_graph / kb_suggest_dir / kb_preview_patch
+- 知识库级（全局视角，只读）：kb_stats（整体统计）/ kb_duplicates（查重）/ kb_orphans（孤立笔记）/ kb_tag_tree（标签体系）/ kb_structure_review（目录结构评审）/ kb_stale（长期未更新）/ kb_diagnose（健康诊断）
+
+用户问「我的知识库怎么样 / 结构合理吗 / 有多少笔记 / 有重复吗」这类全局问题时，优先使用知识库级工具，
+而不是逐篇 kb_read_note。
 
 判断是否需要修改：
 - 若用户只想总结、分析、提问，**不要修改**，直接以自然语言回答，**不要**输出 json 代码块。
@@ -342,6 +363,54 @@ export async function routeSkill(text: string): Promise<string> {
   return getSkill(pick) ? pick : 'ask';
 }
 
+/** 转义正则元字符（按笔记名精确匹配已有双链时用） */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** 执行已确认的 action，统一收敛异常并产出可展示的结果文本 */
+async function execAction(action: ConfirmableAction, kbId?: string): Promise<string> {
+  try {
+    const r = await actionService.execute(action, { kbId });
+    if (typeof r === 'string') return r;
+    const obj = r as { message?: string };
+    return obj?.message ?? JSON.stringify(r);
+  } catch (e) {
+    return `执行失败：${String(e)}`;
+  }
+}
+
+/**
+ * 构造 notePatch 确认建议：先在内存生成 diff 预览（**不落盘**），
+ * 再连同 preview 一起回传渲染层渲染「确认 / 放弃」卡片
+ * （doc/MCP技术实现方案.md §5.2）。
+ * 预览不可应用时直接返回文本说明，不产出待确认卡片。
+ */
+async function buildPatchAction(args: {
+  kbId: string;
+  notePath: string;
+  ops: NotePatchOp[];
+  title: string;
+  description: string;
+}): Promise<AIResponse> {
+  const action: ConfirmableAction<NotePatchPayload, NotePatchPreview> = {
+    id: `act_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    type: 'notePatch',
+    title: args.title,
+    description: args.description,
+    payload: { notePath: args.notePath, ops: args.ops }
+  };
+  let pv: NotePatchPreview | null = null;
+  try {
+    pv = await previewNotePatch(args.kbId, args.notePath, args.ops);
+  } catch (e) {
+    return txt(`修改预览生成失败：${String(e)}`);
+  }
+  if (!pv || !pv.canApply) return txt(`修改预览生成失败：${pv?.message || '该修改无法安全应用'}`);
+  action.preview = pv;
+  return { kind: 'structured', data: action, pending: true };
+}
+
 export const SKILLS: Record<string, AISkill> = {
   ask: {
     id: 'ask',
@@ -351,6 +420,11 @@ export const SKILLS: Record<string, AISkill> = {
     stateful: true,
     useTools: ['kb_search', 'kb_read_note', 'kb_list_notes'],
     run: async ({ kbId, input, history }) => {
+      // 聚焦单篇笔记（笔记侧栏「普通模式」）：该笔记全文即上下文，直接问答，不做 RAG 召回。
+      if (kbId && input.notePath) {
+        const ans = await aiService.askAboutNote(kbId, input.notePath, input.text);
+        return txt(ans);
+      }
       // 时间维度问题（如「帮我总结今天的笔记」）走专门路径：按 mtime 筛笔记 → 读正文 → 让模型总结。
       // 否则走标准 RAG 检索 + 多轮上下文。
       const ts = await runTimeSummary(kbId!, input.text, history);
@@ -467,6 +541,27 @@ export const SKILLS: Record<string, AISkill> = {
     }
   },
 
+  summarize: {
+    id: 'summarize',
+    title: '生成摘要',
+    description: '为某篇笔记生成纯文本摘要（只出摘要，不出标签）。',
+    run: async ({ kbId, input }) => {
+      const summary = await aiService.summarize(kbId!, String(input.text ?? ''));
+      return txt(summary);
+    }
+  },
+
+  'generate-tags': {
+    id: 'generate-tags',
+    title: '生成标签',
+    description: '为某篇笔记生成标签（只出标签，不出摘要，避免多跑一次大模型）。',
+    run: async ({ kbId, input }) => {
+      const tags = await aiService.generateTags(kbId!, String(input.text ?? ''));
+      return structured(tags);
+    },
+    localFallback: () => structured([] as string[])
+  },
+
   'summarize-tags': {
     id: 'summarize-tags',
     title: '摘要与标签',
@@ -520,6 +615,77 @@ export const SKILLS: Record<string, AISkill> = {
       return txt(r);
     }
   },
+
+  'refine-note': {
+    id: 'refine-note',
+    title: '笔记润色',
+    description: '结合 AI 对话要点完善并重写整篇笔记，保留原有格式；先生成修改预览，确认后应用。',
+    awaitConfirm: true,
+    useTools: ['kb_preview_patch', 'kb_apply_patch'],
+    run: async ({ kbId, input, pendingDraft }) => {
+      // ===== 已确认：执行上一轮预览过的 Patch（不重新生成，保证"所见即所改"）=====
+      const approved = pendingDraft as ConfirmableAction<NotePatchPayload, NotePatchPreview> | undefined;
+      if (approved) return txt(await execAction(approved, kbId));
+
+      // ===== 首轮：生成润色全文 → 构造 Patch 预览 =====
+      const notePath = String(input.notePath ?? '');
+      const reply = String(input.text ?? input.question ?? '');
+      if (!kbId || !notePath) return txt('缺少知识库或笔记路径，无法润色。');
+      if (!reply.trim()) return txt('没有可融合的内容：请先在对话中得到 AI 建议，或直接输入润色要求。');
+
+      // Patch 作用于「不含 frontmatter 的正文」，与 fsService.readNote 的 content 对齐，保证 replace 能命中
+      const note = await fsService.readNote(kbId, notePath).catch(() => null);
+      if (!note) return txt(`读取笔记失败：${notePath}`);
+      const body = note.content;
+      const refined = await aiService.refineNoteWithAgent(kbId, notePath, reply, body);
+      const cleaned = String(refined ?? '').trim();
+      if (!cleaned || cleaned === body.trim()) return txt('AI 未产出有效修改，笔记保持不变。');
+
+      return await buildPatchAction({
+        kbId,
+        notePath,
+        ops: [{ op: 'replace', oldText: body, newText: cleaned }],
+        title: `润色：${notePath}`,
+        description: '结合对话要点完善全文，保留原有结构与 Markdown 风格。'
+      });
+    }
+  },
+
+  'insert-links': {
+    id: 'insert-links',
+    title: '插入双链',
+    description: '在笔记末尾追加「相关链接」段落，指向指定笔记；先生成预览，确认后应用。',
+    awaitConfirm: true,
+    useTools: ['kb_apply_patch'],
+    run: async ({ kbId, input, pendingDraft }) => {
+      // ===== 已确认：执行 =====
+      const approved = pendingDraft as ConfirmableAction<NotePatchPayload, NotePatchPreview> | undefined;
+      if (approved) return txt(await execAction(approved, kbId));
+
+      // ===== 首轮：构造追加型 Patch 预览 =====
+      const notePath = String(input.notePath ?? '');
+      const targets = (input.targets ?? []).map((t) => String(t).trim()).filter(Boolean);
+      if (!kbId || !notePath) return txt('缺少知识库或笔记路径，无法插入双链。');
+      if (targets.length === 0) return txt('没有需要插入的链接目标。');
+
+      const note = await fsService.readNote(kbId, notePath).catch(() => null);
+      if (!note) return txt(`读取笔记失败：${notePath}`);
+      const body = note.content;
+      // 已存在的双链不重复插入
+      const fresh = targets.filter((t) => !new RegExp(`\\[\\[${escapeRegExp(t)}\\]\\]`).test(body));
+      if (fresh.length === 0) return txt('这些链接已存在于笔记中，无需重复插入。');
+
+      const links = fresh.map((t) => `- [[${t}]]`).join('\n');
+      const block = body.includes('## 相关链接') ? `\n${links}\n` : `\n## 相关链接\n\n${links}\n`;
+      return await buildPatchAction({
+        kbId,
+        notePath,
+        ops: [{ op: 'append', text: block }],
+        title: `插入双链：${notePath}`,
+        description: `追加 ${fresh.length} 条相关链接：${fresh.join('、')}`
+      });
+    }
+  }
 };
 
 /** 按 id 取 Skill；未知 skill 由 AIHub 处理降级 */

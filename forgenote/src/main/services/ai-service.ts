@@ -430,6 +430,10 @@ class AIService {
   /**
    * 流式多轮问答（方案 §三.1）：检索上下文一次性得到，正文逐 token 流式返回。
    * yield 首片即附带 refs（引用溯源），末片可能附带 usage。
+   *
+   * 定位：**仅供 AIHub.runStream 内部调用**（ask 技能的流式分支）。
+   * 渲染层的流式入口统一为 hubRunStream，不得直接调用本方法，
+   * 否则会绕过会话挂载、用量埋点与画像抽取（doc/AI智能管家重构方案.md §5.1 P0-3）。
    */
   async *askStream(
     kbId: string | undefined,

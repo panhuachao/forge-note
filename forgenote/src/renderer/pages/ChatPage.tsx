@@ -119,8 +119,9 @@ export default function ChatPage() {
   // 重命名（inline）
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  // 会话级 AI session 映射（每轮对话独立多轮上下文，见 doc/AI调用重构技术方案.md §4.2）
-  const convSessionMap = useRef<Record<string, string>>({});
+  // 主进程 AI 会话 id 已持久化在会话对象（conversation.sessionId）上，
+  // 不再用内存 ref 维护映射——刷新后多轮上下文依然连续（P1-3）。
+  const setConversationSession = useChatStore((s) => s.setConversationSession);
   // 智能体模式：开启后 AI 可主动调用知识库 MCP 工具
   const [agentMode, setAgentMode] = useState(false);
   // 自动路由模式：开启后由模型从已注册能力中挑选最合适的 skill（#1）
@@ -181,7 +182,7 @@ export default function ChatPage() {
       // 智能体模式下走 agent skill，AI 可主动调用知识库 MCP 工具（检索/读/写/诊断）
       // auto 模式由模型从已注册能力中自路由（#1）
       const skill = agentMode ? 'agent' : routeMode ? 'auto' : 'ask';
-      const existingSession = convSessionMap.current[convId!];
+      const existingSession = conversations.find((c) => c.id === convId)?.sessionId;
       // 若本对话尚未建立 AI session（如刚打开已持久化的旧对话），用已存的消息历史作为种子，
       // 让多轮上下文在刷新/重开后依然连续（方案 §4.2）。
       const seedHistory: { role: 'user' | 'assistant'; text: string }[] = existingSession
@@ -221,7 +222,9 @@ export default function ChatPage() {
       } as any)) as any;
       off();
       offAct?.();
-      if (res?.sessionId) convSessionMap.current[convId!] = res.sessionId;
+      if (res?.sessionId && res.sessionId !== existingSession) {
+        setConversationSession(convId!, res.sessionId);
+      }
       // 待确认操作：不落为普通文本消息，改为渲染「确认 / 放弃」卡片
       if (res?.kind === 'structured' && (res as any).pending && (res as any).data) {
         setStreaming(null);
@@ -277,13 +280,13 @@ export default function ChatPage() {
         skill: 'agent',
         input: { text: '确认执行上述修改', question: '确认执行上述修改' },
         kbId: activeKb.id,
-        sessionId: convSessionMap.current[activeId],
+        sessionId: conversations.find((c) => c.id === activeId)?.sessionId,
         confirm: true,
         draft: action,
         streamId
       } as any)) as any;
       off();
-      if (res?.sessionId) convSessionMap.current[activeId] = res.sessionId;
+      if (res?.sessionId) setConversationSession(activeId, res.sessionId);
       const text = res?.kind === 'text' ? res.text : acc || '（已执行）';
       setStreaming(null);
       appendMessage(activeId, {

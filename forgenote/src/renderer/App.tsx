@@ -28,6 +28,7 @@ import { TreeContextMenuRoot } from './components/TreeContextMenuRoot';
 import { WikiLinkLayer } from './components/WikiLinkLayer';
 import { WanderOverlay } from './components/WanderOverlay';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
+import { PatrolSuggestionWatcher } from './components/PatrolSuggestionWatcher';
 
 export function App() {
   const {
@@ -154,6 +155,8 @@ export function App() {
       </div>
       <StatusBar />
       <ToastContainer />
+      {/* 主动建议：应用启动后自动检查知识库体检结果并轻提示一次（P2-5） */}
+      <PatrolSuggestionWatcher />
       <Onboarding />
       {showSetup && <SetupWizard onDone={() => setShowSetup(false)} />}
       <TreeContextMenuRoot />
