@@ -120,40 +120,55 @@
 
   .hero-note { margin-top: 16px; font-size: 13px; color: var(--faint); }
 
-  /* ---------- 产品窗口预览 ---------- */
-  .shot {
-    margin: 54px auto 0; max-width: 980px;
+  /* ---------- 产品界面轮播 ---------- */
+  .carousel {
+    position: relative; margin: 54px auto 0; max-width: 980px;
     border-radius: 14px; overflow: hidden;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border); background: var(--panel);
     box-shadow: 0 32px 70px -28px rgba(17,24,39,.32), 0 8px 20px -12px rgba(17,24,39,.16);
-    background: #fff;
   }
-  .shot-bar {
-    display: flex; align-items: center; gap: 7px;
-    padding: 11px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  .carousel-track {
+    display: flex;
+    transition: transform .55s cubic-bezier(.4, 0, .2, 1);
+    will-change: transform;
   }
-  .dot { width: 11px; height: 11px; border-radius: 50%; }
-  .dot.r { background: #FF5F57; } .dot.y { background: #FEBC2E; } .dot.g { background: #28C840; }
-  .shot-title { margin-left: 10px; font-size: 12px; color: var(--faint); }
-  .shot-body { display: grid; grid-template-columns: 190px 1fr 220px; min-height: 330px; }
-  @media (max-width: 760px) { .shot-body { grid-template-columns: 1fr; } .shot-col.side { display: none; } }
-  .shot-col { padding: 16px; border-right: 1px solid var(--border); }
-  .shot-col:last-child { border-right: none; }
-  .shot-col.side { background: var(--panel); }
-  .sk { height: 9px; border-radius: 5px; background: var(--panel-2); margin-bottom: 9px; }
-  .sk.w70 { width: 70%; } .sk.w90 { width: 90%; } .sk.w50 { width: 50%; } .sk.w40 { width: 40%; }
-  .sk.brand { background: rgba(220,38,38,.16); }
-  .sk-h { height: 15px; width: 46%; border-radius: 6px; background: var(--panel-2); margin: 4px 0 16px; }
-  .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
-  .tag-pill {
-    font-size: 10.5px; padding: 3px 9px; border-radius: 999px;
-    background: var(--brand-soft); color: var(--brand-hover); border: 1px solid rgba(220,38,38,.16);
+  .carousel-slide { flex: 0 0 100%; min-width: 100%; }
+  /* 截图原始比例约 1.82:1，不做任何裁切：
+     曾用 aspect-ratio:16/10 + object-fit:cover 会把更宽的截图左右切掉，
+     因此这里只按比例缩放，由 <img> 的 width/height 属性提供占位比例防跳动。 */
+  .carousel-slide img {
+    display: block; width: 100%; height: auto;
   }
-  .ver-row {
-    display: flex; align-items: center; gap: 7px; margin-top: 6px;
-    font-size: 11px; color: var(--muted);
+
+  .carousel-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 38px; height: 38px; border: none; border-radius: 50%; cursor: pointer;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.9); color: var(--ink);
+    box-shadow: 0 4px 14px rgba(17,24,39,.22);
+    opacity: 0; transition: opacity .2s, background .18s;
   }
-  .ver-row i { width: 15px; height: 15px; border-radius: 4px; background: rgba(220,38,38,.2); flex-shrink: 0; }
+  .carousel:hover .carousel-nav, .carousel-nav:focus-visible { opacity: 1; }
+  .carousel-nav:hover { background: #fff; }
+  .carousel-nav.prev { left: 14px; }
+  .carousel-nav.next { right: 14px; }
+  @media (hover: none) { .carousel-nav { opacity: .85; } }
+
+  .carousel-dots {
+    position: absolute; left: 0; right: 0; bottom: 14px;
+    display: flex; justify-content: center; gap: 8px;
+  }
+  .carousel-dot {
+    width: 8px; height: 8px; padding: 0; border: none; border-radius: 50%; cursor: pointer;
+    background: rgba(255,255,255,.55);
+    box-shadow: 0 1px 3px rgba(17,24,39,.4);
+    transition: background .2s, width .25s;
+  }
+  .carousel-dot.active { background: #fff; width: 22px; border-radius: 999px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .carousel-track { transition: none; }
+  }
 
   /* ---------- 区块通用 ---------- */
   section { padding: 84px 0; }
@@ -304,34 +319,31 @@
       </div>
       <p class="hero-note">macOS · Windows · Linux　|　数据完全存储在本地，无需注册账号</p>
 
-      <!-- 产品界面示意 -->
-      <div class="shot" aria-hidden="true">
-        <div class="shot-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="shot-title">锦囊笔记 · 个人OKR规划.md</span>
-        </div>
-        <div class="shot-body">
-          <div class="shot-col side">
-            <div class="sk-h"></div>
-            <div class="sk w90"></div><div class="sk w70"></div><div class="sk w50"></div>
-            <div class="sk w90"></div><div class="sk w40"></div>
+      <!-- 产品界面轮播 -->
+      <div class="carousel" id="carousel" aria-roledescription="carousel" aria-label="产品界面截图">
+        <div class="carousel-track" id="carouselTrack">
+          <div class="carousel-slide" role="group" aria-label="1 / 4">
+            <img src="images/01.png" alt="锦囊笔记界面截图 1" width="1913" height="1052" loading="eager" decoding="async" />
           </div>
-          <div class="shot-col">
-            <div class="sk-h"></div>
-            <div class="sk w90"></div><div class="sk w70 brand"></div><div class="sk w90"></div>
-            <div class="sk w50"></div><div class="sk w90"></div><div class="sk w70"></div>
-            <div class="tag-row">
-              <span class="tag-pill">OKR</span><span class="tag-pill">目标管理</span><span class="tag-pill">季度复盘</span>
-            </div>
+          <div class="carousel-slide" role="group" aria-label="2 / 4">
+            <img src="images/02.png" alt="锦囊笔记界面截图 2" width="1910" height="1051" loading="lazy" decoding="async" />
           </div>
-          <div class="shot-col side">
-            <div class="sk-h"></div>
-            <div class="ver-row"><i></i>自动 · 3 分钟前</div>
-            <div class="ver-row"><i></i>AI 修改 · 1 小时前</div>
-            <div class="ver-row"><i></i>手动「初稿完成」· 昨天</div>
-            <div class="ver-row"><i></i>自动 · 3 天前</div>
+          <div class="carousel-slide" role="group" aria-label="3 / 4">
+            <img src="images/03.png" alt="锦囊笔记界面截图 3" width="1915" height="1055" loading="lazy" decoding="async" />
+          </div>
+          <div class="carousel-slide" role="group" aria-label="4 / 4">
+            <img src="images/04.png" alt="锦囊笔记界面截图 4" width="1908" height="1052" loading="lazy" decoding="async" />
           </div>
         </div>
+
+        <button class="carousel-nav prev" id="carouselPrev" type="button" aria-label="上一张">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <button class="carousel-nav next" id="carouselNext" type="button" aria-label="下一张">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+
+        <div class="carousel-dots" id="carouselDots" role="tablist" aria-label="选择截图"></div>
       </div>
     </div>
   </section>
@@ -617,6 +629,107 @@
 </footer>
 
 <script>
+  // 产品界面轮播：自动播放 + 箭头 + 指示点 + 键盘 + 触摸滑动
+  (function () {
+    var carousel = document.getElementById('carousel');
+    var track = document.getElementById('carouselTrack');
+    var dotsWrap = document.getElementById('carouselDots');
+    var btnPrev = document.getElementById('carouselPrev');
+    var btnNext = document.getElementById('carouselNext');
+    if (!carousel || !track || !dotsWrap) return;
+
+    var slides = track.children;
+    var total = slides.length;
+    if (total <= 1) return;
+
+    var idx = 0;
+    var timer = null;
+    var INTERVAL = 5000;
+
+    // 生成指示点
+    var dots = [];
+    for (var i = 0; i < total; i++) {
+      (function (n) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'carousel-dot' + (n === 0 ? ' active' : '');
+        b.setAttribute('role', 'tab');
+        b.setAttribute('aria-label', '第 ' + (n + 1) + ' 张截图');
+        b.addEventListener('click', function () { go(n); restart(); });
+        dotsWrap.appendChild(b);
+        dots.push(b);
+      })(i);
+    }
+
+    function go(n) {
+      idx = (n % total + total) % total;
+      track.style.transform = 'translateX(' + (-idx * 100) + '%)';
+      for (var k = 0; k < dots.length; k++) {
+        var on = k === idx;
+        dots[k].classList.toggle('active', on);
+        dots[k].setAttribute('aria-selected', on ? 'true' : 'false');
+      }
+    }
+
+    function next() { go(idx + 1); }
+    function prev() { go(idx - 1); }
+    function start() { stop(); timer = setInterval(next, INTERVAL); }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } }
+    function restart() { stop(); start(); }
+
+    btnNext && btnNext.addEventListener('click', function () { next(); restart(); });
+    btnPrev && btnPrev.addEventListener('click', function () { prev(); restart(); });
+
+    // 悬停 / 聚焦时暂停，离开后恢复
+    carousel.addEventListener('mouseenter', stop);
+    carousel.addEventListener('mouseleave', start);
+    carousel.addEventListener('focusin', stop);
+    carousel.addEventListener('focusout', start);
+
+    // 键盘左右箭头
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { prev(); restart(); }
+      else if (e.key === 'ArrowRight') { next(); restart(); }
+    });
+
+    // 触摸滑动
+    var startX = 0, startY = 0, tracking = false;
+    carousel.addEventListener('touchstart', function (e) {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+      stop();
+    }, { passive: true });
+    carousel.addEventListener('touchend', function (e) {
+      if (!tracking) return;
+      tracking = false;
+      var dx = e.changedTouches[0].clientX - startX;
+      var dy = e.changedTouches[0].clientY - startY;
+      // 仅在横向滑动占主导时切换，避免与页面纵向滚动冲突
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+        dx < 0 ? next() : prev();
+      }
+      start();
+    }, { passive: true });
+
+    // 页面不可见时暂停，回来再恢复
+    document.addEventListener('visibilitychange', function () {
+      document.hidden ? stop() : start();
+    });
+
+    // 首屏进入视口后才开始自动播放，避免后台空转
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          en.isIntersecting ? start() : stop();
+        });
+      }, { threshold: 0.25 });
+      io.observe(carousel);
+    } else {
+      start();
+    }
+  })();
+
   // 滚动淡入：仅在支持 IntersectionObserver 时启用，降级时直接显示
   (function () {
     var items = document.querySelectorAll('.reveal');
