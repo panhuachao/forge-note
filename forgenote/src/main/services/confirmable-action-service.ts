@@ -18,6 +18,7 @@ import {
   restoreSnapshot,
   verifyPatch
 } from './note-patch';
+import { versionService } from './version-service';
 
 export interface ActionCtx {
   kbId?: string;
@@ -153,6 +154,9 @@ actionService.register<NotePatchPayload, NotePatchPreview>('notePatch', {
   execute: async (payload, ctx) => {
     if (!ctx.kbId) return { ok: false, message: '缺少知识库上下文' };
     if (!payload?.notePath) return { ok: false, message: '缺少 notePath' };
+    // AI 改笔记前先存一个版本：内存快照只保 1 小时，版本历史才能长期回溯
+    // （doc/笔记版本实现方案.md §9.1）
+    void versionService.create(ctx.kbId, payload.notePath, { source: 'ai', force: true });
     // 先存快照再改：为回滚留后路（P2-3）
     const snapshotId = await saveSnapshot(ctx.kbId, payload.notePath);
     const r = await applyNotePatch(ctx.kbId, payload.notePath, payload.ops ?? [], payload.previewId);
@@ -258,6 +262,13 @@ actionService.register<BatchPatchPayload, BatchPatchPreview>('batchPatch', {
     if (!ctx.kbId) return { ok: false, message: '缺少知识库上下文' };
     const items = payload?.items ?? [];
     if (!items.length) return { ok: false, message: '没有待执行的修改项' };
+
+    // 批量修改前为每篇笔记存一个版本，便于事后逐篇回溯
+    for (const it of items) {
+      if (it?.notePath) {
+        void versionService.create(ctx.kbId, it.notePath, { source: 'ai', force: true });
+      }
+    }
 
     const snapshots: { id: string; notePath: string }[] = [];
     const failed: { item: unknown; reason: string }[] = [];

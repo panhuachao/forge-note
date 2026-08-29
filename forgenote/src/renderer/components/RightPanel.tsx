@@ -7,6 +7,8 @@ import {
 } from '../lib/window-control';
 import { NoteOutline } from './NoteOutline';
 import { LinkPanel } from './LinkPanel';
+import { VersionHistoryModal } from './VersionHistoryModal';
+import type { VersionSummary } from '@shared/types/version';
 import { EVT_ACTIVE_HEADING } from './NotePane';
 import { useLayoutStore } from '../stores/layout-store';
 import { useKBStore, requireAI } from '../stores/kb-store';
@@ -36,7 +38,7 @@ interface CurrentInfo {
 }
 
 export function RightPanel() {
-  const { activeKb } = useKBStore();
+  const { activeKb, pushToast } = useKBStore();
   const { rightPanelWidth, setRightPanelWidth } = useLayoutStore();
   const [resizing, setResizing] = useState(false);
   const [info, setInfo] = useState<CurrentInfo | null>(null);
@@ -353,6 +355,45 @@ export function RightPanel() {
     };
   }, [info]);
 
+  // 版本历史概览（doc/笔记版本实现方案.md §8.1）
+  const [versionSummary, setVersionSummary] = useState<VersionSummary>({ count: 0, lastAt: null });
+  const [versionOpen, setVersionOpen] = useState(false);
+  // 防止同一个笔记生命周期内重复触发「无历史版本 → 自动创建初始版本」
+  const autoInitRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeKb || !notePath) {
+      setVersionSummary({ count: 0, lastAt: null });
+      return;
+    }
+    let cancelled = false;
+    const kbId = activeKb.id;
+    void window.forge.version
+      .summary(kbId, notePath)
+      .then((s) => {
+        if (cancelled) return;
+        setVersionSummary(s);
+        // 无历史版本时自动把当前内容保存为初始版本，避免用户打开弹窗看到空列表
+        if (s.count === 0 && !autoInitRef.current.has(notePath)) {
+          autoInitRef.current.add(notePath);
+          void window.forge.version
+            .create(kbId, notePath, '自动初始版本')
+            .then(() => window.forge.version.summary(kbId, notePath))
+            .then((fresh) => {
+              if (!cancelled) setVersionSummary(fresh);
+            })
+            .catch(() => {
+              /* 静默：版本是增值能力 */
+            });
+        }
+      })
+      .catch(() => {
+        /* 静默：版本是增值能力 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeKb?.id, notePath, info?.mtime]);
+
   return (
     <aside
       style={{ width: rightPanelWidth }}
@@ -593,6 +634,23 @@ export function RightPanel() {
                   {basics.brokenCount > 0 && <span className="text-red-500"> · 失效 {basics.brokenCount}</span>}
                 </span>
               </Row>
+              {/* 版本历史入口（doc/笔记版本实现方案.md §8.1） */}
+              <Row label="版本">
+                {versionSummary.count === 0 ? (
+                  <span className="text-fg-faint">暂无历史版本</span>
+                ) : (
+                  <span className="text-fg-secondary">
+                    共 {versionSummary.count} 个版本
+                    {versionSummary.lastAt && <span className="text-fg-faint"> · {relTime(versionSummary.lastAt)}</span>}
+                  </span>
+                )}
+                <button
+                  onClick={() => setVersionOpen(true)}
+                  className="ml-1.5 text-brand hover:underline shrink-0"
+                >
+                  查看
+                </button>
+              </Row>
             </dl>
           </PanelCard>
         )}
@@ -689,9 +747,33 @@ export function RightPanel() {
       </div>
         )}
       </div>
+      {/* 版本历史弹窗 */}
+      {versionOpen && activeKb && notePath && (
+        <VersionHistoryModal
+          kbId={activeKb.id}
+          notePath={notePath}
+          pushToast={pushToast}
+          onClose={() => setVersionOpen(false)}
+          onRestored={() => {
+            setVersionOpen(false);
+            // 通知编辑器重新读盘（恢复后 fsChange 也会触发，这里双保险）
+            window.dispatchEvent(new CustomEvent('forgenote:note-changed', { detail: notePath }));
+          }}
+        />
+      )}
       <ResizeHandle onStart={() => setResizing(true)} />
     </aside>
   );
+}
+
+/** 相对时间：用于版本历史概览 */
+function relTime(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
+  if (diff < 7 * 86400_000) return `${Math.floor(diff / 86400_000)} 天前`;
+  return new Date(ts).toLocaleDateString('zh-CN');
 }
 
 function ResizeHandle({ onStart }: { onStart: () => void }) {

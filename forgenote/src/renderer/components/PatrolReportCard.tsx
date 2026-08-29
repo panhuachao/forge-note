@@ -17,7 +17,8 @@ const CATEGORY_META: Record<string, { label: string; icon: string }> = {
   'empty-dir': { label: '空目录', icon: 'folder' },
   'sparse-tag': { label: '稀疏标签', icon: 'tag' },
   structure: { label: '目录结构', icon: 'folder-tree' },
-  stale: { label: '长期未更新', icon: 'clock' }
+  stale: { label: '长期未更新', icon: 'clock' },
+  'version-size': { label: '版本占用', icon: 'archive' }
 };
 
 const SEV_STYLE: Record<string, { label: string; cls: string; bar: string }> = {

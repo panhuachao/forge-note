@@ -22,6 +22,7 @@ import {
   getPendingSuggestions,
   markSuggestionsShown
 } from './services/patrol-service';
+import { versionService } from './services/version-service';
 import type { UserProfile } from '@shared/types/profile';
 import type { AIPrompts } from '@shared/types/ai';
 import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
@@ -182,6 +183,36 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     async (_e, action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
       actionService.execute(action, { kbId })
   );
+  // 笔记版本历史（doc/笔记版本实现方案.md）
+  ipcMain.handle(IPC.VS_LIST, async (_e, kbId: string, notePath: string) =>
+    versionService.list(kbId, notePath)
+  );
+  ipcMain.handle(IPC.VS_SUMMARY, async (_e, kbId: string, notePath: string) =>
+    versionService.summary(kbId, notePath)
+  );
+  ipcMain.handle(IPC.VS_GET, async (_e, kbId: string, notePath: string, versionId: string) =>
+    versionService.getContent(kbId, notePath, versionId)
+  );
+  // a / b 可传 'current' 表示与磁盘当前内容比对
+  ipcMain.handle(IPC.VS_DIFF, async (_e, kbId: string, notePath: string, a: string, b: string) =>
+    versionService.diff(kbId, notePath, a, b)
+  );
+  ipcMain.handle(IPC.VS_DIFF_TEXT, async (_e, kbId: string, notePath: string, a: string, b: string) =>
+    versionService.diffText(kbId, notePath, a, b)
+  );
+  ipcMain.handle(IPC.VS_RESTORE, async (_e, kbId: string, notePath: string, versionId: string) =>
+    versionService.restore(kbId, notePath, versionId)
+  );
+  // 手动保存版本：force=true 跳过节流
+  ipcMain.handle(IPC.VS_CREATE, async (_e, kbId: string, notePath: string, note?: string) =>
+    versionService.create(kbId, notePath, { source: 'manual', note, force: true })
+  );
+  ipcMain.handle(IPC.VS_DELETE, async (_e, kbId: string, notePath: string, versionId: string) => {
+    await versionService.remove(kbId, notePath, versionId);
+    return null;
+  });
+  ipcMain.handle(IPC.VS_PRUNE, async (_e, kbId: string) => versionService.prune(kbId));
+
   // 知识库巡检（P2-1）：规则类检查不依赖模型，未配置 AI 也能体检
   ipcMain.handle(IPC.AI_PATROL_RUN, async (_e, kbId: string, force?: boolean) => runPatrol(kbId, !!force));
   ipcMain.handle(IPC.AI_PATROL_LATEST, async (_e, kbId: string) => getCachedReport(kbId));

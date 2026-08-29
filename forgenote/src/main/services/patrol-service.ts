@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { getKB } from './store';
 import { linkIndex } from './link-index';
 import { scanNotes } from './tool-runtime';
+import { versionService } from './version-service';
 import type {
   BatchPatchPayload,
   ConfirmableAction,
@@ -39,7 +40,8 @@ const CATEGORY_LABEL: Record<PatrolCategory, string> = {
   'empty-dir': '空目录',
   'sparse-tag': '稀疏标签',
   structure: '目录结构',
-  stale: '长期未更新'
+  stale: '长期未更新',
+  'version-size': '版本占用'
 };
 
 let seq = 0;
@@ -292,6 +294,22 @@ export async function runPatrol(kbId: string, force = false): Promise<PatrolRepo
       detail: '长期未动的笔记可能已经过时，建议回顾、归档或补充最新信息。',
       affected: stale.map((n) => n.path).slice(0, 30),
       dedupeKey: `stale:${stale.length}`
+    });
+  }
+
+  /* ---------- 8) 版本历史占用（低，仅提示不做自动动作）---------- */
+  const versionBytes = await versionService.totalSize(kbId).catch(() => 0);
+  // 仅在占用超过 32MB 时才提示，避免刚启用版本功能就打扰用户
+  if (versionBytes > 32 * 1024 * 1024) {
+    findings.push({
+      id: genId(),
+      severity: 'low',
+      category: 'version-size',
+      title: `版本历史占用 ${(versionBytes / 1024 / 1024).toFixed(1)} MB`,
+      detail:
+        '版本历史保存在 .forge/versions/ 下，会随编辑积累。系统已按「7 天内全保留 / 30 天内每天 1 份 / 更早每周 1 份」自动淘汰，如需立即释放空间可手动清理。',
+      affected: [],
+      dedupeKey: `version-size:${Math.round(versionBytes / (32 * 1024 * 1024))}`
     });
   }
 

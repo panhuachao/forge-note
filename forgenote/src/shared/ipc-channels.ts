@@ -27,6 +27,17 @@ export const IPC = {
   FS_LIST_TAGS: 'fs:listTags',
   FS_NOTES_BY_TAG: 'fs:notesByTag',
 
+  // Version（笔记版本历史，doc/笔记版本实现方案.md §7.1）
+  VS_LIST: 'vs:list',
+  VS_SUMMARY: 'vs:summary',
+  VS_GET: 'vs:get',
+  VS_DIFF: 'vs:diff',
+  VS_DIFF_TEXT: 'vs:diffText',
+  VS_RESTORE: 'vs:restore',
+  VS_CREATE: 'vs:create',
+  VS_DELETE: 'vs:delete',
+  VS_PRUNE: 'vs:prune',
+
   // Links
   LINKS_GET_BACKLINKS: 'links:getBacklinks',
   LINKS_GET_OUTLINKS: 'links:getOutlinks',

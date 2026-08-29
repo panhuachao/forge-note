@@ -30,6 +30,28 @@ import type {
 } from '@shared/types';
 
 const api = {
+  // 笔记版本历史（doc/笔记版本实现方案.md §7.3）
+  version: {
+    list: (kbId: string, notePath: string) =>
+      ipcRenderer.invoke(IPC.VS_LIST, kbId, notePath) as Promise<import('@shared/types/version').VersionListItem[]>,
+    summary: (kbId: string, notePath: string) =>
+      ipcRenderer.invoke(IPC.VS_SUMMARY, kbId, notePath) as Promise<import('@shared/types/version').VersionSummary>,
+    getContent: (kbId: string, notePath: string, versionId: string) =>
+      ipcRenderer.invoke(IPC.VS_GET, kbId, notePath, versionId) as Promise<string | null>,
+    /** a / b 可传 'current' 表示与磁盘当前内容比对 */
+    diff: (kbId: string, notePath: string, a: string, b: string) =>
+      ipcRenderer.invoke(IPC.VS_DIFF, kbId, notePath, a, b) as Promise<import('@shared/types/version').DiffLine[]>,
+    diffText: (kbId: string, notePath: string, a: string, b: string) =>
+      ipcRenderer.invoke(IPC.VS_DIFF_TEXT, kbId, notePath, a, b) as Promise<string>,
+    restore: (kbId: string, notePath: string, versionId: string) =>
+      ipcRenderer.invoke(IPC.VS_RESTORE, kbId, notePath, versionId) as Promise<{ ok: boolean; message: string }>,
+    create: (kbId: string, notePath: string, note?: string) =>
+      ipcRenderer.invoke(IPC.VS_CREATE, kbId, notePath, note) as Promise<string | null>,
+    remove: (kbId: string, notePath: string, versionId: string) =>
+      ipcRenderer.invoke(IPC.VS_DELETE, kbId, notePath, versionId) as Promise<void>,
+    prune: (kbId: string) =>
+      ipcRenderer.invoke(IPC.VS_PRUNE, kbId) as Promise<{ removed: number; freedBytes: number }>
+  },
   kb: {
     list: () => ipcRenderer.invoke(IPC.KB_LIST) as Promise<KBSummary[]>,
     add: () => ipcRenderer.invoke(IPC.KB_ADD) as Promise<KnowledgeBase | null>,

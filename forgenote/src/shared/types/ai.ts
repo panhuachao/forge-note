@@ -429,7 +429,9 @@ export type PatrolCategory =
   | 'empty-dir'
   | 'sparse-tag'
   | 'structure'
-  | 'stale';
+  | 'stale'
+  /** 版本历史占用（doc/笔记版本实现方案.md §9.2） */
+  | 'version-size';
 
 export interface PatrolFinding {
   id: string;

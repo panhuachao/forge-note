@@ -9,6 +9,8 @@ import matter from 'gray-matter';
 import { fsService } from './fs-service';
 import { auditService } from './audit-service';
 import { readFrontmatter } from '../utils/markdown';
+// diff 能力已上提到 utils/diff，供 Patch 预览与版本历史共用（doc/笔记版本实现方案.md §5.3）
+import { makeUnifiedDiff } from '../utils/diff';
 import type { NotePatchOp, NotePatchPreview } from '@shared/types/ai';
 
 interface StoredPreview {
@@ -179,68 +181,6 @@ function applyPatchOps(raw: string, ops: NotePatchOp[]): { raw: string; ok: bool
 
   const nextRaw = Object.keys(nextData).length > 0 ? matter.stringify(content, nextData) : content;
   return { raw: nextRaw, ok, affected, message: messages.length ? messages.join('；') : undefined };
-}
-
-/**
- * 简易行级 unified diff（无外部依赖）。
- * 超大文档（行数组合超过阈值）退化为「仅统计 + 截断预览」，避免 O(n*m) 内存爆炸。
- */
-function makeUnifiedDiff(before: string, after: string, context = 2): string {
-  const a = before.split('\n');
-  const b = after.split('\n');
-  if (a.length * b.length > 4_000_000) {
-    return `（文档过大，已跳过逐行 diff；修改后共 ${b.length} 行）`;
-  }
-
-  const n = a.length;
-  const m = b.length;
-  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    }
-  }
-
-  const ops: { type: ' ' | '-' | '+'; line: string }[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (a[i] === b[j]) {
-      ops.push({ type: ' ', line: a[i] });
-      i++;
-      j++;
-    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-      ops.push({ type: '-', line: a[i] });
-      i++;
-    } else {
-      ops.push({ type: '+', line: b[j] });
-      j++;
-    }
-  }
-  while (i < n) {
-    ops.push({ type: '-', line: a[i] });
-    i++;
-  }
-  while (j < m) {
-    ops.push({ type: '+', line: b[j] });
-    j++;
-  }
-
-  // 仅保留变更行附近 context 行
-  const keep = new Array<boolean>(ops.length).fill(false);
-  for (let idx = 0; idx < ops.length; idx++) {
-    if (ops[idx].type === ' ') continue;
-    for (let k = Math.max(0, idx - context); k <= Math.min(ops.length - 1, idx + context); k++) keep[k] = true;
-  }
-  const out: string[] = [];
-  let last = -1;
-  for (let idx = 0; idx < ops.length; idx++) {
-    if (!keep[idx]) continue;
-    if (last >= 0 && idx - last > 1) out.push('@@ ...');
-    out.push(`${ops[idx].type}${ops[idx].line}`);
-    last = idx;
-  }
-  return out.join('\n');
 }
 
 /** 生成修改预览（不落盘），并把 ops 存入 previewStore */

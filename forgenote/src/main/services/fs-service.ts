@@ -10,6 +10,7 @@ import { atomicWrite, safeJoin } from '../utils/fs';
 import { extractWikiLinks, parseFrontMatter, extractTags, writeFrontmatter, readFrontmatter, replaceWikiTarget } from '../utils/markdown';
 import { getKB } from './store';
 import { linkIndex } from './link-index';
+import { versionService } from './version-service';
 import matter from 'gray-matter';
 import { kbService } from './kb-service';
 import { templateService } from './template-service';
@@ -138,6 +139,9 @@ class FSService {
     const newOutlinks = extractWikiLinks(content);
     linkIndex.updateOutlinks(kbId, notePath, newOutlinks);
     await this.syncIndex(kbId, notePath);
+    // 版本历史埋点：仅记录「有变化」，实际快照由调度器节流后异步落盘，
+    // 避免 500ms 防抖自动保存把版本区撑爆（doc/笔记版本实现方案.md §4.1）
+    versionService.recordChange(kbId, notePath);
     // 触发事件
     eventBus.emit('fsChange', { type: 'change', path: notePath });
   }
@@ -188,6 +192,7 @@ class FSService {
     const yaml = writeFrontmatter(raw, { tags: norm });
     await atomicWrite(abs, yaml);
     await this.syncIndex(kbId, notePath);
+    versionService.recordChange(kbId, notePath);
     eventBus.emit('fsChange', { type: 'change', path: notePath });
   }
 
@@ -200,6 +205,7 @@ class FSService {
     const yaml = writeFrontmatter(raw, { summary: String(summary || '').trim() });
     await atomicWrite(abs, yaml);
     await this.syncIndex(kbId, notePath);
+    versionService.recordChange(kbId, notePath);
     eventBus.emit('fsChange', { type: 'change', path: notePath });
   }
 
@@ -308,6 +314,8 @@ class FSService {
     await fs.unlink(abs);
     linkIndex.removeNote(kbId, notePath);
     await searchService.removeNote(kbId, notePath);
+    // 版本数据转入 orphan 区保留 30 天，误删后仍可找回（doc/笔记版本实现方案.md §4.5）
+    void versionService.onNoteDeleted(kbId, notePath);
     // 清除 buildTree 的 5 秒缓存，避免 listTree 返回旧树导致删除"看似不生效"
     kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'unlink', path: notePath, isDir: false });
@@ -330,10 +338,14 @@ class FSService {
     if (opts?.autoCreateDir) {
       await fs.mkdir(dirname(toAbs), { recursive: true });
     }
+    // 移动前先存一个版本（路径变更属高风险操作，便于误移后找回）
+    void versionService.create(kbId, fromPath, { source: 'pre-move', force: true });
     await fs.rename(fromAbs, toAbs);
     linkIndex.renameNote(kbId, fromPath, toPath);
     await searchService.removeNote(kbId, fromPath);
     await this.syncIndex(kbId, toPath);
+    // 版本数据的 noteId 基于首次路径哈希，终身不变，此处只需更新路径映射
+    void versionService.onNoteMoved(kbId, fromPath, toPath);
     kbService.invalidateMeta(root);
     eventBus.emit('fsChange', { type: 'change', path: toPath });
     return toPath;
@@ -359,10 +371,14 @@ class FSService {
       }
     }
 
+    // 重命名前存一个版本（路径变更属高风险操作）
+    void versionService.create(kbId, oldPath, { source: 'pre-move', force: true });
     await fs.rename(oldAbs, newAbs);
     linkIndex.renameNote(kbId, oldPath, newPath);
     await searchService.removeNote(kbId, oldPath);
     await this.syncIndex(kbId, newPath);
+    // 版本数据跟随新路径（noteId 不变，仅更新映射）
+    void versionService.onNoteMoved(kbId, oldPath, newPath);
     // 清除 buildTree 的 5 秒缓存，让重命名后的最新树被下次 listTree 拿到
     kbService.invalidateMeta(root);
 
@@ -447,6 +463,8 @@ class FSService {
     for (const notePath of collected) {
       linkIndex.removeNote(kbId, notePath);
       await searchService.removeNote(kbId, notePath);
+      // 递归删除时逐篇把版本数据转入 orphan 区
+      void versionService.onNoteDeleted(kbId, notePath);
     }
     await fs.rm(abs, { recursive: true, force: true });
     kbService.invalidateMeta(root);
@@ -478,6 +496,8 @@ class FSService {
   async writeText(kbId: string, filePath: string, content: string): Promise<void> {
     const abs = this.abs(kbId, filePath);
     await atomicWrite(abs, content);
+    // AI Patch / 批量修改走此路径（note-patch 会自行 syncIndex）
+    versionService.recordChange(kbId, filePath);
     eventBus.emit('fsChange', { type: 'change', path: filePath });
   }
 
