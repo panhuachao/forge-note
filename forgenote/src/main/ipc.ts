@@ -197,6 +197,12 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     console.log('[plugin] 安全模式：跳过插件加载');
   }
   pluginHost.scan();
+  // 主进程启动时主动恢复当前知识库并按 KB 启用状态加载插件，
+  // 避免依赖渲染层 setActive 的调用时机导致重启后插件显示为禁用。
+  void (async () => {
+    const activeKbId = getConfig<string>('activeKb');
+    if (activeKbId) await pluginHost.setActiveKb(activeKbId);
+  })();
   // 插件 toast / 确认请求 → 转发给渲染层
   forwardPluginEvents((channel, payload) => {
     const win = getMainWindow();
@@ -247,6 +253,10 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   // 取得插件自带资源的 file:// URL（如 vendor 库），供渲染层动态加载
   ipcMain.handle(IPC.PLUGIN_RESOURCE_URL, async (_e, pluginId: string, relativePath: string) => {
     return pluginHost.getResourceUrl(pluginId, relativePath);
+  });
+  // 读取插件自带资源文件内容（如 vendor/mermaid.min.js），供渲染层在当前上下文 eval 执行
+  ipcMain.handle(IPC.PLUGIN_READ_RESOURCE_FILE, async (_e, pluginId: string, relativePath: string) => {
+    return pluginHost.readResourceFile(pluginId, relativePath);
   });
 
   // 笔记版本历史（doc/笔记版本实现方案.md）

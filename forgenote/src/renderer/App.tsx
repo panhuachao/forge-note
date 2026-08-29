@@ -145,12 +145,15 @@ export function App() {
     el.setAttribute('data-theme-color', themeColor);
   }, [fontSize, lineHeight, themeColor]);
 
-  // 插件渲染层入口：应用启动后加载所有已启用插件的 ui.js（doc/插件技术实现方案.md §3.1）
+  // 插件渲染层入口：active KB 确定后加载该库下已启用插件的 ui.js；
+  // KB 切换或插件启用/禁用后由 PluginsPage 主动重新触发。
   useEffect(() => {
     let cleanup: (() => void) | null = null;
-    void loadAllPluginUI().then((off) => {
-      cleanup = off;
-    });
+    if (activeKb?.id) {
+      void loadAllPluginUI().then((off) => {
+        cleanup = off;
+      });
+    }
     // 插件 toast 事件 → 全局提示
     const onToast = (e: Event) => {
       const d = (e as CustomEvent<{ level: 'info' | 'success' | 'warn' | 'error'; text: string }>).detail;
@@ -161,7 +164,7 @@ export function App() {
       cleanup?.();
       window.removeEventListener('forgenote:plugin-toast', onToast);
     };
-  }, [pushToast]);
+  }, [pushToast, activeKb?.id]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-canvas">

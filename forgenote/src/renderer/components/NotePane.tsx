@@ -9,7 +9,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
-import { getPluginEditorExtensions, clearPluginEditorExtensions, getCodeBlockRenderer } from '../plugin/runtime';
+import { getPluginEditorExtensions, clearPluginEditorExtensions, getCodeBlockRenderer, onCodeBlockRenderersChanged } from '../plugin/runtime';
 import { Icon } from './Icon';
 import { ConfirmableActionCard } from './ConfirmableActionCard';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
@@ -381,10 +381,17 @@ export function NotePane(props: Props) {
 
   // 实时预览 HTML（基于 liveContent，分屏编辑即时同步）
   const [previewHtml, setPreviewHtml] = useState('');
+  // 代码块渲染器注册表版本：插件启用/卸载时递增，触发预览重新生成与扫描
+  const [rendererVer, setRendererVer] = useState(0);
   useEffect(() => {
     const html = renderMarkdownPreview(liveContent, activeKb?.id || '', props.notePath);
     setPreviewHtml(html);
-  }, [liveContent, activeKb?.id, props.notePath]);
+  }, [liveContent, activeKb?.id, props.notePath, rendererVer]);
+
+  // 监听插件代码块渲染器注册/注销（如启用 mermaid 插件后），触发重新扫描
+  useEffect(() => {
+    return onCodeBlockRenderersChanged(() => setRendererVer((v) => v + 1));
+  }, []);
 
   // 预览渲染后：调用插件注册的代码块渲染器（如 mermaid）。
   // 宿主不绑定任何绘图库，仅做调度：扫描 <code class="language-<lang>">，
@@ -415,7 +422,7 @@ export function NotePane(props: Props) {
         container.textContent = String(err);
       }
     }
-  }, [previewHtml, tab]);
+  }, [previewHtml, tab, rendererVer]);
 
   // 大纲点击跳转：滚动到对应标题
   useEffect(() => {

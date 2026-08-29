@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Icon } from '../components/Icon';
 import type { PluginInfo, PluginPermission } from '@shared/types/plugin';
+import { loadAllPluginUI } from '../plugin/runtime';
 
 // 社区插件仓库（公开仓位）：https://github.com/panhuachao/forge-note-plugins
 // 插件页直接访问该仓库：拉取 community-plugins.json 索引，安装时从仓库下载插件文件。
@@ -126,10 +127,12 @@ export default function PluginsPage() {
 
   async function handleEnable(id: string) {
     await window.forge.plugin.enable(id);
+    await loadAllPluginUI();
     refresh();
   }
   async function handleDisable(id: string) {
     await window.forge.plugin.disable(id);
+    await loadAllPluginUI();
     refresh();
   }
   async function handleUninstall(id: string) {
@@ -325,7 +328,10 @@ export default function PluginsPage() {
 
                   <div className="flex flex-wrap items-center gap-2 mt-auto">
                     {installed ? (
-                      <span className="text-xs text-fg-muted">已在上方「已安装插件」中管理</span>
+                      <button
+                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-all bg-rose-500 text-white hover:bg-rose-600"
+                        onClick={() => handleUninstall(c.id)}
+                      >卸载</button>
                     ) : (
                       <button
                         className="btn btn-primary text-xs px-2.5 py-1 rounded-lg"

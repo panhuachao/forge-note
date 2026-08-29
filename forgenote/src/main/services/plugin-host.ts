@@ -315,7 +315,10 @@ class PluginHost {
     return { ok: true, message: `已安装「${id}」` };
   }
 
-  /** 写入已下载的插件文件（来自远程仓库），路径相对于插件根目录 */
+  /** 写入已下载的插件文件（来自远程仓库），路径相对于插件根目录。
+   * 索引中 files 字段通常带仓库前缀（如 plugins/<id>/manifest.json），
+   * 安装到本地时要剥离 plugins/<id>/ 前缀，使其落在 userData/plugins/<id>/ 下。
+   */
   async installFiles(id: string, files: { path: string; content: string }[]): Promise<{ ok: boolean; message: string }> {
     const dest = path.join(this.root() || '', id);
     if (fs.existsSync(dest)) {
@@ -323,8 +326,11 @@ class PluginHost {
     }
     try {
       await fs.promises.mkdir(dest, { recursive: true });
+      const repoPrefix = `plugins/${id}/`;
       for (const f of files) {
-        const target = path.join(dest, f.path);
+        // 把仓库级路径映射成本地插件根目录下的相对路径
+        const relativePath = f.path.startsWith(repoPrefix) ? f.path.slice(repoPrefix.length) : f.path;
+        const target = path.join(dest, relativePath);
         await fs.promises.mkdir(path.dirname(target), { recursive: true });
         await fs.promises.writeFile(target, f.content, 'utf8');
       }
@@ -510,6 +516,27 @@ class PluginHost {
     const abs = path.resolve(uiFile);
     if (!abs.startsWith(pluginDir + path.sep) && abs !== pluginDir) {
       console.warn(`[plugin] ${pluginId} 请求越界的 UI 文件：${uiFile}`);
+      return null;
+    }
+    try {
+      return fs.readFileSync(abs, 'utf-8');
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 读取插件目录下的任意资源文件（如 vendor/mermaid.min.js）内容，
+   * 供渲染层插件在当前隔离上下文中直接 eval / 执行，避免 <script src="file://..."> 被安全策略拦截。
+   * 严格限定在插件自身目录内，防止目录穿越。
+   */
+  readResourceFile(pluginId: string, relativePath: string): string | null {
+    const root = this.root();
+    if (!root) return null;
+    const pluginDir = path.resolve(root, pluginId);
+    const abs = path.resolve(pluginDir, relativePath);
+    if (!abs.startsWith(pluginDir + path.sep) && abs !== pluginDir) {
+      console.warn(`[plugin] ${pluginId} 请求越界的资源文件：${relativePath}`);
       return null;
     }
     try {

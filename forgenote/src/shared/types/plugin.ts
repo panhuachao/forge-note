@@ -256,6 +256,8 @@ export interface PluginUIAPI {
     registerStatusBar(def: StatusBarDef): void;
     /** 声明本插件负责渲染某语言的预览代码块（如 mermaid）。宿主在预览渲染后调用 render(container, code)。 */
     registerCodeBlockRenderer(def: { lang: string; render: (container: HTMLElement, code: string) => void | Promise<void> }): void;
+    /** 加载并执行插件自带的 vendor 库（如 vendor/mermaid.min.js），在当前隔离上下文中暴露全局变量。 */
+    loadVendor(relativePath: string): Promise<void>;
     toast(msg: { level: 'info' | 'success' | 'warn' | 'error'; text: string }): void;
   };
 }

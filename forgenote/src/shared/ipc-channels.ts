@@ -38,6 +38,7 @@ export const IPC = {
   PLUGIN_RUN_COMMAND: 'plugin:runCommand',
   PLUGIN_UI_ENTRIES: 'plugin:uiEntries',
   PLUGIN_READ_UI: 'plugin:readUi',
+  PLUGIN_READ_RESOURCE_FILE: 'plugin:readResourceFile',
   PLUGIN_TOAST: 'plugin:toast',
   PLUGIN_CONFIRM_ACTION: 'plugin:confirmAction',
   PLUGIN_INSTALL_BUILTIN: 'plugin:installBuiltin',

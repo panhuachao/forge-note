@@ -108,6 +108,7 @@ export function buildUIPluginApi(pluginId: string): {
       lang: string;
       render: (container: HTMLElement, code: string) => void | Promise<void>;
     }) => void;
+    loadVendor: (relativePath: string) => Promise<void>;
     toast: (msg: { level: 'info' | 'success' | 'warn' | 'error'; text: string }) => void;
   };
 } {
@@ -124,6 +125,20 @@ export function buildUIPluginApi(pluginId: string): {
       registerStatusBar: (d) => reg('statusbar', { id: d.id, title: '', render: d.render }),
       registerCodeBlockRenderer: (d) =>
         registerCodeBlockRenderer({ lang: d.lang, render: d.render, pluginId }),
+      loadVendor: async (relativePath: string) => {
+        // 读取插件自带 vendor 库内容，并在干净的隔离上下文中执行，使其暴露为全局变量（如 window.mermaid）。
+        // 把 module/exports/define 遮蔽掉，防止 UMD 把库注册到当前插件的 CommonJS 垫片而不是全局。
+        // 避免插件使用 <script src="file://..."> 被 Electron 安全策略拦截。
+        const code = await window.forge.plugin.readResourceFile(pluginId, relativePath);
+        if (!code) throw new Error(`无法加载插件资源：${relativePath}`);
+        try {
+          // eslint-disable-next-line no-new-func
+          new Function(`(function(){var module=undefined,exports=undefined,define=undefined;\n${code}\n})();`)();
+        } catch (e) {
+          console.error(`[plugin] ${pluginId} 执行 vendor ${relativePath} 失败：`, e);
+          throw e;
+        }
+      },
       toast: (msg) => {
         // 转发到全局 toast（与宿主共用同一提示体系）
         window.dispatchEvent(
@@ -152,6 +167,17 @@ export interface CodeBlockRenderer {
 }
 
 const codeBlockRenderers: CodeBlockRenderer[] = [];
+const codeBlockRendererListeners = new Set<() => void>();
+
+function notifyCodeBlockRenderersChanged(): void {
+  for (const cb of codeBlockRendererListeners) cb();
+}
+
+/** 订阅代码块渲染器注册表变化（如插件启用/卸载时）。返回取消订阅函数。 */
+export function onCodeBlockRenderersChanged(cb: () => void): () => void {
+  codeBlockRendererListeners.add(cb);
+  return () => codeBlockRendererListeners.delete(cb);
+}
 
 export function registerCodeBlockRenderer(r: Omit<CodeBlockRenderer, 'pluginId'> & { pluginId?: string }): void {
   // 同 lang 重复注册视为覆盖（支持热重载）；先移除旧的
@@ -162,12 +188,18 @@ export function registerCodeBlockRenderer(r: Omit<CodeBlockRenderer, 'pluginId'>
     }
   }
   codeBlockRenderers.push({ ...r, pluginId: pid ?? 'unknown' });
+  notifyCodeBlockRenderersChanged();
 }
 
 export function unregisterCodeBlockRenderers(pluginId: string): void {
+  let changed = false;
   for (let i = codeBlockRenderers.length - 1; i >= 0; i--) {
-    if (codeBlockRenderers[i].pluginId === pluginId) codeBlockRenderers.splice(i, 1);
+    if (codeBlockRenderers[i].pluginId === pluginId) {
+      codeBlockRenderers.splice(i, 1);
+      changed = true;
+    }
   }
+  if (changed) notifyCodeBlockRenderersChanged();
 }
 
 /** 返回某语言已注册的渲染器（第一个命中），无则返回 undefined */
@@ -222,8 +254,14 @@ export async function loadPluginUI(pluginId: string, uiFile: string): Promise<((
   }
 }
 
-/** 启动时加载全部已启用插件的 UI，返回批量卸载函数 */
+let currentPluginUICleanup: (() => void) | null = null;
+
+/** 加载全部已启用插件的 UI，返回批量卸载函数。
+ * 重复调用会先卸载上一次加载的 UI，避免同一插件被多次注册。
+ */
 export async function loadAllPluginUI(): Promise<() => void> {
+  currentPluginUICleanup?.();
+  currentPluginUICleanup = null;
   let entries: { id: string; uiFile: string }[] = [];
   try {
     entries = await window.forge.plugin.uiEntries();
@@ -235,7 +273,9 @@ export async function loadAllPluginUI(): Promise<() => void> {
     const off = await loadPluginUI(e.id, e.uiFile);
     if (off) cleanups.push(off);
   }
-  return () => {
+  const cleanup = () => {
     for (const c of cleanups) c();
   };
+  currentPluginUICleanup = cleanup;
+  return cleanup;
 }
