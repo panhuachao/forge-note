@@ -10,6 +10,7 @@
 //   · 卸载时贡献项全部撤销，不留残留
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { app } from 'electron';
 import type {
   PluginInfo,
@@ -479,6 +480,23 @@ class PluginHost {
   /** 全部插件禁用（安全模式） */
   async disableAll(): Promise<void> {
     for (const id of [...this.plugins.keys()]) await this.disable(id, true);
+  }
+
+  /**
+   * 取得插件目录下某资源（如自带的第三方库 vendor/x.js）的绝对 file:// URL，
+   * 供渲染层插件在隔离上下文用 <script src> 动态加载自身携带的资源。
+   * 严格限定在插件自身目录内，防止目录穿越。
+   */
+  getResourceUrl(pluginId: string, relativePath: string): string {
+    const root = this.root();
+    if (!root) return '';
+    const pluginDir = path.resolve(root, pluginId);
+    const abs = path.resolve(pluginDir, relativePath);
+    if (abs !== pluginDir && !abs.startsWith(pluginDir + path.sep)) {
+      console.warn(`[plugin] ${pluginId} 请求越界的资源：${relativePath}`);
+      return '';
+    }
+    return pathToFileURL(abs).toString();
   }
 
   /**

@@ -104,6 +104,10 @@ export function buildUIPluginApi(pluginId: string): {
     registerView: (def: { id: string; title: string; render: (c: HTMLElement) => void }) => void;
     registerSettingTab: (def: { id: string; title: string; render: (c: HTMLElement) => void }) => void;
     registerStatusBar: (def: { id: string; render: (c: HTMLElement) => void }) => void;
+    registerCodeBlockRenderer: (def: {
+      lang: string;
+      render: (container: HTMLElement, code: string) => void | Promise<void>;
+    }) => void;
     toast: (msg: { level: 'info' | 'success' | 'warn' | 'error'; text: string }) => void;
   };
 } {
@@ -118,6 +122,8 @@ export function buildUIPluginApi(pluginId: string): {
       registerView: (d) => reg('view', { id: d.id, title: d.title, render: d.render }),
       registerSettingTab: (d) => reg('settings', { id: d.id, title: d.title, render: d.render }),
       registerStatusBar: (d) => reg('statusbar', { id: d.id, title: '', render: d.render }),
+      registerCodeBlockRenderer: (d) =>
+        registerCodeBlockRenderer({ lang: d.lang, render: d.render, pluginId }),
       toast: (msg) => {
         // 转发到全局 toast（与宿主共用同一提示体系）
         window.dispatchEvent(
@@ -128,6 +134,45 @@ export function buildUIPluginApi(pluginId: string): {
       }
     }
   };
+}
+
+/* ==================== 预览代码块渲染扩展 ==================== */
+
+/**
+ * 插件声明的「预览代码块渲染器」。
+ * lang 为代码块语言（如 'mermaid'）；宿主在预览渲染后，对
+ * `<code class="language-<lang>">` 调用 render(container, codeText)。
+ * 具体渲染能力（加载哪个库）完全由插件自带，宿主不绑定任何绘图库，
+ * 以便后续扩展 plantuml / cytoscape 等时无需改动宿主。
+ */
+export interface CodeBlockRenderer {
+  pluginId: string;
+  lang: string;
+  render: (container: HTMLElement, code: string) => void | Promise<void>;
+}
+
+const codeBlockRenderers: CodeBlockRenderer[] = [];
+
+export function registerCodeBlockRenderer(r: Omit<CodeBlockRenderer, 'pluginId'> & { pluginId?: string }): void {
+  // 同 lang 重复注册视为覆盖（支持热重载）；先移除旧的
+  const pid = r.pluginId;
+  for (let i = codeBlockRenderers.length - 1; i >= 0; i--) {
+    if (codeBlockRenderers[i].lang === r.lang && codeBlockRenderers[i].pluginId === pid) {
+      codeBlockRenderers.splice(i, 1);
+    }
+  }
+  codeBlockRenderers.push({ ...r, pluginId: pid ?? 'unknown' });
+}
+
+export function unregisterCodeBlockRenderers(pluginId: string): void {
+  for (let i = codeBlockRenderers.length - 1; i >= 0; i--) {
+    if (codeBlockRenderers[i].pluginId === pluginId) codeBlockRenderers.splice(i, 1);
+  }
+}
+
+/** 返回某语言已注册的渲染器（第一个命中），无则返回 undefined */
+export function getCodeBlockRenderer(lang: string): CodeBlockRenderer | undefined {
+  return codeBlockRenderers.find((r) => r.lang === lang);
 }
 
 /* ==================== 插件 UI 代码加载 ==================== */
@@ -165,6 +210,7 @@ export async function loadPluginUI(pluginId: string, uiFile: string): Promise<((
     return () => {
       try {
         pluginSlots.unregisterByOwner(pluginId);
+        unregisterCodeBlockRenderers(pluginId);
         mod.onunload?.(api);
       } catch {
         /* 卸载出错不影响其它插件 */

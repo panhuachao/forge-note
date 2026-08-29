@@ -42,6 +42,7 @@ export const IPC = {
   PLUGIN_CONFIRM_ACTION: 'plugin:confirmAction',
   PLUGIN_INSTALL_BUILTIN: 'plugin:installBuiltin',
   PLUGIN_INSTALL_FILES: 'plugin:installFiles',
+  PLUGIN_RESOURCE_URL: 'plugin:resourceUrl',
 
   // Version（笔记版本历史，doc/笔记版本实现方案.md §7.1）
   VS_LIST: 'vs:list',

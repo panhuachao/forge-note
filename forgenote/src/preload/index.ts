@@ -52,6 +52,8 @@ const api = {
       ipcRenderer.invoke(IPC.PLUGIN_UI_ENTRIES) as Promise<{ id: string; uiFile: string }[]>,
     readUiFile: (pluginId: string, uiFile: string) =>
       ipcRenderer.invoke(IPC.PLUGIN_READ_UI, pluginId, uiFile) as Promise<string | null>,
+    getResourceUrl: (pluginId: string, relativePath: string) =>
+      ipcRenderer.invoke(IPC.PLUGIN_RESOURCE_URL, pluginId, relativePath) as Promise<string>,
     installBuiltin: (id: string, sourceDir?: string) =>
       ipcRenderer.invoke(IPC.PLUGIN_INSTALL_BUILTIN, id, sourceDir) as Promise<{ ok: boolean; message: string }>,
     installFiles: (id: string, files: { path: string; content: string }[]) =>

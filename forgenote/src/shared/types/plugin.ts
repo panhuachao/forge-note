@@ -32,6 +32,8 @@ export type PluginPermission =
   | 'ui:statusbar'
   /** 编辑器扩展插槽 */
   | 'ui:editor'
+  /** 预览代码块渲染扩展插槽（如 mermaid 图表） */
+  | 'ui:preview'
   /** 插件私有持久化存储 */
   | 'storage'
   /** 发起外部网络请求（高风险，需二次确认） */
@@ -53,6 +55,7 @@ export const PERMISSION_LABEL: Record<PluginPermission, string> = {
   'ui:settings': '设置页签',
   'ui:statusbar': '状态栏',
   'ui:editor': '编辑器扩展',
+  'ui:preview': '预览代码块渲染',
   storage: '插件数据存储',
   network: '访问网络'
 };
@@ -251,6 +254,8 @@ export interface PluginUIAPI {
     registerView(def: ViewDef): void;
     registerSettingTab(def: SettingTabDef): void;
     registerStatusBar(def: StatusBarDef): void;
+    /** 声明本插件负责渲染某语言的预览代码块（如 mermaid）。宿主在预览渲染后调用 render(container, code)。 */
+    registerCodeBlockRenderer(def: { lang: string; render: (container: HTMLElement, code: string) => void | Promise<void> }): void;
     toast(msg: { level: 'info' | 'success' | 'warn' | 'error'; text: string }): void;
   };
 }

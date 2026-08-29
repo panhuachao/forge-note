@@ -244,6 +244,10 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.PLUGIN_READ_UI, async (_e, pluginId: string, uiFile: string) => {
     return pluginHost.readUiFile(pluginId, uiFile);
   });
+  // 取得插件自带资源的 file:// URL（如 vendor 库），供渲染层动态加载
+  ipcMain.handle(IPC.PLUGIN_RESOURCE_URL, async (_e, pluginId: string, relativePath: string) => {
+    return pluginHost.getResourceUrl(pluginId, relativePath);
+  });
 
   // 笔记版本历史（doc/笔记版本实现方案.md）
   ipcMain.handle(IPC.VS_LIST, async (_e, kbId: string, notePath: string) =>

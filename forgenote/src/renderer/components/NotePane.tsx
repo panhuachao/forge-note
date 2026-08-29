@@ -1,6 +1,6 @@
 // 单个笔记标签页的内容：编辑器 + 预览
 // AI 操作已移至 TopToolbar（顶部工具条）
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -9,7 +9,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
-import { getPluginEditorExtensions, clearPluginEditorExtensions } from '../plugin/runtime';
+import { getPluginEditorExtensions, clearPluginEditorExtensions, getCodeBlockRenderer } from '../plugin/runtime';
 import { Icon } from './Icon';
 import { ConfirmableActionCard } from './ConfirmableActionCard';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
@@ -385,6 +385,37 @@ export function NotePane(props: Props) {
     const html = renderMarkdownPreview(liveContent, activeKb?.id || '', props.notePath);
     setPreviewHtml(html);
   }, [liveContent, activeKb?.id, props.notePath]);
+
+  // 预览渲染后：调用插件注册的代码块渲染器（如 mermaid）。
+  // 宿主不绑定任何绘图库，仅做调度：扫描 <code class="language-<lang>">，
+  // 若某插件声明负责该 lang 则交由插件渲染；未注册则保持原样（纯文本 + 复制按钮）。
+  // 用 data-rendered 标记避免重复渲染（同一元素在 split/preview 切换时可能被再次处理）。
+  useLayoutEffect(() => {
+    const root = previewRef.current;
+    if (!root) return; // 预览未挂载（edit 模式）时跳过
+    const codes = Array.from(root.querySelectorAll<HTMLElement>('code[class*="language-"]'));
+    for (const codeEl of codes) {
+      if (codeEl.dataset.rendered === '1') continue;
+      const m = /language-([\w-]+)/.exec(codeEl.className);
+      const lang = m?.[1];
+      if (!lang) continue;
+      const renderer = getCodeBlockRenderer(lang);
+      if (!renderer) continue;
+      codeEl.dataset.rendered = '1';
+      // 用容器包裹，保持原有 <pre> 结构但把内容区交给渲染器
+      const container = document.createElement('div');
+      container.className = 'plugin-codeblock';
+      const text = codeEl.textContent ?? '';
+      codeEl.replaceWith(container);
+      try {
+        Promise.resolve(renderer.render(container, text)).catch((err) => {
+          container.textContent = String(err);
+        });
+      } catch (err) {
+        container.textContent = String(err);
+      }
+    }
+  }, [previewHtml, tab]);
 
   // 大纲点击跳转：滚动到对应标题
   useEffect(() => {
