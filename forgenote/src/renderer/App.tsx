@@ -16,6 +16,7 @@ import SearchResultsPage from './pages/SearchResultsPage';
 import { TagNotesPage } from './pages/TagNotesPage';
 import { InspirationPage } from './pages/InspirationPage';
 import { DiagnosePage } from './pages/DiagnosePage';
+import PluginsPage from './pages/PluginsPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { SetupWizard } from './components/SetupWizard';
@@ -29,14 +30,21 @@ import { WikiLinkLayer } from './components/WikiLinkLayer';
 import { WanderOverlay } from './components/WanderOverlay';
 import { CollapsedLeftHandle, CollapsedRightHandle } from './components/CollapsedPanelHandle';
 import { PatrolSuggestionWatcher } from './components/PatrolSuggestionWatcher';
+import { PluginView } from './components/PluginSlots';
+import { CommandPalette } from './components/CommandPalette';
+import { loadAllPluginUI } from './plugin/runtime';
+import { BUILTIN_VIEWS, type BuiltinView } from './stores/layout-store';
 
 export function App() {
   const {
     setKBs, setActiveKb, setTree, setApplied, setAIConfig,
     openCreateNote, createNoteOpen, createNoteDir, closeCreateNote,
-    quickNoteOpen, closeQuickNote, pushToast
+    quickNoteOpen, closeQuickNote, pushToast, activeKb
   } = useKBStore();
-  const { mainView, leftPanelCollapsed, rightPanelCollapsed, fontSize, lineHeight, themeColor } = useLayoutStore();
+  const { mainView, leftPanelCollapsed, rightPanelCollapsed, fontSize, lineHeight, themeColor, tabs, activeTabId } =
+    useLayoutStore();
+  // 当前笔记路径：传给命令面板，供插件命令使用
+  const currentNotePath = tabs.find((t) => t.id === activeTabId)?.notePath;
   const [quickNoteInitial, setQuickNoteInitial] = useState('');
   const [showSetup, setShowSetup] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -112,11 +120,14 @@ export function App() {
     if (mainView === 'template') return <TemplatePage />;
     if (mainView === 'audit') return <AuditPage />;
     if (mainView === 'settings') return <SettingsPage />;
+    if (mainView === 'plugins') return <PluginsPage />;
     if (mainView === 'chat') return <ChatPage />;
     if (mainView === 'search-results') return <SearchResultsPage />;
     if (mainView === 'tag-notes') return <TagNotesPage />;
     if (mainView === 'inspiration') return <InspirationPage />;
     if (mainView === 'diagnose') return <DiagnosePage />;
+    // 内置路由均未命中 → 查插件注册的自定义视图（doc/插件技术实现方案.md §10.4）
+    if (BUILTIN_VIEWS.indexOf(mainView as BuiltinView) < 0) return <PluginView viewId={mainView} />;
     return <MultiNoteEditor />;
   }
 
@@ -133,6 +144,24 @@ export function App() {
     el.setAttribute('data-lineheight', lineHeight);
     el.setAttribute('data-theme-color', themeColor);
   }, [fontSize, lineHeight, themeColor]);
+
+  // 插件渲染层入口：应用启动后加载所有已启用插件的 ui.js（doc/插件技术实现方案.md §3.1）
+  useEffect(() => {
+    let cleanup: (() => void) | null = null;
+    void loadAllPluginUI().then((off) => {
+      cleanup = off;
+    });
+    // 插件 toast 事件 → 全局提示
+    const onToast = (e: Event) => {
+      const d = (e as CustomEvent<{ level: 'info' | 'success' | 'warn' | 'error'; text: string }>).detail;
+      if (d?.text) pushToast({ level: d.level, text: d.text });
+    };
+    window.addEventListener('forgenote:plugin-toast', onToast);
+    return () => {
+      cleanup?.();
+      window.removeEventListener('forgenote:plugin-toast', onToast);
+    };
+  }, [pushToast]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-canvas">
@@ -155,6 +184,8 @@ export function App() {
       </div>
       <StatusBar />
       <ToastContainer />
+      {/* 命令面板：插件能力的统一入口（Cmd/Ctrl + P） */}
+      <CommandPalette kbId={activeKb?.id} notePath={currentNotePath} />
       {/* 主动建议：应用启动后自动检查知识库体检结果并轻提示一次（P2-5） */}
       <PatrolSuggestionWatcher />
       <Onboarding />

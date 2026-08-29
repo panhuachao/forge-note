@@ -31,4 +31,6 @@ export interface AuditEntry {
   action: 'move' | 'insertLink' | 'forge' | 'applyTemplate' | 'removeTemplate' | 'aiPatch' | 'confirmableAction';
   payload: Record<string, unknown>;
   undone?: boolean;
+  /** 操作来源：'plugin:' 前缀表示插件发起（doc/插件技术实现方案.md §12 阶段四 4.5） */
+  source?: string;
 }

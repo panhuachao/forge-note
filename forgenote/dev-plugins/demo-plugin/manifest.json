@@ -1,0 +1,12 @@
+{
+  "id": "demo-plugin",
+  "name": "示例插件",
+  "version": "0.1.0",
+  "description": "用于验证插件系统：命令面板、侧栏面板、菜单项、存储、AI 调用。",
+  "author": "ForgeNote",
+  "minAppVersion": "1.0.0",
+  "apiVersion": 1,
+  "main": "main.js",
+  "ui": "ui.js",
+  "permissions": ["storage", "fs:read", "ai:call", "ui:sidebar", "ui:menu", "ui:view", "ui:settings"]
+}

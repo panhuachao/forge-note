@@ -23,6 +23,8 @@ import {
   markSuggestionsShown
 } from './services/patrol-service';
 import { versionService } from './services/version-service';
+import { pluginHost, forwardPluginEvents } from './services/plugin-host';
+import { commandRegistry } from './services/plugin-api';
 import type { UserProfile } from '@shared/types/profile';
 import type { AIPrompts } from '@shared/types/ai';
 import { checkForUpdates, downloadAndInstall, quitAndInstall, setAutoCheckEnabled } from './services/updater';
@@ -104,6 +106,8 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   });
   ipcMain.handle(IPC.KB_SET_ACTIVE, async (_e, id: string) => {
     setConfig('activeKb', id);
+    // 插件按知识库启用：切换 KB 后重新加载该库启用的插件
+    await pluginHost.setActiveKb(id);
   });
 
   // FS
@@ -183,6 +187,64 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
     async (_e, action: import('@shared/types/ai').ConfirmableAction, kbId?: string) =>
       actionService.execute(action, { kbId })
   );
+  // 插件系统（doc/插件技术实现方案.md）
+  // 恢复用户已授权记录，并扫描插件目录（只登记不加载，加载发生在 setActiveKb 时）
+  pluginHost.setAppVersion(app.getVersion());
+  pluginHost.restoreGrants();
+  // 安全模式：启动时按住 Shift 跳过插件自动加载（方案 §12 阶段四 4.4）
+  if (process.argv.includes('--safe-mode') || process.env.FORGENOTE_SAFE_MODE === '1') {
+    pluginHost.setSafeMode(true);
+    console.log('[plugin] 安全模式：跳过插件加载');
+  }
+  pluginHost.scan();
+  // 插件 toast / 确认请求 → 转发给渲染层
+  forwardPluginEvents((channel, payload) => {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  });
+  ipcMain.handle(IPC.PLUGIN_LIST, async () => pluginHost.list());
+  ipcMain.handle(IPC.PLUGIN_ENABLE, async (_e, id: string) => pluginHost.enable(id));
+  ipcMain.handle(IPC.PLUGIN_DISABLE, async (_e, id: string) => pluginHost.disable(id));
+  ipcMain.handle(IPC.PLUGIN_UNINSTALL, async (_e, id: string) => pluginHost.uninstall(id));
+  ipcMain.handle(IPC.PLUGIN_GRANT, async (_e, id: string, perms: import('@shared/types/plugin').PluginPermission[]) => {
+    pluginHost.grantPermissions(id, perms ?? []);
+    return null;
+  });
+  ipcMain.handle(IPC.PLUGIN_REVOKE, async (_e, id: string) => {
+    pluginHost.revokePermissions(id);
+    return null;
+  });
+  ipcMain.handle(IPC.PLUGIN_COMMANDS, async () =>
+    [...commandRegistry.entries()].map(([key, c]) => ({
+      key,
+      pluginId: c.pluginId,
+      title: c.title,
+      hotkey: c.hotkey
+    }))
+  );
+  ipcMain.handle(IPC.PLUGIN_RUN_COMMAND, async (_e, key: string, ctx: { kbId?: string; notePath?: string }) => {
+    const cmd = commandRegistry.get(key);
+    if (!cmd) return { ok: false, message: '命令不存在' };
+    try {
+      await cmd.handler(ctx ?? {});
+      return { ok: true, message: '已执行' };
+    } catch (e) {
+      return { ok: false, message: String(e) };
+    }
+  });
+  ipcMain.handle(IPC.PLUGIN_UI_ENTRIES, async () => pluginHost.listUiEntries());
+  // 从预置/仓库目录安装社区插件到 userData/plugins/<id>
+  ipcMain.handle(IPC.PLUGIN_INSTALL_BUILTIN, async (_e, id: string, sourceDir?: string) =>
+    pluginHost.installBuiltin(id, sourceDir)
+  );
+  ipcMain.handle(IPC.PLUGIN_INSTALL_FILES, async (_e, id: string, files: { path: string; content: string }[]) =>
+    pluginHost.installFiles(id, files)
+  );
+  // 读取插件 UI 源码交给渲染层执行；严格校验路径必须落在插件目录内（防目录穿越）
+  ipcMain.handle(IPC.PLUGIN_READ_UI, async (_e, pluginId: string, uiFile: string) => {
+    return pluginHost.readUiFile(pluginId, uiFile);
+  });
+
   // 笔记版本历史（doc/笔记版本实现方案.md）
   ipcMain.handle(IPC.VS_LIST, async (_e, kbId: string, notePath: string) =>
     versionService.list(kbId, notePath)

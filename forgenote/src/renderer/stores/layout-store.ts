@@ -2,7 +2,22 @@
 import { create } from 'zustand';
 import type { TreeNode } from '@shared/types';
 
-export type MainView = 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home' | 'chat' | 'search-results' | 'tag-notes' | 'inspiration' | 'diagnose';
+/** 内置视图（doc/插件技术实现方案.md §10.4） */
+export type BuiltinView =
+  | 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home'
+  | 'chat' | 'search-results' | 'tag-notes' | 'inspiration' | 'diagnose' | 'plugins';
+
+/**
+ * 允许插件注册自定义视图：
+ * `string & {}` 保留字面量自动补全，同时接受任意字符串（插件视图 id 形如 `plugin:xxx`）。
+ */
+export type MainView = BuiltinView | (string & {});
+
+/** 判断是否为内置视图（App.renderMain 据此决定是否查插件视图表） */
+export const BUILTIN_VIEWS: BuiltinView[] = [
+  'note', 'graph', 'template', 'audit', 'settings', 'home',
+  'chat', 'search-results', 'tag-notes', 'inspiration', 'diagnose', 'plugins'
+];
 export type TreeView = 'tree' | 'tags';
 export type SortMode = 'name' | 'mtime' | 'created';
 export type FontSizeKey = 'sm' | 'md' | 'lg';

@@ -143,7 +143,7 @@ class FSService {
     // 避免 500ms 防抖自动保存把版本区撑爆（doc/笔记版本实现方案.md §4.1）
     versionService.recordChange(kbId, notePath);
     // 触发事件
-    eventBus.emit('fsChange', { type: 'change', path: notePath });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: notePath });
   }
 
   /**
@@ -171,7 +171,7 @@ class FSService {
     if (!fsSync.existsSync(absFile)) {
       await atomicWrite(absFile, Buffer.from(data));
     }
-    eventBus.emit('fsChange', { type: 'change', path: `${relDir}/${fileName}` });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: `${relDir}/${fileName}` });
     return `${relDir}/${fileName}`;
   }
 
@@ -193,7 +193,7 @@ class FSService {
     await atomicWrite(abs, yaml);
     await this.syncIndex(kbId, notePath);
     versionService.recordChange(kbId, notePath);
-    eventBus.emit('fsChange', { type: 'change', path: notePath });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: notePath });
   }
 
   /**
@@ -206,7 +206,7 @@ class FSService {
     await atomicWrite(abs, yaml);
     await this.syncIndex(kbId, notePath);
     versionService.recordChange(kbId, notePath);
-    eventBus.emit('fsChange', { type: 'change', path: notePath });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: notePath });
   }
 
   /**
@@ -318,7 +318,7 @@ class FSService {
     void versionService.onNoteDeleted(kbId, notePath);
     // 清除 buildTree 的 5 秒缓存，避免 listTree 返回旧树导致删除"看似不生效"
     kbService.invalidateMeta(root);
-    eventBus.emit('fsChange', { type: 'unlink', path: notePath, isDir: false });
+    eventBus.emit('fsChange', { kbId, type: 'unlink', path: notePath, isDir: false });
   }
 
   async moveNote(kbId: string, fromPath: string, toDirPath: string, opts?: { autoCreateDir?: boolean }): Promise<string> {
@@ -347,7 +347,7 @@ class FSService {
     // 版本数据的 noteId 基于首次路径哈希，终身不变，此处只需更新路径映射
     void versionService.onNoteMoved(kbId, fromPath, toPath);
     kbService.invalidateMeta(root);
-    eventBus.emit('fsChange', { type: 'change', path: toPath });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: toPath });
     return toPath;
   }
 
@@ -388,7 +388,7 @@ class FSService {
       await this.syncWikiRename(kbId, oldBase, newBase);
     }
 
-    eventBus.emit('fsChange', { type: 'change', path: newPath });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: newPath });
     return newPath;
   }
 
@@ -420,7 +420,7 @@ class FSService {
         await atomicWrite(abs, updated);
         linkIndex.updateOutlinks(kbId, refPath, extractWikiLinks(updated));
         await this.syncIndex(kbId, refPath);
-        eventBus.emit('fsChange', { type: 'change', path: refPath });
+        eventBus.emit('fsChange', { kbId, type: 'change', path: refPath });
       } catch {
         // 单个引用笔记更新失败不影响其余引用
       }
@@ -434,7 +434,7 @@ class FSService {
     await fs.mkdir(target, { recursive: true });
     const newPath = parentPath ? join(parentPath, name) : name;
     kbService.invalidateMeta(root);
-    eventBus.emit('fsChange', { type: 'addDir', path: newPath });
+    eventBus.emit('fsChange', { kbId, type: 'addDir', path: newPath });
     return newPath;
   }
 
@@ -468,7 +468,7 @@ class FSService {
     }
     await fs.rm(abs, { recursive: true, force: true });
     kbService.invalidateMeta(root);
-    eventBus.emit('fsChange', { type: 'unlinkDir', path: dirPath });
+    eventBus.emit('fsChange', { kbId, type: 'unlinkDir', path: dirPath });
   }
 
   async renameDir(kbId: string, dirPath: string, newName: string): Promise<string> {
@@ -484,7 +484,7 @@ class FSService {
       ? dirPath.slice(0, dirPath.lastIndexOf('/')) + '/' + newName
       : newName;
     kbService.invalidateMeta(root);
-    eventBus.emit('fsChange', { type: 'renameDir', path: dirPath, to: newPath });
+    eventBus.emit('fsChange', { kbId, type: 'renameDir', path: dirPath, to: newPath });
     return newPath;
   }
 
@@ -498,7 +498,7 @@ class FSService {
     await atomicWrite(abs, content);
     // AI Patch / 批量修改走此路径（note-patch 会自行 syncIndex）
     versionService.recordChange(kbId, filePath);
-    eventBus.emit('fsChange', { type: 'change', path: filePath });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: filePath });
   }
 
   async listTree(kbId: string) {

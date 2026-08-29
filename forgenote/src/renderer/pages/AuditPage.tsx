@@ -42,6 +42,11 @@ export function AuditPage() {
                   <div className="flex items-center gap-2">
                     <span className="badge badge-brand">{e.action}</span>
                     <span className="text-xs text-fg-muted">{new Date(e.ts).toLocaleString()}</span>
+                    {e.source?.startsWith('plugin:') && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                        插件：{e.source.slice('plugin:'.length)}
+                      </span>
+                    )}
                     {e.undone && <span className="badge badge-gray">已撤销</span>}
                   </div>
                   <pre className="text-xs text-fg-secondary mt-1 truncate">{JSON.stringify(e.payload, null, 0)}</pre>

@@ -448,7 +448,7 @@ class VersionService {
         versionId,
         by: 'user'
       });
-      eventBus.emit('fsChange', { type: 'change', path: notePath });
+      eventBus.emit('fsChange', { kbId, type: 'change', path: notePath });
       return { ok: true, message: '已恢复到该版本' };
     } catch (e) {
       return { ok: false, message: `恢复失败：${String(e)}` };

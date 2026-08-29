@@ -9,6 +9,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { useKBStore, requireAI } from '../stores/kb-store';
 import { useLayoutStore } from '../stores/layout-store';
+import { getPluginEditorExtensions, clearPluginEditorExtensions } from '../plugin/runtime';
 import { Icon } from './Icon';
 import { ConfirmableActionCard } from './ConfirmableActionCard';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
@@ -245,6 +246,7 @@ export function NotePane(props: Props) {
       viewRef.current.destroy();
       viewRef.current = null;
     }
+    clearPluginEditorExtensions();
     const state = EditorState.create({
       doc: note.content,
       extensions: [
@@ -254,6 +256,9 @@ export function NotePane(props: Props) {
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         markdown(),
         syntaxHighlighting(markdownHighlight),
+        // 插件编辑器扩展（doc/插件技术实现方案.md §7.4 / §3.5）
+        // 取得当前已启用插件注册的 CodeMirror 扩展，并注入。返回空数组时不影响原有编辑器。
+        ...getPluginEditorExtensions(),
         EditorView.lineWrapping,
         EditorView.domEventHandlers({
           paste: (event, view) => {

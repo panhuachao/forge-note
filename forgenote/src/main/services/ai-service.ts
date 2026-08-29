@@ -13,7 +13,7 @@ import { extractWikiLinks, previewLine, writeFrontmatter } from '../utils/markdo
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
 import { retrieve, rerankHits } from './rag-service';
-import { KB_TOOLS, WRITE_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
+import { allTools, WRITE_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
 import { listExternalTools, executeExternalTool } from './mcp-client';
 import { profileService } from './profile-service';
 import { agentRegistry } from './agents/registry';
@@ -820,7 +820,7 @@ class AIService {
     });
     await atomicWrite(abs, withFm);
     await fsService.syncIndex(kbId, transcriptPath);
-    eventBus.emit('fsChange', { type: 'change', path: transcriptPath });
+    eventBus.emit('fsChange', { kbId, type: 'change', path: transcriptPath });
     return transcriptPath;
   }
 
@@ -1190,7 +1190,8 @@ class AIService {
       }
       const canWrite = !!opts?.canWrite;
       // 未确认时从工具表中剔除写类工具：模型「看不见」就无法误调用，比提示词约束更可靠
-      const tools = KB_TOOLS.filter((t) => canWrite || !WRITE_TOOLS.has(t.name)).map((t) => ({
+      // 用 allTools()：内置工具 + 插件注册的工具，对模型完全等价
+      const tools = allTools().filter((t) => canWrite || !WRITE_TOOLS.has(t.name)).map((t) => ({
         type: 'function',
         function: { name: t.name, description: t.description, parameters: t.input_schema }
       }));

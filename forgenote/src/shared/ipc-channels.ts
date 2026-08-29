@@ -27,6 +27,22 @@ export const IPC = {
   FS_LIST_TAGS: 'fs:listTags',
   FS_NOTES_BY_TAG: 'fs:notesByTag',
 
+  // Plugin（插件系统，doc/插件技术实现方案.md）
+  PLUGIN_LIST: 'plugin:list',
+  PLUGIN_ENABLE: 'plugin:enable',
+  PLUGIN_DISABLE: 'plugin:disable',
+  PLUGIN_UNINSTALL: 'plugin:uninstall',
+  PLUGIN_GRANT: 'plugin:grant',
+  PLUGIN_REVOKE: 'plugin:revoke',
+  PLUGIN_COMMANDS: 'plugin:commands',
+  PLUGIN_RUN_COMMAND: 'plugin:runCommand',
+  PLUGIN_UI_ENTRIES: 'plugin:uiEntries',
+  PLUGIN_READ_UI: 'plugin:readUi',
+  PLUGIN_TOAST: 'plugin:toast',
+  PLUGIN_CONFIRM_ACTION: 'plugin:confirmAction',
+  PLUGIN_INSTALL_BUILTIN: 'plugin:installBuiltin',
+  PLUGIN_INSTALL_FILES: 'plugin:installFiles',
+
   // Version（笔记版本历史，doc/笔记版本实现方案.md §7.1）
   VS_LIST: 'vs:list',
   VS_SUMMARY: 'vs:summary',

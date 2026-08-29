@@ -47,7 +47,7 @@ export async function startWatching(kbId: string): Promise<void> {
       if (isMarkdown(p)) {
         // 预热索引（链接 + RAG 分块）
         syncChunk(kbId, p, p.replace(kb.rootPath + '/', '')).catch(() => {});
-        eventBus.emit('fsChange', { type: 'add', path: p.replace(kb.rootPath + '/', ''), isDir: false });
+        eventBus.emit('fsChange', { kbId, type: 'add', path: p.replace(kb.rootPath + '/', ''), isDir: false });
       }
     })
     .on('change', async (p) => {
@@ -59,18 +59,18 @@ export async function startWatching(kbId: string): Promise<void> {
       if (isMarkdown(p)) {
         await syncChunk(kbId, p, rel).catch(() => {});
       }
-      eventBus.emit('fsChange', { type: 'change', path: rel });
+      eventBus.emit('fsChange', { kbId, type: 'change', path: rel });
     })
     .on('unlink', (p) => {
       const rel = p.replace(kb.rootPath + '/', '');
       linkIndex.removeNote(kbId, rel);
       searchService.removeNote(kbId, rel).catch(() => {});
-      eventBus.emit('fsChange', { type: 'unlink', path: rel, isDir: false });
+      eventBus.emit('fsChange', { kbId, type: 'unlink', path: rel, isDir: false });
     })
-    .on('addDir', (p) => eventBus.emit('fsChange', { type: 'addDir', path: p.replace(kb.rootPath + '/', '') }))
+    .on('addDir', (p) => eventBus.emit('fsChange', { kbId, type: 'addDir', path: p.replace(kb.rootPath + '/', '') }))
     .on('unlinkDir', (p) => {
       kbService.invalidateMeta(kb.rootPath);
-      eventBus.emit('fsChange', { type: 'unlinkDir', path: p.replace(kb.rootPath + '/', '') });
+      eventBus.emit('fsChange', { kbId, type: 'unlinkDir', path: p.replace(kb.rootPath + '/', '') });
     })
     .on('error', (err) => console.error('[watcher]', err));
 

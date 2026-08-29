@@ -11,26 +11,10 @@ import { previewNotePatch, applyNotePatch, normalizeOps } from './note-patch';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-export interface MCPTool {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-}
-
-export interface ToolCtx {
-  kbId: string;
-}
-
-export interface ToolCall {
-  name: string;
-  args: Record<string, unknown>;
-}
-
-export interface ToolActivity {
-  name: string;
-  args: Record<string, unknown>;
-  result: string;
-}
+// 工具类型已上提到 @shared/types/mcp（插件系统需要让 shared 层引用 MCPTool）；
+// 此处 re-export 以保持既有 import 不变。
+import type { MCPTool, ToolCtx, ToolCall, ToolActivity, ToolHandler } from '@shared/types/mcp';
+export type { MCPTool, ToolCtx, ToolCall, ToolActivity, ToolHandler };
 
 // 工具 Schema（OpenAI function calling 风格）
 export const KB_TOOLS: MCPTool[] = [
@@ -659,10 +643,55 @@ export async function executeTool(call: ToolCall, ctx: ToolCtx): Promise<string>
           .join('\n')}${stale.length > limit ? `\n…其余 ${stale.length - limit} 篇未列出` : ''}`;
       }
 
-      default:
-        return `未知工具: ${call.name}`;
+      default: {
+        // 内置工具未命中 → 查插件注册的工具（doc/插件技术实现方案.md §10.2）
+        const p = pluginTools.get(call.name);
+        if (!p) return `未知工具: ${call.name}`;
+        try {
+          const r = await p.handler(call.args || {}, ctx);
+          return typeof r === 'string' ? r : JSON.stringify(r);
+        } catch (err) {
+          return `插件工具执行失败 (${p.tool.name}): ${String(err)}`;
+        }
+      }
     }
   } catch (e) {
     return `工具执行失败: ${String(e)}`;
   }
+}
+
+/* ==================== 插件工具注册（doc/插件技术实现方案.md §10.2） ====================
+ * 插件注册的工具与内置工具对模型完全等价：进入 allTools() 供模型选择，
+ * executeTool 的 default 分支负责分派。
+ */
+const pluginTools = new Map<string, { tool: MCPTool; handler: ToolHandler; owner: string }>();
+
+/** 注册插件工具；kb_ 前缀保留给内置，防止插件伪装成内置工具 */
+export function registerTool(tool: MCPTool, handler: ToolHandler, owner = ''): void {
+  if (!tool?.name) throw new Error('工具缺少 name');
+  if (tool.name.startsWith('kb_')) {
+    throw new Error(`工具名「${tool.name}」使用了保留前缀 kb_，请更换名称`);
+  }
+  pluginTools.set(tool.name, { tool, handler, owner });
+}
+
+/** 卸载插件时撤销其全部工具 */
+export function unregisterToolsByOwner(owner: string): void {
+  for (const [name, t] of pluginTools) {
+    if (t.owner === owner) pluginTools.delete(name);
+  }
+}
+
+/** 供模型使用的完整工具清单：内置 + 插件 */
+export function allTools(): MCPTool[] {
+  return [...KB_TOOLS, ...[...pluginTools.values()].map((t) => t.tool)];
+}
+
+/** 列出插件注册的工具（管理界面展示用） */
+export function listPluginTools(): { name: string; description: string; owner: string }[] {
+  return [...pluginTools.values()].map((t) => ({
+    name: t.tool.name,
+    description: t.tool.description,
+    owner: t.owner
+  }));
 }

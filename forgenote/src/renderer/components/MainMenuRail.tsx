@@ -5,6 +5,7 @@
 import { useLayoutStore, MainView } from '../stores/layout-store';
 import { useKBStore } from '../stores/kb-store';
 import { Icon, IconName } from './Icon';
+import { PluginMenuItems } from './PluginSlots';
 
 interface MenuItem {
   id: MainView;
@@ -18,7 +19,8 @@ const items: MenuItem[] = [
   { id: 'graph', icon: 'share', label: '图谱', requireKb: true },
   { id: 'chat', icon: 'chat-bubble', label: '对话', requireKb: true },
   { id: 'search-results', icon: 'search', label: '检索', requireKb: true },
-  { id: 'template', icon: 'clipboard', label: '模板', requireKb: true }
+  { id: 'template', icon: 'clipboard', label: '模板', requireKb: true },
+  { id: 'plugins', icon: 'puzzle', label: '插件', requireKb: false }
 ];
 
 export function MainMenuRail() {
@@ -100,6 +102,9 @@ export function MainMenuRail() {
           );
         })}
       </div>
+
+      {/* 插件注册的主菜单项（doc/插件技术实现方案.md §7.4） */}
+      <PluginMenuItems mainView={mainView} />
 
       {/* 底部：主题切换 + 设置 */}
       <div className="flex flex-col items-center gap-1.5">

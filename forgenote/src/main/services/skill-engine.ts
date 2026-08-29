@@ -46,37 +46,10 @@ export function resolveAgentId(skillId: string, explicit?: string): string {
   return explicit || SKILL_TO_AGENT[skillId] || 'conversationalist';
 }
 
-/** Skill 运行上下文（由 AIHub 注入） */
-export interface AISkillCtx {
-  kbId?: string;
-  input: { text: string; question?: string; dirId?: string; notePath?: string; targets?: string[] };
-  /** 已注入的多轮历史（stateful Skill 才有） */
-  history: AITurn[];
-  /** 会话草稿（awaitConfirm Skill 确认后回传） */
-  pendingDraft?: unknown;
-  onActivity?: (a: ToolActivity) => void;
-  /** 多 Agent 方案：当前请求指定的 Agent 角色（已由 AIHub 解析，含 SKILL_TO_AGENT 兜底） */
-  agentId?: string;
-}
-
-/** 统一 Skill 声明（本地类型，避免与 shared/types/ai.ts 的 Skill 冲突） */
-export interface AISkill {
-  id: string;
-  title: string;
-  description: string;
-  /** 模型能力偏好（预留 ModelRouter） */
-  capability?: ('reasoning' | 'long-context' | 'cheap')[];
-  /** 需要跨轮上下文（AIHub 自动挂载 SessionStore） */
-  stateful?: boolean;
-  /** 首轮只产出 draft，确认后才执行写工具（方案 §4.2 / §5.4） */
-  awaitConfirm?: boolean;
-  /** 需要调用的 MCP 工具 id（见 tool-runtime.ts / mcp-client.ts） */
-  useTools?: string[];
-  /** 无模型时的本地降级 */
-  localFallback?: (ctx: AISkillCtx) => AIResponse | Promise<AIResponse>;
-  /** 实际执行 */
-  run: (ctx: AISkillCtx) => Promise<AIResponse & { refs?: AIRefHit[]; usage?: AIUsage }>;
-}
+// Skill 类型已上提到 @shared/types/ai-skill（插件系统需要让 shared 层引用 AISkill）；
+// 此处 re-export 以保持既有 import 不变。
+import type { AISkillCtx, AISkill } from '@shared/types/ai-skill';
+export type { AISkillCtx, AISkill };
 
 function txt(text: string): AIResponse {
   return { kind: 'text', text };
@@ -688,7 +661,33 @@ export const SKILLS: Record<string, AISkill> = {
   }
 };
 
-/** 按 id 取 Skill；未知 skill 由 AIHub 处理降级 */
+/* ==================== 插件 Skill 注册（doc/插件技术实现方案.md §10.1） ====================
+ * 内置 Skill 仍用字面量常量，插件 Skill 单独存放。
+ * 查找顺序「内置优先」，因此插件无法劫持 ask / agent 等核心能力。
+ */
+const pluginSkills = new Map<string, AISkill & { __owner: string }>();
+
+/** 注册插件 Skill；owner 为插件 id，用于卸载时批量撤销 */
+export function registerSkill(skill: AISkill, owner = ''): void {
+  if (SKILLS[skill.id]) {
+    throw new Error(`Skill「${skill.id}」为内置能力，插件不可覆盖`);
+  }
+  pluginSkills.set(skill.id, { ...skill, __owner: owner });
+}
+
+/** 卸载插件时撤销其全部 Skill */
+export function unregisterSkillsByOwner(owner: string): void {
+  for (const [id, s] of pluginSkills) {
+    if (s.__owner === owner) pluginSkills.delete(id);
+  }
+}
+
+/** 列出插件注册的 Skill（管理界面展示用） */
+export function listPluginSkills(): { id: string; title: string; owner: string }[] {
+  return [...pluginSkills.values()].map((s) => ({ id: s.id, title: s.title, owner: s.__owner }));
+}
+
+/** 按 id 取 Skill：内置优先，其次插件；未知 skill 由 AIHub 处理降级 */
 export function getSkill(id: string): AISkill | undefined {
-  return SKILLS[id];
+  return SKILLS[id] ?? pluginSkills.get(id);
 }

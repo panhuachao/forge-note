@@ -30,6 +30,43 @@ import type {
 } from '@shared/types';
 
 const api = {
+  // 插件系统（doc/插件技术实现方案.md）
+  plugin: {
+    list: () => ipcRenderer.invoke(IPC.PLUGIN_LIST) as Promise<import('@shared/types/plugin').PluginInfo[]>,
+    enable: (id: string) =>
+      ipcRenderer.invoke(IPC.PLUGIN_ENABLE, id) as Promise<{ ok: boolean; message: string }>,
+    disable: (id: string) =>
+      ipcRenderer.invoke(IPC.PLUGIN_DISABLE, id) as Promise<{ ok: boolean; message: string }>,
+    uninstall: (id: string) =>
+      ipcRenderer.invoke(IPC.PLUGIN_UNINSTALL, id) as Promise<{ ok: boolean; message: string }>,
+    grant: (id: string, perms: import('@shared/types/plugin').PluginPermission[]) =>
+      ipcRenderer.invoke(IPC.PLUGIN_GRANT, id, perms) as Promise<void>,
+    revoke: (id: string) => ipcRenderer.invoke(IPC.PLUGIN_REVOKE, id) as Promise<void>,
+    commands: () =>
+      ipcRenderer.invoke(IPC.PLUGIN_COMMANDS) as Promise<
+        { key: string; pluginId: string; title: string; hotkey?: string }[]
+      >,
+    runCommand: (key: string, ctx?: { kbId?: string; notePath?: string }) =>
+      ipcRenderer.invoke(IPC.PLUGIN_RUN_COMMAND, key, ctx) as Promise<{ ok: boolean; message: string }>,
+    uiEntries: () =>
+      ipcRenderer.invoke(IPC.PLUGIN_UI_ENTRIES) as Promise<{ id: string; uiFile: string }[]>,
+    readUiFile: (pluginId: string, uiFile: string) =>
+      ipcRenderer.invoke(IPC.PLUGIN_READ_UI, pluginId, uiFile) as Promise<string | null>,
+    installBuiltin: (id: string, sourceDir?: string) =>
+      ipcRenderer.invoke(IPC.PLUGIN_INSTALL_BUILTIN, id, sourceDir) as Promise<{ ok: boolean; message: string }>,
+    installFiles: (id: string, files: { path: string; content: string }[]) =>
+      ipcRenderer.invoke(IPC.PLUGIN_INSTALL_FILES, id, files) as Promise<{ ok: boolean; message: string }>,
+    onToast: (cb: (p: { pluginId: string; level: 'info' | 'success' | 'warn' | 'error'; text: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, p: unknown) => cb(p as never);
+      ipcRenderer.on(IPC.PLUGIN_TOAST, listener);
+      return () => ipcRenderer.removeListener(IPC.PLUGIN_TOAST, listener);
+    },
+    onConfirmAction: (cb: (p: { pluginId: string; action: import('@shared/types/ai').ConfirmableAction }) => void) => {
+      const listener = (_e: IpcRendererEvent, p: unknown) => cb(p as never);
+      ipcRenderer.on(IPC.PLUGIN_CONFIRM_ACTION, listener);
+      return () => ipcRenderer.removeListener(IPC.PLUGIN_CONFIRM_ACTION, listener);
+    }
+  },
   // 笔记版本历史（doc/笔记版本实现方案.md §7.3）
   version: {
     list: (kbId: string, notePath: string) =>

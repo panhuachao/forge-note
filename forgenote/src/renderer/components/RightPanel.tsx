@@ -8,6 +8,7 @@ import {
 import { NoteOutline } from './NoteOutline';
 import { LinkPanel } from './LinkPanel';
 import { VersionHistoryModal } from './VersionHistoryModal';
+import { PluginSidebarPanels } from './PluginSlots';
 import type { VersionSummary } from '@shared/types/version';
 import { EVT_ACTIVE_HEADING } from './NotePane';
 import { useLayoutStore } from '../stores/layout-store';
@@ -654,6 +655,9 @@ export function RightPanel() {
             </dl>
           </PanelCard>
         )}
+
+        {/* 插件侧栏面板（doc/插件技术实现方案.md §7.4） */}
+        <PluginSidebarPanels />
 
         {/* AI 链接推荐 */}
         {linkSuggestions.length > 0 && (

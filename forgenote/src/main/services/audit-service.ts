@@ -57,9 +57,10 @@ class AuditService {
   record(
     kbId: string,
     action: 'move' | 'insertLink' | 'forge' | 'applyTemplate' | 'removeTemplate' | 'aiPatch' | 'confirmableAction',
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    source?: string
   ) {
-    addAudit({ id: nanoid(), ts: Date.now(), action, payload }, kbId);
+    addAudit({ id: nanoid(), ts: Date.now(), action, payload, source }, kbId);
   }
 }
 

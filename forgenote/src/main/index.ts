@@ -11,6 +11,7 @@ import { initAutoUpdater } from './services/updater';
 import { registerBuiltInAgents } from './services/agents/register';
 import { sessionStore } from './services/session-store';
 import { versionService } from './services/version-service';
+import { pluginHost } from './services/plugin-host';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -270,6 +271,8 @@ app.on('before-quit', async () => {
   // 版本历史：把尚在静默期内的编辑变更补存为版本，
   // 否则用户「写完最后一段就退出」的那次修改不会有版本记录
   await versionService.flushPending();
+  // 插件：逐个执行 onunload，撤销其注册的 Skill / 工具 / 命令与事件订阅
+  await pluginHost.disableAll();
   await stopAll();
   closeStore();
 });

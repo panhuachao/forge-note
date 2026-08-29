@@ -63,7 +63,9 @@ export type IconName =
   | 'bolt'
   | 'microphone'
   | 'arrow-up'
-  | 'check-circle';
+  | 'check-circle'
+  | 'copy'
+  | 'puzzle';
 
 const outlineMap: Record<string, any> = {
   folder: HeroiconsOutline.FolderIcon,
@@ -127,6 +129,7 @@ const outlineMap: Record<string, any> = {
   'view-columns': HeroiconsOutline.EyeIcon,
   'document-text': HeroiconsOutline.DocumentTextIcon,
   'copy': HeroiconsOutline.DocumentDuplicateIcon,
+  'puzzle': HeroiconsOutline.PuzzlePieceIcon,
   'arrow-path': HeroiconsOutline.ArrowPathIcon,
   'arrows-right-left': HeroiconsOutline.ArrowsRightLeftIcon,
   'check': HeroiconsOutline.CheckIcon,

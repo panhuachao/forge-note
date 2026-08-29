@@ -656,6 +656,25 @@ html, body, #root {
 .badge-gray {
   @apply bg-hover-bg text-fg-secondary;
 }
+.badge-official {
+  @apply bg-brand/10 text-brand;
+}
+
+/* 插件页权限徽章 */
+.perm {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs border;
+}
+.perm-ok {
+  @apply bg-emerald-500/10 text-emerald-600 border-emerald-500/20;
+}
+.perm-risk {
+  @apply bg-rose-500/10 text-rose-600 border-rose-500/20;
+}
+
+/* 插件卡片内 small action 按钮统一与 .btn 变量一致 */
+.plugin-action-danger {
+  @apply text-xs px-2.5 py-1 rounded-lg font-medium transition-all bg-rose-500 text-white hover:bg-rose-600;
+}
 
 /* 更新说明弹窗 - 富文本样式适配（GitHub Release Notes 的 HTML 结构） */
 .release-notes-body h1,
