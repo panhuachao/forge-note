@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Icon } from '../components/Icon';
 import type { PluginInfo, PluginPermission } from '@shared/types/plugin';
 import { loadAllPluginUI } from '../plugin/runtime';
+import { PageHeader } from '../components/PageHeader';
 
 // 社区插件仓库（公开仓位）：https://github.com/panhuachao/forge-note-plugins
 // 插件页直接访问该仓库：拉取 community-plugins.json 索引，安装时从仓库下载插件文件。
@@ -23,6 +23,8 @@ interface CommunityPlugin {
   files: string[]; // 相对仓库根的文件路径
   official: boolean;
 }
+
+type PluginTab = 'installed' | 'community';
 
 const RISK_PERMS: PluginPermission[] = ['fs:write', 'ai:skill', 'ai:tool', 'network'];
 
@@ -94,6 +96,7 @@ export default function PluginsPage() {
   const [permModal, setPermModal] = useState<{ id: string; name: string; perms: PluginPermission[] } | null>(null);
   const [sourceModal, setSourceModal] = useState(false);
   const [sourceDir, setSourceDir] = useState('');
+  const [tab, setTab] = useState<PluginTab>('installed');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -138,6 +141,7 @@ export default function PluginsPage() {
   async function handleUninstall(id: string) {
     if (!confirm(`确定卸载插件「${id}」？将从磁盘删除其目录与本地数据。`)) return;
     await window.forge.plugin.uninstall(id);
+    await loadAllPluginUI();
     refresh();
   }
   async function handleGrant(id: string, name: string, perms: PluginPermission[]) {
@@ -188,47 +192,95 @@ export default function PluginsPage() {
     }
   }
 
+  function PluginCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-full overflow-auto p-6">
-      <div className="mx-auto max-w-5xl flex flex-col gap-5">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold flex items-center gap-2 text-fg">
-            <Icon name="puzzle" className="w-6 h-6 text-brand" />
-            插件管理
-          </h1>
+    <div className="bg-canvas border border-border-soft rounded-xl p-4 flex flex-col gap-3 hover:border-brand/40 transition-colors">
+      {children}
+    </div>
+  );
+}
+
+function StateBadge({ state }: { state: PluginInfo['state'] }) {
+  switch (state) {
+    case 'active':
+      return <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 shrink-0">运行中</span>;
+    case 'disabled':
+      return <span className="text-xs px-1.5 py-0.5 rounded bg-hover-bg text-fg-secondary shrink-0">已禁用</span>;
+    case 'error':
+      return <span className="text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 shrink-0">出错</span>;
+    case 'pending-permission':
+      return <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 shrink-0">待授权</span>;
+    default:
+      return <span className="text-xs px-1.5 py-0.5 rounded bg-hover-bg text-fg-secondary shrink-0">{state}</span>;
+  }
+}
+
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-content border border-border rounded-2xl shadow-xl p-5 w-full max-w-md flex flex-col gap-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-canvas">
+      <PageHeader icon="puzzle" title="插件管理" />
+
+      <div className="flex-1 overflow-y-auto p-6 pt-20 space-y-6 bg-canvas">
+        <div className="mx-auto max-w-5xl flex flex-col gap-5">
+          {/* Tab 切换 */}
+          <div className="flex items-center gap-2 w-fit">
+            {(
+              [
+                { k: 'installed', label: '已安装插件' },
+                { k: 'community', label: '社区插件' }
+              ] as { k: PluginTab; label: string }[]
+            ).map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setTab(t.k)}
+                className={`px-5 py-2 rounded-full text-sm transition-all ${
+                  tab === t.k
+                    ? 'bg-brand-soft text-brand border border-brand/20'
+                    : 'bg-content text-fg-secondary border border-border-soft hover:bg-hover-bg'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-rose-200 bg-rose-500/10 text-rose-600 px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+
+        {tab === 'installed' && (
+        <section className="bg-content rounded-xl border border-border-soft p-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-fg">已安装插件（{plugins.length}）</h2>
+            <button
+              className="btn btn-secondary text-xs px-3 py-1.5 rounded-lg"
+              onClick={refresh}
+              disabled={loading}
+            >
+              {loading ? '刷新中…' : '刷新'}
+            </button>
+          </div>
           <p className="text-sm text-fg-secondary">
             插件以本机原生模块运行在应用主进程，按知识库维度启用。启用含权限的插件需授权；
             启动时按住 <kbd className="px-1 py-0.5 rounded bg-hover-bg border border-border-soft text-xs">Shift</kbd> 可进入安全模式跳过所有插件。
           </p>
-          <p className="text-xs text-fg-muted">
-            社区插件来源：<a className="text-brand hover:underline" href={REPO_BASE} target="_blank" rel="noreferrer">{REPO_BASE}</a>
-          </p>
-        </header>
-
-        <div className="flex items-center gap-2">
-          <button
-            className="btn btn-secondary text-sm px-3 py-1.5 rounded-lg"
-            onClick={refresh}
-            disabled={loading}
-          >
-            {loading ? '刷新中…' : '刷新'}
-          </button>
-          <button
-            className="btn btn-secondary text-sm px-3 py-1.5 rounded-lg"
-            onClick={() => setSourceModal(true)}
-          >
-            从本地目录添加
-          </button>
-        </div>
-
-        {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-500/10 text-rose-600 px-4 py-3 text-sm">
-            {error}
-          </div>
-        )}
-
-        <section className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-fg">已安装插件（{plugins.length}）</h2>
           {plugins.length === 0 && !loading && (
             <p className="text-sm text-fg-secondary">暂无插件。可从下方「社区插件」一键安装，或用「从本地目录添加」。</p>
           )}
@@ -292,9 +344,19 @@ export default function PluginsPage() {
             ))}
           </div>
         </section>
+        )}
 
-        <section className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-fg">社区插件</h2>
+        {tab === 'community' && (
+        <section className="bg-content rounded-xl border border-border-soft p-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-fg">社区插件</h2>
+            <button
+              className="btn btn-secondary text-xs px-3 py-1.5 rounded-lg"
+              onClick={() => setSourceModal(true)}
+            >
+              从本地目录添加
+            </button>
+          </div>
           <p className="text-sm text-fg-secondary">
             直接从公开仓库 <code className="text-xs bg-hover-bg px-1 py-0.5 rounded">{REPO_BASE}</code> 获取索引与文件并安装。
           </p>
@@ -353,6 +415,7 @@ export default function PluginsPage() {
             })}
           </div>
         </section>
+        )}
       </div>
 
       {permModal && (
@@ -391,44 +454,6 @@ export default function PluginsPage() {
           </div>
         </Modal>
       )}
-    </div>
-  );
-}
-
-function PluginCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-content border border-border rounded-xl p-4 flex flex-col gap-3 hover:border-brand/40 transition-colors shadow-sm">
-      {children}
-    </div>
-  );
-}
-
-function StateBadge({ state }: { state: PluginInfo['state'] }) {
-  switch (state) {
-    case 'active':
-      return <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 shrink-0">运行中</span>;
-    case 'disabled':
-      return <span className="text-xs px-1.5 py-0.5 rounded bg-hover-bg text-fg-secondary shrink-0">已禁用</span>;
-    case 'error':
-      return <span className="text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 shrink-0">出错</span>;
-    case 'pending-permission':
-      return <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 shrink-0">待授权</span>;
-    default:
-      return <span className="text-xs px-1.5 py-0.5 rounded bg-hover-bg text-fg-secondary shrink-0">{state}</span>;
-  }
-}
-
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-content border border-border rounded-2xl shadow-xl p-5 w-full max-w-md flex flex-col gap-3"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
       </div>
     </div>
   );
