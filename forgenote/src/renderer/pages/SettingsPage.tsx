@@ -22,6 +22,16 @@ export function SettingsPage() {
   const [agentOverride, setAgentOverride] = useState<string>(''); // daily-muse 的 systemPrompt 覆写
   const [agentOverrideSaving, setAgentOverrideSaving] = useState(false);
 
+  // 进入设置页时从主进程重新拉取最新持久化配置（含外部 MCP 启用状态），
+  // 避免因为 store 快照过期而显示过时的启用状态；同时用 cleanup 标记防止卸载后还 setState。
+  useEffect(() => {
+    let mounted = true;
+    window.forge.ai.getConfig().then((remote) => {
+      if (mounted && remote) setCfg(remote);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
   // 应用更新状态
   const [version, setVersion] = useState('');
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
@@ -168,6 +178,19 @@ export function SettingsPage() {
       pushToast({ level: 'error', text: String(e) });
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * 静默保存当前 cfg（不弹成功 toast，失败时提示）。
+   * 用于 MCP 启用开关等即时生效场景，确保勾选即持久化。
+   */
+  async function saveConfigSilently(nextCfg: AIModelConfig) {
+    try {
+      await window.forge.ai.setConfig(nextCfg);
+      setAIConfig(nextCfg);
+    } catch (e) {
+      pushToast({ level: 'error', text: String(e) });
     }
   }
 
@@ -595,8 +618,16 @@ export function SettingsPage() {
                 <p className="text-xs text-fg-faint">尚未配置任何外部 MCP 服务。</p>
               )}
               {(cfg.mcpServers || []).map((s, i) => (
-                <div key={i} className="rounded-xl border border-border-soft p-3 space-y-2">
-                  <div className="flex items-center gap-2">
+                <div key={i} className="rounded-xl border border-border-soft p-4 space-y-3">
+                  {s.description && (
+                    <div className="flex items-start gap-2">
+                      <p className="text-xs text-fg-muted leading-relaxed flex-1">{s.description}</p>
+                      {s.name === 'duckduckgo' && (
+                        <span className="badge badge-brand shrink-0">预置</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_7rem_5rem_auto] gap-2 items-center">
                     <input
                       value={s.name}
                       onChange={(e) => {
@@ -604,7 +635,7 @@ export function SettingsPage() {
                         next[i] = { ...next[i], name: e.target.value };
                         setCfg({ ...cfg, mcpServers: next });
                       }}
-                      className="input flex-1"
+                      className="input"
                       placeholder="服务名"
                     />
                     <select
@@ -614,20 +645,24 @@ export function SettingsPage() {
                         next[i] = { ...next[i], transport: e.target.value as 'stdio' | 'sse' };
                         setCfg({ ...cfg, mcpServers: next });
                       }}
-                      className="input w-28"
+                      className="input"
                     >
                       <option value="stdio">stdio</option>
                       <option value="sse">sse</option>
                     </select>
-                    <label className="flex items-center gap-1 text-xs text-fg-muted">
+                    <label className="flex items-center justify-center gap-1.5 text-xs text-fg-muted cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={s.enabled !== false}
                         onChange={(e) => {
                           const next = [...(cfg.mcpServers || [])];
                           next[i] = { ...next[i], enabled: e.target.checked };
-                          setCfg({ ...cfg, mcpServers: next });
+                          const updated = { ...cfg, mcpServers: next };
+                          setCfg(updated);
+                          // MCP 启用状态即时持久化，避免用户忘记点顶部保存按钮导致丢失
+                          void saveConfigSilently(updated);
                         }}
+                        className="w-4 h-4 accent-brand cursor-pointer"
                       />
                       启用
                     </label>
@@ -636,7 +671,7 @@ export function SettingsPage() {
                         const next = (cfg.mcpServers || []).filter((_, j) => j !== i);
                         setCfg({ ...cfg, mcpServers: next });
                       }}
-                      className="btn text-xs text-red-500"
+                      className="btn text-xs text-red-500 whitespace-nowrap"
                     >
                       删除
                     </button>
@@ -648,7 +683,9 @@ export function SettingsPage() {
                         onChange={(e) => {
                           const next = [...(cfg.mcpServers || [])];
                           next[i] = { ...next[i], command: e.target.value };
-                          setCfg({ ...cfg, mcpServers: next });
+                          const updated = { ...cfg, mcpServers: next };
+                          setCfg(updated);
+                          void saveConfigSilently(updated);
                         }}
                         className="input"
                         placeholder="命令，如 npx -y @modelcontextprotocol/server-filesystem"
@@ -658,7 +695,9 @@ export function SettingsPage() {
                         onChange={(e) => {
                           const next = [...(cfg.mcpServers || [])];
                           next[i] = { ...next[i], args: e.target.value.split(/\s+/).filter(Boolean) };
-                          setCfg({ ...cfg, mcpServers: next });
+                          const updated = { ...cfg, mcpServers: next };
+                          setCfg(updated);
+                          void saveConfigSilently(updated);
                         }}
                         className="input"
                         placeholder="参数（空格分隔，可选）"
@@ -670,27 +709,36 @@ export function SettingsPage() {
                       onChange={(e) => {
                         const next = [...(cfg.mcpServers || [])];
                         next[i] = { ...next[i], url: e.target.value };
-                        setCfg({ ...cfg, mcpServers: next });
+                        const updated = { ...cfg, mcpServers: next };
+                        setCfg(updated);
+                        void saveConfigSilently(updated);
                       }}
                       className="input"
                       placeholder="SSE 地址，如 http://localhost:3000/sse"
                     />
                   )}
-                  <input
-                    value={Object.entries(s.env || {}).map(([k, v]) => `${k}=${v}`).join('\n')}
-                    onChange={(e) => {
-                      const env: Record<string, string> = {};
-                      e.target.value.split('\n').forEach((line) => {
-                        const idx = line.indexOf('=');
-                        if (idx > 0) env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-                      });
-                      const next = [...(cfg.mcpServers || [])];
-                      next[i] = { ...next[i], env };
-                      setCfg({ ...cfg, mcpServers: next });
-                    }}
-                    className="input"
-                    placeholder="环境变量（可选，KEY=VALUE 每行一条）"
-                  />
+                  <div>
+                    <label className="block text-xs text-fg-faint mb-1">环境变量（可选，KEY=VALUE 每行一条）</label>
+                    <textarea
+                      value={Object.entries(s.env || {}).map(([k, v]) => `${k}=${v}`).join('\n')}
+                      onChange={(e) => {
+                        const env: Record<string, string> = {};
+                        e.target.value.split('\n').forEach((line) => {
+                          const idx = line.indexOf('=');
+                          if (idx > 0) env[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+                        });
+                        const next = [...(cfg.mcpServers || [])];
+                        next[i] = { ...next[i], env };
+                        const updated = { ...cfg, mcpServers: next };
+                        setCfg(updated);
+                        // 环境变量修改即时持久化
+                        void saveConfigSilently(updated);
+                      }}
+                      className="input min-h-[3.5rem] resize-y font-mono text-xs"
+                      rows={4}
+                      placeholder={"DDG_MAX_RESULTS=5\nDDG_OUTPUT_FORMAT=dense\nDDG_REGION=wt-wt\nDDG_SAFE_SEARCH=MODERATE"}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

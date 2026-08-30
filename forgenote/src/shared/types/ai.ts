@@ -46,6 +46,8 @@ export interface MCPServerConfig {
   env?: Record<string, string>;
   /** 是否启用（外部 MCP 默认需显式开启） */
   enabled?: boolean;
+  /** 服务说明（可选，用于设置页展示） */
+  description?: string;
 }
 
 /** 灵感方向（灵感工坊固定提示词条目） */
@@ -188,6 +190,25 @@ export function inferServiceProvider(cfg: AIModelConfig): AIServiceProvider {
   return 'none';
 }
 
+/** 预置的外部 MCP 服务（默认禁用，用户在设置中显式启用）。预置逻辑见 mergeDefaultMCPServers 及 doc/MCP技术实现方案.md */
+export const DEFAULT_MCP_SERVERS: MCPServerConfig[] = [
+  {
+    name: 'duckduckgo',
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@ericthered926/duckduckgo-mcp-server'],
+    env: {
+      DDG_MAX_RESULTS: '5',
+      DDG_OUTPUT_FORMAT: 'dense',
+      DDG_REGION: 'wt-wt',
+      DDG_SAFE_SEARCH: 'MODERATE',
+      RATE_LIMIT_PER_SECOND: '1'
+    },
+    enabled: false,
+    description: 'DuckDuckGo 搜索：用于检索热点、话题与最新新闻（零 API Key，免费，纯 Node 版 npx 运行）'
+  }
+];
+
 /** 保证配置同时包含 provider（协议）和 serviceProvider（服务商），缺失则补齐默认值 */
 export function normalizeAIModelConfig(cfg: Partial<AIModelConfig>): AIModelConfig {
   const serviceProvider = (inferServiceProvider(cfg as AIModelConfig) || 'deepseek') as Exclude<AIServiceProvider, 'none'>;
@@ -198,8 +219,22 @@ export function normalizeAIModelConfig(cfg: Partial<AIModelConfig>): AIModelConf
     serviceProvider,
     baseUrl: cfg.baseUrl || def?.baseUrl || '',
     model: cfg.model || def?.defaultModel || '',
-    apiKey: cfg.apiKey || ''
+    apiKey: cfg.apiKey || '',
+    mcpServers: mergeDefaultMCPServers(cfg.mcpServers)
   };
+}
+
+/**
+ * 合并预置 MCP 服务与用户已存配置：
+ * - 预置项若用户已手动存在（按 name 匹配），保留用户配置（含启用状态/删除）；
+ * - 用户自定义的项原样保留；
+ * - 新升级的用户自动获得预置项（默认禁用）。
+ */
+function mergeDefaultMCPServers(existing?: MCPServerConfig[]): MCPServerConfig[] {
+  const saved = existing ?? [];
+  const savedNames = new Set(saved.map((s) => s.name));
+  const presets = DEFAULT_MCP_SERVERS.filter((p) => !savedNames.has(p.name));
+  return [...saved, ...presets];
 }
 
 /** AI 推荐笔记归档目录 */

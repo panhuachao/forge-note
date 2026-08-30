@@ -494,3 +494,31 @@ AI（确认后）：已按建议修改完成，并同步更新了 frontmatter �
 - 本方案**不改动**现有非智能体对话路径（`ask` skill），仅对 `agent` skill 引入确认流；未来可按需把 `refine-note` 等写类 skill 也纳入。
 - 外部 MCP 工具若包含写操作（如 `calendar.create_event`），同样应返回 `ConfirmableAction` 并走确认流，本方案已在 `ConfirmableAction.type` 预留 `external.<server>.<tool>` 命名空间。
 - 当前 `agent` skill 的 `awaitConfirm: true` 标记是能力开关，UI 层应据此在工具条/设置中提示用户「该模式下 AI 的写操作需要确认」。
+
+---
+
+## 13. 预置外部 MCP 服务
+
+为降低用户的接入成本，应用在加载配置（`normalizeAIModelConfig`）时，会自动合并一组**预置外部 MCP 服务**。预置项默认 `enabled: false`，用户需在「设置 → AI 配置 → 外部 MCP 服务」中显式勾选启用。
+
+预置逻辑（`src/shared/types/ai.ts`）：
+
+- `DEFAULT_MCP_SERVERS`：预置服务清单。
+- `mergeDefaultMCPServers(existing)`：按 `name` 去重合并。若用户已存在同名服务则保留其配置（含启用状态），否则追加预置项；用户自定义服务原样保留。
+
+### 13.1 DuckDuckGo 搜索（预置）
+
+用于检索**热点、话题与最新新闻**，零 API Key、免费，底层为纯 Node 版 `@ericthered926/duckduckgo-mcp-server`（经 `npx` 运行，无需 Python 环境，适合客户端安装到用户电脑使用）。
+
+| 字段 | 值 |
+|---|---|
+| name | `duckduckgo` |
+| transport | `stdio` |
+| command | `npx` |
+| args | `-y @ericthered926/duckduckgo-mcp-server` |
+| env | `DDG_MAX_RESULTS=5`、`DDG_OUTPUT_FORMAT=dense`、`RATE_LIMIT_PER_SECOND=1` |
+| enabled | `false`（默认禁用） |
+
+> 前置依赖：本机需有 Node.js（≥18）。启用后由 `npx` 自动拉取并运行，AI 智能体即可调用其搜索工具完成联网检索；内置速率限制（`RATE_LIMIT_PER_SECOND`）以降低被限流风险。
+
+> 注：该服务为通用网页搜索，新闻/热点通过查询词实现（如 `search("最新科技新闻")`），并非独立的新闻 API。

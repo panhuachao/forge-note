@@ -10,6 +10,8 @@ export interface MCPTool {
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
+  /** 原始 server.action 名（当 name 被规范化后使用） */
+  rawName?: string;
 }
 
 /** 工具执行上下文 */

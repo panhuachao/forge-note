@@ -86,19 +86,20 @@ export default function ChatPage() {
     }
   }, [activeConv?.messages.length, loading]);
 
-  // 进入页面时从主进程同步最新 AI 配置到渲染层（确保模型下拉/发送使用真实配置）
+  // 进入页面时从主进程同步最新 AI 配置到渲染层（确保模型下拉/发送使用真实配置）。
+  // 注意：仅读取并补全渲染层显示用的默认值，禁止把规范化结果写回主进程，
+  // 否则会覆盖用户在设置页已启用的外部 MCP（如 DuckDuckGo）的 enabled 状态。
   useEffect(() => {
     (async () => {
       try {
         const remote = await window.forge.ai.getConfig();
         if (remote && remote.provider !== 'none') {
-          // 补全 serviceProvider / model / baseUrl 默认值
+          // 补全 serviceProvider / model / baseUrl 默认值（仅用于渲染层显示）
           const normalized = normalizeAIModelConfig(remote);
           setAIConfig(normalized);
-          // 同步回主进程，确保后续调用无需每次兜底
-          if (!remote.serviceProvider || !remote.model || !remote.baseUrl) {
-            await window.forge.ai.setConfig(normalized);
-          }
+        } else if (remote) {
+          // 无 AI 模型时仍同步基础配置（含外部 MCP 启用状态），供工具调用读取
+          setAIConfig(normalizeAIModelConfig(remote));
         }
       } catch (e) {
         console.error('[ChatPage] getConfig failed', e);

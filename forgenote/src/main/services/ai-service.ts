@@ -13,13 +13,31 @@ import { extractWikiLinks, previewLine, writeFrontmatter } from '../utils/markdo
 import { linkIndex } from './link-index';
 import { searchService } from './search-service';
 import { retrieve, rerankHits } from './rag-service';
-import { allTools, WRITE_TOOLS, executeTool, ToolCall, ToolActivity } from './tool-runtime';
-import { listExternalTools, executeExternalTool } from './mcp-client';
+import { allTools, WRITE_TOOLS, executeTool, ToolCall, ToolActivity, type MCPTool } from './tool-runtime';
+import { listExternalTools, executeExternalTool, isExternalTool } from './mcp-client';
 import { profileService } from './profile-service';
 import { agentRegistry } from './agents/registry';
 import { composeAgentSystem } from './agents/compose';
 import { mergeSampling } from './agents/sampling';
 import type { AgentRunCtx, AgentProfile } from './agents/types';
+
+/**
+ * 按 name 合并两组 MCP 服务配置：base（磁盘已有）优先保留用户已设置的字段，
+ * override（传入的新值）中同名服务覆盖对应字段；override 的新增服务直接追加。
+ * 用户已启用的服务不会被预置默认值（enabled:false）覆盖。
+ */
+function mergeMCPServers(
+  base: import('@shared/types').MCPServerConfig[],
+  override: import('@shared/types').MCPServerConfig[]
+): import('@shared/types').MCPServerConfig[] {
+  const byName = new Map<string, import('@shared/types').MCPServerConfig>();
+  for (const s of base) byName.set(s.name, { ...s });
+  for (const s of override) {
+    const prev = byName.get(s.name);
+    byName.set(s.name, prev ? { ...prev, ...s } : { ...s });
+  }
+  return Array.from(byName.values());
+}
 
 const BASE_SYSTEM = `你是「锦囊笔记 ForgeNote」内置的本地 AI 知识管家，遵循以下铁律：
 1. 优先基于用户提供的笔记内容与知识库上下文回答，不编造本地资料中不存在的信息。
@@ -64,7 +82,13 @@ class AIService {
 
   async setConfig(cfg: Partial<AIModelConfig>): Promise<void> {
     const cur = await this.getConfig();
-    const next = { ...cur, ...cfg };
+    // 按 name 深合并 mcpServers：用户已保存的服务（含 enabled）始终优先于预置默认，
+    // 避免任何浅合并路径把用户启用的外部 MCP 覆盖回默认禁用。
+    const mergedServers =
+      cfg.mcpServers && cur.mcpServers
+        ? mergeMCPServers(cur.mcpServers, cfg.mcpServers)
+        : (cfg.mcpServers ?? cur.mcpServers);
+    const next = { ...cur, ...cfg, mcpServers: mergedServers };
     setConfig('ai:config', next);
     this.configCache = next;
   }
@@ -1182,6 +1206,10 @@ class AIService {
       onActivity?: (a: ToolActivity) => void;
       /** 是否已获得用户确认（doc/MCP技术实现方案.md §4.2）：未确认时不暴露写类工具 */
       canWrite?: boolean;
+      /** 外部 MCP server 暴露的工具（方案 §6.4）。不传时自动读取已启用 MCP。 */
+      externalTools?: MCPTool[];
+      /** Agent 采样参数覆盖 */
+      sampling?: { temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number };
     }
     ): Promise<string> {
       const cfg = await this.getConfig();
@@ -1197,7 +1225,7 @@ class AIService {
       }));
     // 合并外部 MCP server 暴露的工具（方案 §6.4）：默认禁用，设置开启后才出现，实现跨域能力扩展。
     try {
-      const ext = await listExternalTools();
+      const ext = opts?.externalTools ?? (await listExternalTools());
       for (const e of ext) tools.push({ type: 'function', function: { name: e.name, description: e.description, parameters: e.input_schema } });
     } catch {
       /* 外部 MCP 不可用不影响本地能力 */
@@ -1207,12 +1235,13 @@ class AIService {
     messages.push({ role: 'user', content: user });
 
     const provider = cfg.provider === 'ollama' ? 'ollama' : 'openai';
+    const sampling = opts?.sampling;
     const maxRounds = 10;
     for (let round = 0; round < maxRounds; round++) {
       const { content, toolCalls } =
         provider === 'ollama'
-          ? await this.callOllamaTools(cfg, messages, tools)
-          : await this.callOpenAITools(cfg, messages, tools);
+          ? await this.callOllamaTools(cfg, messages, tools, sampling)
+          : await this.callOpenAITools(cfg, messages, tools, sampling);
       if (toolCalls.length === 0) {
         return content || '（无返回）';
       }
@@ -1220,8 +1249,8 @@ class AIService {
       for (const tc of toolCalls) {
         const args = safeParseArgs(tc.function?.arguments);
         const name = tc.function?.name || '';
-        // 外部 MCP 工具（含 '.'，如 calendar.list）走 mcp-client，本地 kb_ 工具走 tool-runtime
-        const result = name.includes('.')
+        // 外部 MCP 工具走 mcp-client，本地 kb_ 工具走 tool-runtime
+        const result = isExternalTool(name)
           ? await executeExternalTool(name, args)
           : await executeTool({ name, args }, { kbId: kbId || '' });
         const activity: ToolActivity = { name, args, result };
@@ -1233,12 +1262,22 @@ class AIService {
     return '（已达到最大工具调用轮次）';
   }
 
-  private async callOpenAITools(cfg: AIModelConfig, messages: any[], tools: any[]): Promise<{ content: string; toolCalls: any[] }> {
+  private async callOpenAITools(
+    cfg: AIModelConfig,
+    messages: any[],
+    tools: any[],
+    sampling?: { temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number }
+  ): Promise<{ content: string; toolCalls: any[] }> {
     const base = cfg.baseUrl || 'https://api.openai.com/v1';
+    const body: Record<string, unknown> = { model: cfg.model, messages, tools, temperature: sampling?.temperature ?? 0.3 };
+    if (sampling?.top_p !== undefined) body.top_p = sampling.top_p;
+    if (sampling?.presence_penalty !== undefined) body.presence_penalty = sampling.presence_penalty;
+    if (sampling?.frequency_penalty !== undefined) body.frequency_penalty = sampling.frequency_penalty;
+    if (sampling?.max_tokens !== undefined) body.max_tokens = sampling.max_tokens;
     const r = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey || ''}` },
-      body: JSON.stringify({ model: cfg.model, messages, tools, temperature: 0.3 })
+      body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error(`OpenAI 调用失败: ${r.status} ${await r.text()}`);
     const data = (await r.json()) as any;
@@ -1246,12 +1285,20 @@ class AIService {
     return { content: msg.content || '', toolCalls: msg.tool_calls || [] };
   }
 
-  private async callOllamaTools(cfg: AIModelConfig, messages: any[], tools: any[]): Promise<{ content: string; toolCalls: any[] }> {
+  private async callOllamaTools(
+    cfg: AIModelConfig,
+    messages: any[],
+    tools: any[],
+    sampling?: { temperature?: number; top_p?: number; presence_penalty?: number; frequency_penalty?: number; max_tokens?: number }
+  ): Promise<{ content: string; toolCalls: any[] }> {
     const base = cfg.baseUrl || 'http://127.0.0.1:11434';
+    const body: Record<string, unknown> = { model: cfg.model, stream: false, messages, tools };
+    // Ollama 原生不支持 top_p/presence/frequency/max_tokens；若有温度需求可按需透传 options.temperature
+    if (sampling?.temperature !== undefined) body.options = { temperature: sampling.temperature };
     const r = await fetch(`${base}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: cfg.model, stream: false, messages, tools })
+      body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error(`Ollama 调用失败: ${r.status} ${await r.text()}`);
     const data = (await r.json()) as any;
@@ -1288,7 +1335,14 @@ class AIService {
     if (agent.preRun) await agent.preRun(ctx);
     const sys = await composeAgentSystem(agent, ctx);
     const sampling = mergeSampling(agent.sampling);
-    const text = await this.chat(opts.userMessage, sys, sampling);
+    // Agent 执行任务时关联已启用的外部 MCP 服务（如 DuckDuckGo 搜索），
+    // 与普通智能体对话一样支持工具调用循环。
+    const externalTools = await listExternalTools().catch(() => []);
+    const text = await this.agentChat(opts.kbId, sys, opts.userMessage, {
+      canWrite: true,
+      sampling,
+      externalTools
+    });
     const result = { kind: 'text' as const, text };
     if (agent.postRun) await agent.postRun(ctx, result);
     return text;
@@ -1319,13 +1373,30 @@ class AIService {
     const sampling = mergeSampling(agent.sampling);
     let full = '';
     const capture: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
-    for await (const chunk of this.streamChat(opts.userMessage, sys, { signal: opts.signal, sampling })) {
-      full += chunk.delta;
-      if (chunk.usage) {
-        capture.promptTokens = chunk.usage.promptTokens;
-        capture.completionTokens = chunk.usage.completionTokens;
+    const externalTools = await listExternalTools().catch(() => []);
+    // 若关联了外部 MCP 服务，使用支持工具调用的 agentChat 完成后再流式输出结果；
+    // 否则保持原 streamChat 路径，避免无谓的性能开销。
+    if (externalTools.length > 0) {
+      full = await this.agentChat(opts.kbId, sys, opts.userMessage, {
+        canWrite: true,
+        sampling,
+        externalTools
+      });
+      // 以 token/词粒度流式输出完整文本，保持前端流式体验
+      const tokens = full.split(/(\s+)/).filter(Boolean);
+      for (let i = 0; i < tokens.length; i++) {
+        if (opts.signal?.aborted) break;
+        yield { delta: tokens[i] };
       }
-      yield chunk;
+    } else {
+      for await (const chunk of this.streamChat(opts.userMessage, sys, { signal: opts.signal, sampling })) {
+        full += chunk.delta;
+        if (chunk.usage) {
+          capture.promptTokens = chunk.usage.promptTokens;
+          capture.completionTokens = chunk.usage.completionTokens;
+        }
+        yield chunk;
+      }
     }
     const result = { kind: 'text' as const, text: full };
     if (agent.postRun) await agent.postRun(ctx, result);
