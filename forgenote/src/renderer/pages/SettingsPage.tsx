@@ -625,6 +625,9 @@ export function SettingsPage() {
                       {s.name === 'duckduckgo' && (
                         <span className="badge badge-brand shrink-0">预置</span>
                       )}
+                      {s.name === 'open-websearch' && (
+                        <span className="badge badge-brand shrink-0">预置</span>
+                      )}
                     </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_7rem_5rem_auto] gap-2 items-center">

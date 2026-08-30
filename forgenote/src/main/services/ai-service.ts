@@ -66,7 +66,7 @@ class AIService {
   private configCache: AIModelConfig | null = null;
 
   async getConfig(): Promise<AIModelConfig> {
-    if (this.configCache) return this.configCache;
+    if (this.configCache) return normalizeAIModelConfig(this.configCache);
     const raw = getConfig<AIModelConfig>('ai:config', { provider: 'none' });
     this.configCache = normalizeAIModelConfig(raw || { provider: 'none' });
     return this.configCache;
@@ -74,7 +74,7 @@ class AIService {
 
   /** 同步读取 AI 配置（优先缓存）。外部 MCP 适配层（mcp-client.ts）需在不 await 的上下文取配置时用。 */
   getConfigSync(): AIModelConfig {
-    if (this.configCache) return this.configCache;
+    if (this.configCache) return normalizeAIModelConfig(this.configCache);
     const raw = getConfig<AIModelConfig>('ai:config', { provider: 'none' });
     this.configCache = normalizeAIModelConfig(raw || { provider: 'none' });
     return this.configCache;
@@ -85,7 +85,7 @@ class AIService {
     // 按 name 深合并 mcpServers：用户已保存的服务（含 enabled）始终优先于预置默认，
     // 避免任何浅合并路径把用户启用的外部 MCP 覆盖回默认禁用。
     const mergedServers =
-      cfg.mcpServers && cur.mcpServers
+      Array.isArray(cfg.mcpServers) && cur.mcpServers
         ? mergeMCPServers(cur.mcpServers, cfg.mcpServers)
         : (cfg.mcpServers ?? cur.mcpServers);
     const next = { ...cur, ...cfg, mcpServers: mergedServers };

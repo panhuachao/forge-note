@@ -193,19 +193,21 @@ export function inferServiceProvider(cfg: AIModelConfig): AIServiceProvider {
 /** 预置的外部 MCP 服务（默认禁用，用户在设置中显式启用）。预置逻辑见 mergeDefaultMCPServers 及 doc/MCP技术实现方案.md */
 export const DEFAULT_MCP_SERVERS: MCPServerConfig[] = [
   {
-    name: 'duckduckgo',
+    name: 'open-websearch',
     transport: 'stdio',
     command: 'npx',
-    args: ['-y', '@ericthered926/duckduckgo-mcp-server'],
+    args: ['-y', 'open-websearch@latest'],
     env: {
-      DDG_MAX_RESULTS: '5',
-      DDG_OUTPUT_FORMAT: 'dense',
-      DDG_REGION: 'wt-wt',
-      DDG_SAFE_SEARCH: 'MODERATE',
-      RATE_LIMIT_PER_SECOND: '1'
+      MODE: 'stdio',
+      // 默认搜索引擎；多引擎可自由切换，无需 API Key
+      DEFAULT_SEARCH_ENGINE: 'baidu',
+      // 允许的搜索引擎（逗号分隔）：国内可用 baidu/csdn，海外可用 bing/duckduckgo/brave/exa 等
+      ALLOWED_SEARCH_ENGINES: 'bing,baidu,duckduckgo,brave,exa,csdn',
+      // 走与 DuckDuckGo 相同的系统代理策略，便于国内网络环境访问
+      USE_PROXY: 'false'
     },
-    enabled: false,
-    description: 'DuckDuckGo 搜索：用于检索热点、话题与最新新闻（零 API Key，免费，纯 Node 版 npx 运行）'
+    enabled: true,
+    description: 'Open Web Search 多引擎搜索：内置 Bing、百度、DuckDuckGo、Brave、Exa、CSDN 等，支持国内搜索引擎，零 API Key（纯 Node 版 npx 运行）'
   }
 ];
 
