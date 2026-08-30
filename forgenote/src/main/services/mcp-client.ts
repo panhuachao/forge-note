@@ -145,7 +145,7 @@ class StdioMCPConnection {
               this.pending.delete(id);
               reject(new Error('MCP 调用超时'));
             }
-          }, 20000);
+          }, 30000);
         })
     );
   }

@@ -1236,7 +1236,18 @@ class AIService {
 
     const provider = cfg.provider === 'ollama' ? 'ollama' : 'openai';
     const sampling = opts?.sampling;
-    const maxRounds = 10;
+    const hasExternalTools = tools.some((t) => isExternalTool(t.function?.name));
+    // 外部 MCP 工具（尤其是搜索+网页抓取）通常需要更多轮次；保留本地工具默认 10 轮
+    const maxRounds = hasExternalTools ? 20 : 10;
+    // 注入外部工具使用规范：避免同一失败请求反复调用、避免无意义循环
+    if (hasExternalTools && messages[0]?.role === 'system') {
+      messages[0].content +=
+        '\n\n# 外部 MCP 工具使用规范\n' +
+        '- 同一工具、同一参数已调用过一次且返回失败/超时/空结果时，请勿再次调用，应基于已有信息作答。\n' +
+        '- 搜索类工具返回的摘要通常已足够回答，不要批量抓取所有结果页。\n' +
+        '- 若连续多轮未获得有效新信息，请直接总结并回答，不要继续调用工具。';
+    }
+    const seenCalls = new Set<string>();
     for (let round = 0; round < maxRounds; round++) {
       const { content, toolCalls } =
         provider === 'ollama'
@@ -1249,10 +1260,22 @@ class AIService {
       for (const tc of toolCalls) {
         const args = safeParseArgs(tc.function?.arguments);
         const name = tc.function?.name || '';
-        // 外部 MCP 工具走 mcp-client，本地 kb_ 工具走 tool-runtime
-        const result = isExternalTool(name)
-          ? await executeExternalTool(name, args)
-          : await executeTool({ name, args }, { kbId: kbId || '' });
+        const callKey = `${name}:${JSON.stringify(args)}`;
+        let result: string;
+        if (seenCalls.has(callKey)) {
+          result =
+            '【重复调用已拦截】该工具已使用相同参数调用过。请勿重复调用，请基于已有结果继续分析或直接作答。';
+        } else {
+          seenCalls.add(callKey);
+          // 外部 MCP 工具走 mcp-client，本地 kb_ 工具走 tool-runtime
+          result = isExternalTool(name)
+            ? await executeExternalTool(name, args)
+            : await executeTool({ name, args }, { kbId: kbId || '' });
+        }
+        // 外部工具返回结果往往很长，截断以节省上下文；保留失败提示原样
+        if (isExternalTool(name) && result.length > 6000) {
+          result = result.slice(0, 6000) + '\n\n...（结果已截断，避免上下文过长）';
+        }
         const activity: ToolActivity = { name, args, result };
         opts?.onActivity?.(activity);
         messages.push({ role: 'assistant', content: content || '', tool_calls: [tc] });
