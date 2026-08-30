@@ -345,6 +345,24 @@ html, body, #root {
   margin: 0.7em 0 0.35em;
   color: var(--color-text);
 }
+.markdown-preview h4 {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0.65em 0 0.3em;
+  color: var(--color-text);
+}
+.markdown-preview h5 {
+  font-size: 0.95em;
+  font-weight: 600;
+  margin: 0.6em 0 0.25em;
+  color: var(--color-text);
+}
+.markdown-preview h6 {
+  font-size: 0.85em;
+  font-weight: 600;
+  margin: 0.55em 0 0.25em;
+  color: var(--color-text-muted);
+}
 /* 聊天气泡内的 markdown：缩小标题/间距，适配紧凑气泡 */
 .chat-md h1 { font-size: 1.1em; font-weight: 700; margin: 0.5em 0 0.3em; }
 .chat-md h2 { font-size: 1.05em; font-weight: 600; margin: 0.5em 0 0.3em; padding-bottom: 0; border-bottom: none; }
@@ -393,6 +411,21 @@ html, body, #root {
   width: 3px;
   background: var(--color-brand);
   border-radius: 2px;
+}
+.inspiration-md h4 {
+  font-size: 1em; font-weight: 600;
+  margin: 0.85em 0 0.35em;
+  color: var(--color-text);
+}
+.inspiration-md h5 {
+  font-size: 0.95em; font-weight: 600;
+  margin: 0.75em 0 0.3em;
+  color: var(--color-text);
+}
+.inspiration-md h6 {
+  font-size: 0.9em; font-weight: 600;
+  margin: 0.7em 0 0.3em;
+  color: var(--color-text-muted);
 }
 .inspiration-md p {
   margin: 0.7em 0;

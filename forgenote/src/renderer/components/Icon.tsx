@@ -65,6 +65,7 @@ export type IconName =
   | 'arrow-up'
   | 'check-circle'
   | 'copy'
+  | 'eye'
   | 'puzzle';
 
 const outlineMap: Record<string, any> = {
@@ -129,6 +130,7 @@ const outlineMap: Record<string, any> = {
   'view-columns': HeroiconsOutline.EyeIcon,
   'document-text': HeroiconsOutline.DocumentTextIcon,
   'copy': HeroiconsOutline.DocumentDuplicateIcon,
+  'eye': HeroiconsOutline.EyeIcon,
   'puzzle': HeroiconsOutline.PuzzlePieceIcon,
   'arrow-path': HeroiconsOutline.ArrowPathIcon,
   'arrows-right-left': HeroiconsOutline.ArrowsRightLeftIcon,

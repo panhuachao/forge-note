@@ -42,6 +42,7 @@ function Shell({
   onConfirm,
   onCancel,
   copyText,
+  viewText,
   busy,
   confirmLabel
 }: {
@@ -51,10 +52,12 @@ function Shell({
   onConfirm: () => void;
   onCancel: () => void;
   copyText?: string;
+  viewText?: string;
   busy?: boolean;
   confirmLabel: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
   const doCopy = async () => {
     if (!copyText) return;
     try {
@@ -66,7 +69,8 @@ function Shell({
     }
   };
   return (
-    <div className="my-2 rounded-xl border border-brand/30 bg-brand-soft/20 overflow-hidden">
+    <>
+      <div className="my-2 rounded-xl border border-brand/30 bg-brand-soft/20 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-brand/20">
         <Icon name="sparkles" className="w-3.5 h-3.5 text-brand" />
         <span className="text-[11px] px-1.5 py-0.5 rounded bg-brand/15 text-brand font-medium">{badge}</span>
@@ -90,10 +94,20 @@ function Shell({
           <Icon name="x-mark" className="w-3.5 h-3.5" />
           放弃
         </button>
+        {viewText && (
+          <button
+            onClick={() => setViewOpen(true)}
+            className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-lg text-fg-secondary text-[11px] hover:bg-hover-bg transition-colors"
+            title="查看"
+          >
+            <Icon name="eye" className="w-3.5 h-3.5" />
+            查看
+          </button>
+        )}
         {copyText && (
           <button
             onClick={doCopy}
-            className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-lg text-fg-secondary text-[11px] hover:bg-hover-bg transition-colors"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-fg-secondary text-[11px] hover:bg-hover-bg transition-colors"
             title="复制"
           >
             <Icon name={copied ? 'check-circle' : 'clipboard'} className="w-3.5 h-3.5" />
@@ -101,6 +115,66 @@ function Shell({
           </button>
         )}
       </div>
+    </div>
+
+    {viewOpen && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+        onClick={() => setViewOpen(false)}
+      >
+        <div
+          className="bg-content border border-border rounded-2xl shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-soft">
+            <span className="text-sm font-medium text-fg truncate">{title}</span>
+            <button
+              onClick={() => setViewOpen(false)}
+              className="p-1 rounded-lg hover:bg-hover-bg text-fg-secondary transition-colors"
+            >
+              <Icon name="x-mark" className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-4">
+            <DiffViewer diff={viewText} className="text-xs" />
+          </div>
+        </div>
+      </div>
+    )}
+    </>
+  );
+}
+
+/** 按 Git diff 风格高亮 +/-/@@/文件头行，支持暗黑模式 */
+function DiffViewer({ diff, className = '' }: { diff: string; className?: string }) {
+  const lines = diff.split('\n');
+  return (
+    <div className={`font-mono leading-relaxed whitespace-pre-wrap break-all ${className}`}>
+      {lines.map((line, idx) => {
+        const type = line.startsWith('+') && !line.startsWith('+++ ')
+          ? 'add'
+          : line.startsWith('-') && !line.startsWith('--- ')
+          ? 'del'
+          : line.startsWith('@@') || line.startsWith('+++ ') || line.startsWith('--- ')
+          ? 'meta'
+          : 'ctx';
+        return (
+          <span
+            key={idx}
+            className={`block px-1 -mx-1 rounded-sm ${
+              type === 'add'
+                ? 'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                : type === 'del'
+                ? 'bg-rose-500/10 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
+                : type === 'meta'
+                ? 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                : 'text-fg'
+            }`}
+          >
+            {line || ' '}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -119,6 +193,7 @@ function NotePatchCard({ action, onConfirm, onCancel, busy }: CardProps) {
       confirmLabel="确认修改"
       busy={busy}
       copyText={pv?.diff}
+      viewText={pv?.diff}
       onConfirm={onConfirm}
       onCancel={onCancel}
     >
@@ -133,9 +208,9 @@ function NotePatchCard({ action, onConfirm, onCancel, busy }: CardProps) {
         </div>
       )}
       {pv?.diff ? (
-        <pre className="text-[10px] leading-relaxed bg-canvas/80 rounded-lg p-2 overflow-auto max-h-44 whitespace-pre-wrap break-all font-mono">
-          {pv.diff}
-        </pre>
+        <div className="text-[10px] bg-canvas/80 rounded-lg p-2 overflow-auto max-h-44">
+          <DiffViewer diff={pv.diff} />
+        </div>
       ) : (
         <div className="text-[11px] text-fg-faint">（无 diff 预览）</div>
       )}
@@ -163,6 +238,7 @@ function BatchPatchCard({ action, onConfirm, onCancel, busy }: CardProps) {
       confirmLabel={`确认修改 ${applicable} 篇`}
       busy={busy}
       copyText={items.map((i) => i.diff).filter(Boolean).join('\n\n')}
+      viewText={items.map((i) => `--- ${i.notePath} ---\n${i.diff}`).filter(Boolean).join('\n\n')}
       onConfirm={onConfirm}
       onCancel={onCancel}
     >

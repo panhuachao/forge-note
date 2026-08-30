@@ -580,7 +580,7 @@ export function RightPanel() {
                             value={tagInput}
                             onChange={(e) => setTagInput(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
+                              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                                 if (tagInput.trim()) addTag(tagInput);
                                 setTagInput('');
                                 setTagPickerOpen(false);

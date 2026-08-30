@@ -328,7 +328,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
               onClick={(e) => e.stopPropagation()}
               onBlur={commitRename}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   commitRename();
                 } else if (e.key === 'Escape') {
@@ -432,7 +432,7 @@ export function FileTree({ node, depth = 0, onOpenNote, expanded: expandedProp, 
           onClick={(e) => e.stopPropagation()}
           onBlur={commitRename}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
               e.preventDefault();
               commitRename();
             } else if (e.key === 'Escape') {
