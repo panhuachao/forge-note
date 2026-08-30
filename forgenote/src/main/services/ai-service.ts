@@ -22,10 +22,10 @@ import { mergeSampling } from './agents/sampling';
 import type { AgentRunCtx, AgentProfile } from './agents/types';
 
 const BASE_SYSTEM = `你是「锦囊笔记 ForgeNote」内置的本地 AI 知识管家，遵循以下铁律：
-1. 所有回答必须基于用户提供的笔记内容与知识库上下文，不编造信息。
+1. 优先基于用户提供的笔记内容与知识库上下文回答，不编造本地资料中不存在的信息。
 2. 不得自动修改、删除、移动任何文件；所有结构性变更（移动笔记、插入链接、锻造卡片）必须由用户显式确认。
 3. 引用笔记时请使用 [[笔记名]] 语法。
-4. 当本地资料不足时，明确告知用户「本地未找到相关内容」，不要凭通用知识补全。`;
+4. 当用户请求市场分析、案例延伸、竞品对比等本地资料不足以直接回答的任务时，可结合通用知识进行合理推演与补充，但必须明确区分：哪些结论来自本地资料，哪些是基于通用知识的推断，并提醒用户核实关键数据。`;
 
 class AIService {
   /** 在 BASE_SYSTEM 后追加用户画像长期上下文（阶段 A 注入，doc/用户画像实现方案.md §5.1） */
@@ -1104,7 +1104,7 @@ class AIService {
     if (!kb) return '';
     const content = await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => '');
     const aiConfig = await this.getAIConfigContent(kbId);
-    const sys = `${BASE_SYSTEM}\n\n# 当前笔记（作为对话上下文，请勿修改原文）\n${content.slice(0, 6000)}\n\n# AI_CONFIG\n${aiConfig}\n\n回答要求：\n- 始终基于上述笔记内容回答，不编造信息\n- 引用时用 [[笔记名]] 语法\n- 若本地资料不足，明确告知用户「本地未找到相关内容」`;
+    const sys = `${BASE_SYSTEM}\n\n# 当前笔记（作为对话上下文，请勿修改原文）\n${content.slice(0, 6000)}\n\n# AI_CONFIG\n${aiConfig}\n\n回答要求：\n- 优先基于上述笔记内容回答，不编造本地资料中不存在的信息\n- 引用时用 [[笔记名]] 语法\n- 若用户请求分析、延伸、对比等任务而本地资料不足，可结合通用知识进行合理推演与补充，但须明确区分本地资料与通用知识推断，并提醒用户核实关键数据`;
     return this.chat(question, sys);
   }
 
@@ -1117,7 +1117,7 @@ class AIService {
     if (!kb) return currentContent || '';
     const base = currentContent ?? (await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => ''));
     const aiConfig = await this.getAIConfigContent(kbId);
-    const sys = `${BASE_SYSTEM}\n\n# 任务\n你是笔记完善助手。下面是一篇现有笔记及其已有格式（标题层级、列表、引用、表格、粗体/斜体等 Markdown 语法）。\n请结合「AI 对话回复」中的要点，对整篇笔记进行完善、补充与整合，并输出完善后的【完整笔记全文】。\n要求：\n- 严格保留原文的结构与 Markdown 格式风格\n- 将 AI 回复中有价值的内容自然融入对应章节，不要简单堆砌到末尾\n- 仅输出完善后的笔记全文，不要任何解释、不要使用代码块围栏\n- 若相关内容本地资料不足，在文中相应位置标注「（待补充）」\n\n# 现有笔记全文\n${base.slice(0, 8000)}\n\n# AI_CONFIG\n${aiConfig}`;
+    const sys = `${BASE_SYSTEM}\n\n# 任务\n你是笔记完善助手。下面是一篇现有笔记及其已有格式（标题层级、列表、引用、表格、粗体/斜体等 Markdown 语法）。\n请结合「AI 对话回复」中的要点，对整篇笔记进行完善、补充与整合，并输出完善后的【完整笔记全文】。\n要求：\n- 严格保留原文的结构与 Markdown 格式风格\n- 将 AI 回复中有价值的内容自然融入对应章节，不要简单堆砌到末尾\n- 仅输出完善后的笔记全文，不要任何解释、不要使用代码块围栏\n- 若相关内容本地资料不足，可结合通用知识进行合理推演与补充，但须在对应位置明确标注「（基于通用知识，需核实）」\n\n# 现有笔记全文\n${base.slice(0, 8000)}\n\n# AI_CONFIG\n${aiConfig}`;
     const refined = await this.chat(aiReply, sys);
     // 去除模型可能误加的代码块围栏与首尾空白
     const cleaned = refined
