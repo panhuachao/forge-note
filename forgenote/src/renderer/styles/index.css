@@ -742,3 +742,206 @@ html, body, #root {
 .release-notes-body img { @apply max-w-full h-auto rounded; }
 .release-notes-body hr { @apply my-3 border-border; }
 .release-notes-body strong { @apply text-fg font-semibold; }
+
+/* ===== 编辑器内联 AI 右键菜单 + 弹窗 ===== */
+.inline-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.inline-edit-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 110px;
+  background: var(--bg-content);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+  font-size: 13px;
+}
+.inline-edit-menu-item {
+  display: block;
+  width: 100%;
+  padding: 9px 16px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--color-text);
+  transition: background 0.12s;
+}
+.inline-edit-menu-item:hover {
+  background: var(--bg-hover);
+}
+.inline-edit-menu-item:not(:last-child) {
+  border-bottom: 1px solid var(--border-soft);
+}
+.inline-edit-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+.inline-edit-modal {
+  width: min(520px, 92vw);
+  max-height: 86vh;
+  background: var(--bg-content);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.inline-edit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-canvas);
+}
+.inline-edit-modal-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--color-text);
+}
+.inline-edit-modal-body {
+  padding: 16px;
+  overflow: auto;
+}
+.inline-edit-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border-soft);
+}
+.inline-edit-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.inline-edit-textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.inline-edit-textarea:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+.inline-edit-section {
+  margin-top: 14px;
+}
+.inline-edit-preview,
+.inline-edit-result {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+}
+.inline-edit-loading,
+.inline-edit-error {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.inline-edit-error {
+  color: #f87171;
+}
+.inline-edit-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+.inline-edit-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+/* ===== 预览图片灯箱 ===== */
+.markdown-preview img {
+  cursor: zoom-in;
+  transition: filter 0.15s;
+}
+.markdown-preview img:hover {
+  filter: brightness(0.95);
+}
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  backdrop-filter: blur(4px);
+}
+.lightbox-img {
+  max-width: 92vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  background: #fff;
+}
+.lightbox-toolbar {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  display: flex;
+  gap: 8px;
+  z-index: 101;
+}
+.lightbox-toolbar .btn {
+  padding: 7px 14px;
+  font-size: 13px;
+}
+.lightbox-close {
+  position: fixed;
+  top: 20px;
+  left: 24px;
+  z-index: 101;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.lightbox-error {
+  color: #fca5a5;
+  margin-top: 16px;
+  font-size: 13px;
+}

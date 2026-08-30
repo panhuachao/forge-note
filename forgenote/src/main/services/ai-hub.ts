@@ -29,12 +29,14 @@ class AIHub {
 
     if (!skill) return { kind: 'text', text: `未支持的技能: ${req.skill ?? req.agentId}` };
 
+    const base = (req.input ?? {}) as Record<string, unknown>;
     const input: AISkillCtx['input'] = {
-      text: String(req.input?.text ?? req.input?.question ?? ''),
-      question: req.input?.question ? String(req.input.question) : undefined,
-      dirId: req.input?.dirId ? String(req.input.dirId) : undefined,
-      notePath: req.input?.notePath ? String(req.input.notePath) : undefined,
-      targets: Array.isArray(req.input?.targets) ? (req.input!.targets as unknown[]).map((t) => String(t)) : undefined
+      ...base,
+      text: String(base.text ?? base.question ?? ''),
+      question: base.question ? String(base.question) : undefined,
+      dirId: base.dirId ? String(base.dirId) : undefined,
+      notePath: base.notePath ? String(base.notePath) : undefined,
+      targets: Array.isArray(base.targets) ? (base.targets as unknown[]).map((t) => String(t)) : undefined
     };
 
     const { sessionId, history } = this.resolveSession(skill, req);
@@ -86,12 +88,14 @@ class AIHub {
       return { kind: 'text', text: `未支持的技能: ${skillId}` };
     }
 
+    const base = (req.input ?? {}) as Record<string, unknown>;
     const input: AISkillCtx['input'] = {
-      text: String(req.input?.text ?? req.input?.question ?? ''),
-      question: req.input?.question ? String(req.input.question) : undefined,
-      dirId: req.input?.dirId ? String(req.input.dirId) : undefined,
-      notePath: req.input?.notePath ? String(req.input.notePath) : undefined,
-      targets: Array.isArray(req.input?.targets) ? (req.input!.targets as unknown[]).map((t) => String(t)) : undefined
+      ...base,
+      text: String(base.text ?? base.question ?? ''),
+      question: base.question ? String(base.question) : undefined,
+      dirId: base.dirId ? String(base.dirId) : undefined,
+      notePath: base.notePath ? String(base.notePath) : undefined,
+      targets: Array.isArray(base.targets) ? (base.targets as unknown[]).map((t) => String(t)) : undefined
     };
     const { sessionId, history } = this.resolveSession(skill, req);
     if (sessionId && input.text) sessionStore.append(sessionId, { role: 'user', text: input.text, ts: Date.now() });

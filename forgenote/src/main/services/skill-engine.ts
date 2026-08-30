@@ -38,7 +38,8 @@ export const SKILL_TO_AGENT: Record<string, string> = {
   'generate-tags': 'refiner',
   summarize: 'refiner',
   'forge-card': 'card-smith',
-  'daily-insight': 'daily-muse'
+  'daily-insight': 'daily-muse',
+  'inline-edit': 'refiner'
 };
 
 /** 解析本次请求的 Agent：显式 agentId 优先，否则按 SKILL_TO_AGENT 兜底到 conversationalist */
@@ -586,6 +587,27 @@ export const SKILLS: Record<string, AISkill> = {
         userMessage: prompt
       });
       return txt(r);
+    }
+  },
+
+  'inline-edit': {
+    id: 'inline-edit',
+    title: '内联编辑',
+    description: '选中文本的改写 / 续写 / 翻译，直接返回纯文本结果。',
+    run: async ({ input }) => {
+      const mode = String((input as Record<string, unknown>).mode ?? 'rewrite');
+      const text = String((input as Record<string, unknown>).text ?? '').trim();
+      const instruction = String((input as Record<string, unknown>).instruction ?? '').trim();
+      if (!text) return txt('未提供可处理的文本。');
+      const defaultMap: Record<string, string> = {
+        rewrite: '请改写下面这段内容，使其更通顺、精炼、专业，保留原意与 Markdown 格式，只输出改写后的文本本身，不要任何解释或前后缀：',
+        translate: '请将下面这段内容翻译为中文（技术术语可保留英文原词），保留原有 Markdown 格式，只输出译文本身，不要任何解释或前后缀：',
+        continue: '请基于下面这段内容的语气与主题，自然地续写一段连贯的文字（约 80~150 字），不要重复已有内容，只输出续写部分，不要任何解释或前后缀：'
+      };
+      const suffix = '只输出结果文本本身，不要任何解释或前后缀。';
+      const sys = instruction ? `${instruction}\n${suffix}` : (defaultMap[mode] ?? defaultMap.rewrite);
+      const result = await aiService.chat(text, sys, { temperature: 0.7 });
+      return txt(String(result ?? '').trim());
     }
   },
 

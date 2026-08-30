@@ -53,7 +53,7 @@ function inline(text: string): string {
   // 图片：![alt](src)
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt: string, src: string) => {
     const url = resolveAsset(src.trim());
-    return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt || '')}" style="max-width:100%" />`;
+    return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt || '')}" data-fullsrc="${escapeHtml(url)}" style="max-width:100%" />`;
   });
   // 普通链接
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');

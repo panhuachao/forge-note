@@ -12,6 +12,7 @@ import { useLayoutStore } from '../stores/layout-store';
 import { getPluginEditorExtensions, clearPluginEditorExtensions, getCodeBlockRenderer, onCodeBlockRenderersChanged } from '../plugin/runtime';
 import { Icon } from './Icon';
 import { ConfirmableActionCard } from './ConfirmableActionCard';
+import { InlineEditToolbar } from './InlineEditToolbar';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
 import { hubConfirm, hubRun } from '../utils/ai-hub';
 import type { ConfirmableAction } from '@shared/types/ai';
@@ -83,6 +84,16 @@ export function NotePane(props: Props) {
   const [actionBusy, setActionBusy] = useState(false);
   // 事件监听器内需要读到最新 action，用 ref 避免频繁重建监听
   const pendingRef = useRef<ConfirmableAction | null>(null);
+  // 预览图片灯箱：点击图片打开大图
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxSrc(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxSrc]);
 
   // 监听「AI 聊天面板追加回复到笔记」事件：调用 AI 结合回复与现有笔记全文，
   // 重写完善整篇笔记后整体替换文档，触发 docChanged → 自动保存。
@@ -167,8 +178,7 @@ export function NotePane(props: Props) {
       } catch (e) {
         if (cancelled) return;
         pushToast({ level: 'error', text: '打开笔记失败：' + String(e) });
-      }
-    })();
+      }    })();
     return () => {
       cancelled = true;
     };
@@ -346,9 +356,17 @@ export function NotePane(props: Props) {
     };
   }, [loadedPath]);
 
-  // 预览区任务项点击：切换 [ ]/[x]/[~]/[-] 状态并写回编辑器（→ 自动保存 + 实时预览刷新）
-  const onTaskToggle = (e: React.MouseEvent) => {
-    const target = (e.target as HTMLElement).closest('.task-toggle');
+  // 预览区点击：任务项切换状态 / 图片点击打开灯箱
+  const onPreviewClick = (e: React.MouseEvent) => {
+    const el = e.target as HTMLElement;
+    const img = el.closest('img');
+    if (img) {
+      e.preventDefault();
+      const src = img.getAttribute('data-fullsrc') || img.getAttribute('src') || '';
+      if (src) setLightboxSrc(src);
+      return;
+    }
+    const target = el.closest('.task-toggle');
     if (!target) return;
     const wrap = target.closest('.task-list-item') as HTMLElement | null;
     if (!wrap) return;
@@ -555,7 +573,7 @@ export function NotePane(props: Props) {
           <div
             ref={previewRef}
             onScroll={handleScroll}
-            onClick={onTaskToggle}
+            onClick={onPreviewClick}
             className={`h-full overflow-auto bg-content p-8 ${tab === 'split' ? 'w-1/2' : 'w-full'}`}
           >
             <article
@@ -563,6 +581,10 @@ export function NotePane(props: Props) {
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
           </div>
+        )}
+        {/* 内联 AI 右键菜单 + 改写/续写/翻译弹窗 */}
+        {viewRef.current && tab !== 'preview' && (
+          <InlineEditToolbar view={viewRef.current} onClose={() => {}} />
         )}
       </div>
 
@@ -578,6 +600,35 @@ export function NotePane(props: Props) {
               setPendingAction(null);
             }}
           />
+        </div>
+      )}
+
+      {/* 预览图片灯箱：点击放大，支持复制 / 下载 */}
+      {lightboxSrc && (
+        <div className="lightbox-backdrop" onClick={() => setLightboxSrc(null)}>
+          <button className="lightbox-close" onClick={() => setLightboxSrc(null)} title="关闭 (Esc)">
+            <Icon name="x-mark" className="w-5 h-5" solid />
+          </button>
+          <div className="lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="btn btn-secondary"
+              onClick={async () => {
+                try {
+                  const blob = await (await fetch(lightboxSrc)).blob();
+                  await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+                  pushToast({ level: 'success', text: '图片已复制到剪贴板' });
+                } catch {
+                  pushToast({ level: 'error', text: '复制失败，可尝试下载' });
+                }
+              }}
+            >
+              复制
+            </button>
+            <a className="btn btn-primary" href={lightboxSrc} download onClick={(e) => e.stopPropagation()}>
+              下载
+            </a>
+          </div>
+          <img className="lightbox-img" src={lightboxSrc} alt="" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
