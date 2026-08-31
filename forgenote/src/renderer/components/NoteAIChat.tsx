@@ -98,11 +98,20 @@ export function NoteAIChat({ kbId, notePath, onAppend }: Props) {
     setMessages((m) => [...m, { role: 'ai', text, toolActivity: toolActs.length ? [...toolActs] : undefined }]);
   };
 
-  /** 普通模式：经 AIHub 的 ask skill 注入笔记上下文后问答（非流式） */
+  /** 普通模式：经 AIHub 的 ask skill 注入笔记上下文后问答（流式） */
   const sendPlain = async (question: string) => {
-    const res = await ai.run({ text: question, question }, { skill: 'ask' });
+    let acc = '';
+    const res = await ai.runStream(
+      { text: question, question },
+      (delta) => {
+        acc += delta;
+        setStreaming(acc);
+      },
+      { skill: 'ask' }
+    );
+    setStreaming('');
     if (!res) return;
-    const text = res.kind === 'text' ? res.text : '（无回答）';
+    const text = res.kind === 'text' ? res.text : acc || '（无回答）';
     setMessages((m) => [...m, { role: 'ai', text }]);
   };
 

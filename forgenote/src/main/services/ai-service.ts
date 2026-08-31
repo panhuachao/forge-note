@@ -1133,6 +1133,28 @@ class AIService {
   }
 
   /**
+   * 流式版 askAboutNote（仅供 AIHub.runStream 内部调用）。
+   * 聚焦单篇笔记时该笔记全文即上下文，正文逐 token 流式返回，避免一次性等待。
+   */
+  async *askAboutNoteStream(
+    kbId: string,
+    notePath: string,
+    question: string,
+    opts?: { signal?: AbortSignal }
+  ): AsyncGenerator<{ delta: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } }> {
+    const kb = getKB(kbId);
+    const content = kb ? await fs.readFile(safeRead(kb.rootPath, notePath), 'utf-8').catch(() => '') : '';
+    const aiConfig = await this.getAIConfigContent(kbId);
+    const sys = `${BASE_SYSTEM}\n\n# 当前笔记（作为对话上下文，请勿修改原文）\n${content.slice(0, 6000)}\n\n# AI_CONFIG\n${aiConfig}\n\n回答要求：\n- 优先基于上述笔记内容回答，不编造本地资料中不存在的信息\n- 引用时用 [[笔记名]] 语法\n- 若用户请求分析、延伸、对比等任务而本地资料不足，可结合通用知识进行合理推演与补充，但须明确区分本地资料与通用知识推断，并提醒用户核实关键数据`;
+    let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
+    for await (const chunk of this.streamChat(question, sys, { signal: opts?.signal })) {
+      if (chunk.usage) usage = chunk.usage;
+      yield { delta: chunk.delta };
+    }
+    if (usage) yield { delta: '', usage };
+  }
+
+  /**
    * 依据 AI 对话回复，结合当前笔记全文及其格式，完善并重写整篇笔记。
    * currentContent 可选：传入编辑器最新内容（避免未保存丢失）；缺省时读盘。
    */

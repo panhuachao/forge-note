@@ -105,23 +105,37 @@ class AIHub {
     let refs: AIRefHit[] | undefined;
     let usage: AIUsage | undefined;
 
-    // 聚焦单篇笔记时（input.notePath）不走 RAG 流式分支：
-    // 该笔记全文即上下文，交由 skill.run 内的 askAboutNote 处理。
-    if (skill.id === 'ask' && skill.stateful && !input.notePath) {
-      // 时间维度问题（「今天/本周/最近 N 天」）先走专门路径；命中则基于 mtime 筛出的笔记正文总结。
-      const ts = await runTimeSummary(req.kbId ?? '', String(input.text ?? ''), history, onToken, onActivity);
-      if (ts) {
-        full = ts.text;
-        refs = ts.refs;
-        usage = ts.usage;
-      } else {
-        // 流式问答
-        for await (const chunk of aiService.askStream(req.kbId, this.toChatHistory(history), String(input.text ?? ''))) {
-          if (chunk.refs) refs = chunk.refs;
+    // 聚焦单篇笔记（input.notePath）时，该笔记全文即上下文，逐 token 流式返回（doc/AI对话流式方案）。
+    // 否则走 RAG 流式问答 / 时间维度总结分支。
+    if (skill.id === 'ask' && skill.stateful) {
+      if (input.notePath) {
+        for await (const chunk of aiService.askAboutNoteStream(
+          req.kbId!,
+          input.notePath,
+          String(input.text ?? input.question ?? '')
+        )) {
           if (chunk.usage) usage = { ...chunk.usage, ms: Date.now() - t0 };
           if (chunk.delta) {
             full += chunk.delta;
             onToken(chunk.delta);
+          }
+        }
+      } else {
+        // 时间维度问题（「今天/本周/最近 N 天」）先走专门路径；命中则基于 mtime 筛出的笔记正文总结。
+        const ts = await runTimeSummary(req.kbId ?? '', String(input.text ?? ''), history, onToken, onActivity);
+        if (ts) {
+          full = ts.text;
+          refs = ts.refs;
+          usage = ts.usage;
+        } else {
+          // 流式问答
+          for await (const chunk of aiService.askStream(req.kbId, this.toChatHistory(history), String(input.text ?? ''))) {
+            if (chunk.refs) refs = chunk.refs;
+            if (chunk.usage) usage = { ...chunk.usage, ms: Date.now() - t0 };
+            if (chunk.delta) {
+              full += chunk.delta;
+              onToken(chunk.delta);
+            }
           }
         }
       }
