@@ -18,7 +18,7 @@ export const BUILTIN_VIEWS: BuiltinView[] = [
   'note', 'graph', 'template', 'audit', 'settings', 'home',
   'chat', 'search-results', 'tag-notes', 'inspiration', 'diagnose', 'plugins'
 ];
-export type TreeView = 'tree' | 'tags';
+export type TreeView = 'tree' | 'tags' | 'notes';
 export type SortMode = 'name' | 'mtime' | 'created';
 export type FontSizeKey = 'sm' | 'md' | 'lg';
 export type LineHeightKey = 'sm' | 'md' | 'lg';

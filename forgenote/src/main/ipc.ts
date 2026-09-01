@@ -5,7 +5,7 @@ import { promises as fs } from 'fs';
 import { IPC } from '@shared/ipc-channels';
 import { listKBs, getKB, addKB as storeAddKB, removeKB as storeRemoveKB, getConfig, setConfig, getAIPresets, saveAIPreset, setActiveAIPreset } from './services/store';
 import { kbService } from './services/kb-service';
-import { fsService } from './services/fs-service';
+import { fsService, type NoteSortMode } from './services/fs-service';
 import { eventBus } from './utils/event-bus';
 import { linkIndex } from './services/link-index';
 import { templateService } from './services/template-service';
@@ -127,6 +127,7 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.FS_READ_TEXT, async (_e, kbId: string, p: string) => fsService.readText(kbId, p));
   ipcMain.handle(IPC.FS_WRITE_TEXT, async (_e, kbId: string, p: string, c: string) => fsService.writeText(kbId, p, c));
   ipcMain.handle(IPC.FS_LIST_TAGS, async (_e, kbId: string) => fsService.listTags(kbId));
+  ipcMain.handle(IPC.FS_LIST_NOTES, async (_e, kbId: string, sort?: NoteSortMode) => fsService.listNotes(kbId, sort));
   ipcMain.handle(IPC.FS_NOTES_BY_TAG, async (_e, kbId: string, tag: string) => fsService.notesByTag(kbId, tag));
 
   // Links

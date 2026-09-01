@@ -17,6 +17,8 @@ import { templateService } from './template-service';
 import { eventBus } from '../utils/event-bus';
 import { searchService } from './search-service';
 
+export type NoteSortMode = 'name' | 'mtime' | 'created';
+
 class FSService {
   // 已迁移 createdAt 的笔记（kbId + notePath），避免 readNote 每次都写盘
   private migratedCtime = new Set<string>();
@@ -535,6 +537,45 @@ class FSService {
     return [...counter.entries()]
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  }
+
+  /**
+   * 返回知识库内全部笔记（不含目录结构，默认按修改时间倒序）
+   */
+  async listNotes(kbId: string, sort: NoteSortMode = 'mtime'): Promise<NoteInfo[]> {
+    const root = this.rootOf(kbId);
+    const result: NoteInfo[] = [];
+    const walk = async (dir: string) => {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.name.startsWith('.')) continue;
+        const full = join(dir, e.name);
+        if (e.isDirectory()) {
+          await walk(full);
+        } else if (e.isFile() && e.name.toLowerCase().endsWith('.md')) {
+          try {
+            const rel = root ? full.slice(root.length + 1) : e.name;
+            const stat = await fs.stat(full);
+            const dirPath = dirname(rel);
+            result.push({
+              path: rel,
+              name: e.name,
+              dirPath: dirPath === '.' ? '' : dirPath,
+              mtime: stat.mtimeMs,
+              size: stat.size
+            });
+          } catch {
+            // 读取失败跳过
+          }
+        }
+      }
+    };
+    await walk(root);
+    return result.sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name, 'zh-CN');
+      if (sort === 'created') return b.mtime - a.mtime; // 文件系统无独立创建时间索引，暂以 mtime 占位
+      return b.mtime - a.mtime;
+    });
   }
 
   /**

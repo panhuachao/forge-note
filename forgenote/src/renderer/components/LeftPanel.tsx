@@ -1,16 +1,19 @@
-// 左侧面板：目录/标签视图
-// 顶部：视图切换（📁🏷）+ ⮜ 收起左栏 - 左侧顶部操作栏
+// 左侧面板：目录/标签/笔记列表视图
+// 顶部：视图切换（📁🏷📝）+ ⮜ 收起左栏 - 左侧顶部操作栏
 // 中部：视图内容
 //   - 知识库视图（tree）：FileTree（含内部顶部快捷操作栏）
 //   - 标签视图（tags）：TagsView
-import { useState, useEffect, useRef } from 'react';
+//   - 笔记列表视图（notes）：NotesListView
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type { NoteInfo } from '@shared/types';
 import { useKBStore } from '../stores/kb-store';
-import { useLayoutStore, TreeView } from '../stores/layout-store';
+import { useLayoutStore, TreeView, SortMode } from '../stores/layout-store';
 import { FileTree } from './FileTree';
 import { Icon, IconName } from './Icon';
 
 const viewTabs: { id: TreeView; icon: IconName; label: string }[] = [
   { id: 'tree', icon: 'folder', label: '知识库' },
+  { id: 'notes', icon: 'queue-list', label: '笔记列表' },
   { id: 'tags', icon: 'tag', label: '标签' }
 ];
 
@@ -124,8 +127,10 @@ export function LeftPanel() {
       <div className="flex-1 overflow-y-auto">
         {treeView === 'tree' && tree ? (
           <FileTree node={tree} onOpenNote={(p) => openTab(p)} />
-        ) : (
+        ) : treeView === 'tags' ? (
           <TagsView />
+        ) : (
+          <NotesListView />
         )}
       </div>
       <ResizeHandle onStart={() => setResizing(true)} />
@@ -246,6 +251,111 @@ function TagsView() {
             {key}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function NotesListView() {
+  const { activeKb } = useKBStore();
+  const { openTab, setMainView } = useLayoutStore();
+  const [notes, setNotes] = useState<NoteInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  // 笔记列表视图独立排序，默认按修改时间倒序
+  const [listSort, setListSort] = useState<SortMode>('mtime');
+
+  const loadNotes = useCallback(async () => {
+    if (!activeKb) return;
+    setLoading(true);
+    try {
+      const list = await window.forge.fs.listNotes(activeKb.id, listSort);
+      setNotes(list);
+    } catch {
+      setNotes([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeKb, listSort]);
+
+  useEffect(() => {
+    loadNotes();
+  }, [loadNotes]);
+
+  // 文件变更后刷新列表
+  useEffect(() => {
+    const off = window.forge.events.onFsChange(() => loadNotes());
+    return () => off();
+  }, [loadNotes]);
+
+  const sortOptions: { v: SortMode; l: string }[] = [
+    { v: 'mtime', l: '修改时间' },
+    { v: 'name', l: '名称' }
+  ];
+  const activeSort = listSort === 'created' ? 'mtime' : listSort;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 顶部排序栏 */}
+      <div className="h-10 flex items-center justify-between px-3 border-b border-border-soft bg-toolbar text-xs shrink-0">
+        <span className="text-fg-muted">共 {notes.length} 篇</span>
+        <div className="flex items-center gap-1">
+          {sortOptions.map((s) => (
+            <button
+              key={s.v}
+              onClick={() => setListSort(s.v)}
+              className={`px-2 py-1 rounded-md transition-colors ${
+                activeSort === s.v
+                  ? 'bg-brand-soft text-brand'
+                  : 'text-fg-muted hover:bg-hover-bg'
+              }`}
+              title={`按${s.l}排序`}
+            >
+              {s.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 笔记列表 */}
+      <div className="flex-1 overflow-y-auto p-2">
+        {loading ? (
+          <div className="p-4 text-fg-muted text-sm text-center">加载笔记中…</div>
+        ) : notes.length === 0 ? (
+          <div className="p-4 text-fg-muted text-sm text-center">
+            暂无笔记
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {notes.map((n) => (
+              <button
+                key={n.path}
+                onClick={() => {
+                  openTab(n.path);
+                  setMainView('note');
+                }}
+                className="w-full text-left rounded-xl px-3 py-2 hover:bg-hover-bg transition-colors group"
+                title={n.path}
+              >
+                <div className="flex items-start gap-2">
+                  <Icon
+                    name="document"
+                    className="w-4 h-4 text-fg-muted shrink-0 mt-0.5 group-hover:text-brand"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-fg truncate">
+                      {n.name.replace(/\.md$/i, '')}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-[11px] text-fg-faint">
+                      <span className="truncate">{n.dirPath || '根目录'}</span>
+                      <span>·</span>
+                      <span>{new Date(n.mtime).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -123,6 +123,7 @@ const api = {
     readText: (kbId: string, p: string) => ipcRenderer.invoke(IPC.FS_READ_TEXT, kbId, p) as Promise<string>,
     writeText: (kbId: string, p: string, c: string) => ipcRenderer.invoke(IPC.FS_WRITE_TEXT, kbId, p, c) as Promise<void>,
     listTags: (kbId: string) => ipcRenderer.invoke(IPC.FS_LIST_TAGS, kbId) as Promise<TagInfo[]>,
+    listNotes: (kbId: string, sort?: 'name' | 'mtime' | 'created') => ipcRenderer.invoke(IPC.FS_LIST_NOTES, kbId, sort) as Promise<NoteInfo[]>,
     notesByTag: (kbId: string, tag: string) => ipcRenderer.invoke(IPC.FS_NOTES_BY_TAG, kbId, tag) as Promise<TagNote[]>
   },
   media: {

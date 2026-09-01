@@ -25,6 +25,7 @@ export const IPC = {
   FS_READ_TEXT: 'fs:readText',
   FS_WRITE_TEXT: 'fs:writeText',
   FS_LIST_TAGS: 'fs:listTags',
+  FS_LIST_NOTES: 'fs:listNotes',
   FS_NOTES_BY_TAG: 'fs:notesByTag',
 
   // Plugin（插件系统，doc/插件技术实现方案.md）
