@@ -1,6 +1,6 @@
 {
   "name": "forgenote",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "锦囊笔记 ForgeNote - 本地开源AI知识库笔记",
   "main": "dist/main/index.js",
   "author": "Pan HuaChao",
