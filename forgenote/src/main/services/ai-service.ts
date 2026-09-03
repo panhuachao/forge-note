@@ -290,7 +290,10 @@ class AIService {
           { role: 'user', content: user }
         ],
         ...(sampling && sampling.temperature !== undefined ? { options: { temperature: sampling.temperature, presence_penalty: sampling.presence_penalty ?? 0, frequency_penalty: sampling.frequency_penalty ?? 0 } } : {})
-      })
+      }),
+      // 总请求超时：undici 默认只覆盖 connect，没覆盖 body；
+      // 服务器半响应/卡住会永久等待，此处强制 90s 兜底。
+      signal: AbortSignal.timeout(90_000)
     });
     if (!r.ok) throw new Error(`Ollama 调用失败: ${r.status} ${await r.text()}`);
     const data = (await r.json()) as { message: { content: string } };
@@ -316,7 +319,10 @@ class AIService {
         ...(sampling?.presence_penalty !== undefined ? { presence_penalty: sampling.presence_penalty } : {}),
         ...(sampling?.frequency_penalty !== undefined ? { frequency_penalty: sampling.frequency_penalty } : {}),
         ...(sampling?.max_tokens !== undefined ? { max_tokens: sampling.max_tokens } : {})
-      })
+      }),
+      // 总请求超时：90s 内必须拿到响应，否则 AbortController 触发，
+      // 让 learn-service 的 chatWithRetry 接管重试。
+      signal: AbortSignal.timeout(90_000)
     });
     if (!r.ok) throw new Error(`OpenAI 调用失败: ${r.status} ${await r.text()}`);
     const data = (await r.json()) as { choices: { message: { content: string } }[] };

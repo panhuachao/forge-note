@@ -55,6 +55,7 @@ export type IconName =
   | 'bell'
   | 'bookmark'
   | 'book-open'
+  | 'academic-cap'
   | 'light-bulb'
   | 'folder-open'
   | 'folder-tree'
@@ -119,6 +120,7 @@ const outlineMap: Record<string, any> = {
   bell: HeroiconsOutline.BellIcon,
   bookmark: HeroiconsOutline.BookmarkIcon,
   'book-open': HeroiconsOutline.BookOpenIcon,
+  'academic-cap': HeroiconsOutline.AcademicCapIcon,
   'light-bulb': HeroiconsOutline.LightBulbIcon,
   'chat-bubble': HeroiconsOutline.ChatBubbleLeftRightIcon,
   bolt: HeroiconsOutline.BoltIcon,

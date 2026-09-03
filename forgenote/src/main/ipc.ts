@@ -23,6 +23,7 @@ import {
   markSuggestionsShown
 } from './services/patrol-service';
 import { versionService } from './services/version-service';
+import { learnService } from './services/learn-service';
 import { pluginHost, forwardPluginEvents } from './services/plugin-host';
 import { commandRegistry } from './services/plugin-api';
 import type { UserProfile } from '@shared/types/profile';
@@ -397,6 +398,22 @@ export function registerIpcHandlers(getMainWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.PROFILE_GET, async (_e, kbId: string) => profileService.getProfile(kbId));
   ipcMain.handle(IPC.PROFILE_SAVE, async (_e, kbId: string, profile: UserProfile) => profileService.saveProfile(kbId, profile));
   ipcMain.handle(IPC.PROFILE_RESET, async (_e, kbId: string) => profileService.resetProfile(kbId));
+
+  // 主题学习（Learn）：计划生成 + 逐篇生成，进度实时推送渲染层
+  ipcMain.handle(IPC.LEARN_CREATE, async (_e, input) => {
+    const win = getMainWindow();
+    return await learnService.create(input, (p) => {
+      if (win && !win.isDestroyed()) win.webContents.send(IPC.LEARN_PROGRESS, p);
+    });
+  });
+  ipcMain.handle(IPC.LEARN_LIST, async () => learnService.list());
+  ipcMain.handle(IPC.LEARN_GET, async (_e, id: string) => learnService.get(id));
+  ipcMain.handle(IPC.LEARN_GET_ARTICLE, async (_e, id: string, articleId: string) =>
+    learnService.getArticle(id, articleId)
+  );
+  ipcMain.handle(IPC.LEARN_DELETE, async (_e, id: string) => {
+    await learnService.delete(id);
+  });
 
   // 事件总线 -> 渲染
   eventBus.on('fsChange', (payload) => {

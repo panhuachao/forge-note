@@ -1,6 +1,12 @@
 // 检索服务（S1 重构：SQLite 持久化 + RAG 分块 + 增量维护 + 查询不阻塞）
 // 索引以 SQLite（note_chunks / note_meta）为持久真源，内存为热缓存，
 // 启动时从 DB 加载，写入/删除经 fs-service 单通道增量更新，查询路径不再触发全目录重扫。
+//
+// 重要约束：本服务的 walk() / reindex() / rebuildNoteMeta() / rebuildTagIndex() 必须跳过
+// 隐藏目录（isHidden，即以 '.' 开头的目录，如 .forge/versions 版本快照目录）。
+// 否则版本记录 v_*.md 会被误当作普通笔记写进 note_meta / note_chunks 索引，
+// 进而污染「今天的笔记」「双链检查」「知识库巡检」「RAG 召回」等所有依赖索引的功能。
+// 若历史库已误入残留，执行一次「重建索引」即可自然清掉（rebuildNoteMeta 走带过滤的 walk）。
 import { promises as fs } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';

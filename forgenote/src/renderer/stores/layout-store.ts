@@ -5,7 +5,7 @@ import type { TreeNode } from '@shared/types';
 /** 内置视图（doc/插件技术实现方案.md §10.4） */
 export type BuiltinView =
   | 'note' | 'graph' | 'template' | 'audit' | 'settings' | 'home'
-  | 'chat' | 'search-results' | 'tag-notes' | 'inspiration' | 'diagnose' | 'plugins';
+  | 'chat' | 'search-results' | 'tag-notes' | 'inspiration' | 'diagnose' | 'plugins' | 'learn' | 'learn-session';
 
 /**
  * 允许插件注册自定义视图：
@@ -16,7 +16,7 @@ export type MainView = BuiltinView | (string & {});
 /** 判断是否为内置视图（App.renderMain 据此决定是否查插件视图表） */
 export const BUILTIN_VIEWS: BuiltinView[] = [
   'note', 'graph', 'template', 'audit', 'settings', 'home',
-  'chat', 'search-results', 'tag-notes', 'inspiration', 'diagnose', 'plugins'
+  'chat', 'search-results', 'tag-notes', 'inspiration', 'diagnose', 'plugins', 'learn', 'learn-session'
 ];
 export type TreeView = 'tree' | 'tags' | 'notes';
 export type SortMode = 'name' | 'mtime' | 'created';

@@ -157,7 +157,15 @@ export const IPC = {
   // User Profile（用户画像，doc/用户画像实现方案.md）
   PROFILE_GET: 'profile:get',
   PROFILE_SAVE: 'profile:save',
-  PROFILE_RESET: 'profile:reset'
+  PROFILE_RESET: 'profile:reset',
+
+  // 主题学习（Learn）
+  LEARN_CREATE: 'learn:create',
+  LEARN_LIST: 'learn:list',
+  LEARN_GET: 'learn:get',
+  LEARN_GET_ARTICLE: 'learn:getArticle',
+  LEARN_DELETE: 'learn:delete',
+  LEARN_PROGRESS: 'learn:progress'
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

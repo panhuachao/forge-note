@@ -219,6 +219,15 @@ export function removeChunks(kbId: string, notePath: string): void {
 }
 
 function getDb(): Database.Database {
+  if (!db) {
+    // 理论上 app 启动时已 initStore；若因异常/重载/崩溃恢复导致 db 为 null，
+    // 这里做一次自愈，避免所有 store 相关 IPC 直接抛 "Store not initialized"。
+    try {
+      initStore();
+    } catch (e) {
+      throw new Error('Store 尚未初始化，且自动初始化失败：' + String((e as Error)?.message ?? e));
+    }
+  }
   if (!db) throw new Error('Store not initialized');
   return db;
 }

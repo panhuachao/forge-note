@@ -17,6 +17,8 @@ import { TagNotesPage } from './pages/TagNotesPage';
 import { InspirationPage } from './pages/InspirationPage';
 import { DiagnosePage } from './pages/DiagnosePage';
 import PluginsPage from './pages/PluginsPage';
+import { LearnInputPage } from './pages/LearnInputPage';
+import { LearnSessionPage } from './pages/LearnSessionPage';
 import { StatusBar } from './components/StatusBar';
 import { Onboarding } from './components/Onboarding';
 import { SetupWizard } from './components/SetupWizard';
@@ -125,6 +127,8 @@ export function App() {
     if (mainView === 'search-results') return <SearchResultsPage />;
     if (mainView === 'tag-notes') return <TagNotesPage />;
     if (mainView === 'inspiration') return <InspirationPage />;
+    if (mainView === 'learn') return <LearnInputPage />;
+    if (mainView === 'learn-session') return <LearnSessionPage />;
     if (mainView === 'diagnose') return <DiagnosePage />;
     // 内置路由均未命中 → 查插件注册的自定义视图（doc/插件技术实现方案.md §10.4）
     if (BUILTIN_VIEWS.indexOf(mainView as BuiltinView) < 0) return <PluginView viewId={mainView} />;

@@ -224,7 +224,7 @@ export async function runPatrol(kbId: string, force = false): Promise<PatrolRepo
       return;
     }
     const subDirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.'));
-    const files = entries.filter((e) => e.isFile() && e.name.endsWith('.md'));
+    const files = entries.filter((e) => e.isFile() && e.name.endsWith('.md') && !e.name.startsWith('.'));
     if (!files.length && !subDirs.length && dir) {
       emptyDirs.push(dir);
       return;

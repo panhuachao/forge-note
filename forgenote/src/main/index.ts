@@ -12,6 +12,7 @@ import { registerBuiltInAgents } from './services/agents/register';
 import { sessionStore } from './services/session-store';
 import { versionService } from './services/version-service';
 import { pluginHost } from './services/plugin-host';
+import { initLearnStorage } from './services/learn-storage';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -192,6 +193,13 @@ app.whenReady().then(async () => {
       `<div style="font-family:-apple-system,'PingFang SC',sans-serif;padding:32px;color:#b91c1c"><h2>配置数据库初始化失败</h2><pre style="white-space:pre-wrap">${msg}</pre><p style="color:#334155">${hint}</p></div>`
     )}`;
     mainWindow?.loadURL(html);
+  }
+
+  // 初始化主题学习的目录/文件存储（含旧版 SQLite 的一次性迁移），失败不阻塞主流程
+  try {
+    initLearnStorage();
+  } catch (err) {
+    console.error('[main] initLearnStorage 失败：', err);
   }
 
   // 先创建窗口，避免 initStore 等后续步骤抛错导致窗口永远不显示

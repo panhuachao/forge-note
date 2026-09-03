@@ -258,6 +258,29 @@ const api = {
     save: (kbId: string, profile: UserProfile) => ipcRenderer.invoke(IPC.PROFILE_SAVE, kbId, profile) as Promise<UserProfile>,
     reset: (kbId: string) => ipcRenderer.invoke(IPC.PROFILE_RESET, kbId) as Promise<UserProfile>
   },
+  learn: {
+    create: (input: import('@shared/types/learn').LearnCreateInput) =>
+      ipcRenderer.invoke(IPC.LEARN_CREATE, input) as Promise<import('@shared/types/learn').LearningSession>,
+    list: () =>
+      ipcRenderer.invoke(IPC.LEARN_LIST) as Promise<import('@shared/types/learn').LearnSessionSummary[]>,
+    get: (id: string) =>
+      ipcRenderer.invoke(IPC.LEARN_GET, id) as Promise<import('@shared/types/learn').LearningSession | null>,
+    getArticle: (id: string, file: string) =>
+      ipcRenderer.invoke(
+        IPC.LEARN_GET_ARTICLE,
+        id,
+        file
+      ) as Promise<{ content: string } | null>,
+    remove: (id: string) => ipcRenderer.invoke(IPC.LEARN_DELETE, id) as Promise<void>,
+    // 生成进度（主进程 → 渲染）：注册监听，返回取消订阅
+    onProgress: (cb: (p: import('@shared/types/learn').LearnProgress) => void) => {
+      const listener = (_e: IpcRendererEvent, p: import('@shared/types/learn').LearnProgress) => cb(p);
+      ipcRenderer.on(IPC.LEARN_PROGRESS, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.LEARN_PROGRESS, listener);
+      };
+    }
+  },
   win: {
     maximizeToggle: () => ipcRenderer.invoke(IPC.WIN_MAXIMIZE_TOGGLE) as Promise<void>,
     isMaximized: () => ipcRenderer.invoke(IPC.WIN_IS_MAXIMIZED) as Promise<boolean>,

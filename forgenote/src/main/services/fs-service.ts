@@ -450,7 +450,8 @@ class FSService {
       for (const e of entries) {
         const full = join(p, e.name);
         const relPath = rel ? join(rel, e.name) : e.name;
-        if (e.isDirectory()) {
+        // 跳过隐藏目录（如 .forge/versions），避免把版本快照 v_*.md 误当笔记清理索引
+        if (e.isDirectory() && !e.name.startsWith('.')) {
           walk(full, relPath);
         } else if (e.isFile() && e.name.toLowerCase().endsWith('.md') && !e.name.startsWith('.')) {
           collected.push(relPath);

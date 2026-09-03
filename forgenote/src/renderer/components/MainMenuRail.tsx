@@ -71,6 +71,23 @@ export function MainMenuRail() {
           灵感工坊
         </span>
       </button>
+      <button
+        onClick={() => activeKb && setMainView('learn')}
+        disabled={!activeKb}
+        title="主题学习：AI 生成系列学习文章"
+        className={`group relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
+          mainView === 'learn' || mainView === 'learn-session'
+            ? 'bg-brand-soft text-brand'
+            : activeKb
+            ? 'text-fg-muted hover:bg-hover-bg hover:text-fg'
+            : 'text-fg-faint cursor-not-allowed'
+        }`}
+      >
+        <Icon name="academic-cap" className="w-5 h-5" />
+        <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded bg-canvas text-fg border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+          主题学习
+        </span>
+      </button>
 
       {/* 分割 */}
       <div className="w-7 my-1 border-t border-border-soft" />

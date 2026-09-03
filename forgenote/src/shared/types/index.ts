@@ -5,3 +5,4 @@ export * from './ai';
 export * from './profile';
 export * from './template';
 export * from './events';
+export * from './learn';
