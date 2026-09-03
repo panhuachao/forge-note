@@ -20,7 +20,7 @@ import { renderMarkdownPreview } from '../utils/markdown-preview';
 import { type LearningSession } from '@shared/types/learn';
 
 // ==================== [LearnDbg] 排查日志（用于定位重复执行 / 泄漏，定位完成后请删除或置 DEBUG=false） ====================
-const DEBUG = true;
+const DEBUG = false;
 let dbgClock = 0; // 全局事件序号：数“已发生多少事件”，若快速放大说明存在重复/循环
 let dbgViewSeq = 0; // LearnSessionView 实例唯一序号
 let dbgPageSeq = 0; // LearnSessionPage 实例唯一序号
