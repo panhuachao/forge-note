@@ -224,9 +224,23 @@ export function renderMarkdownPreview(md: string, kbId: string, currentPath: str
       continue;
     }
     // 段落
+    // 注意：停止正则里不能包含「\|」——以 | 开头但并非合法表格的行（例如
+    // 孤立表头行：以 | 结尾、下一行却没有分隔行）不会命中上方 table 分支，
+    // 若段落也把它当结束符，该行将无任何分支消费，外层 while 的 i 永不推进，
+    // 造成死循环（表现为页面卡死 loading）。故此处只排除明确的块级结构开头，
+    // 孤立表格行会作为普通段落文本吞掉并推进。
     const buf: string[] = [];
-    while (i < lines.length && lines[i].trim() !== '' && !/^(#{1,6}\s|```|>\s?|\s*[-*+]\s|\s*\d+\.\s|\|)/.test(lines[i])) {
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !/^(#{1,6}\s|```|>\s?|\s*[-*+]\s|\s*\d+\.\s)/.test(lines[i])
+    ) {
       buf.push(lines[i]);
+      i++;
+    }
+    // 兜底：保证外层循环每轮至少消费一行，任何行都不可能让主循环空转（防死循环）
+    if (buf.length === 0) {
+      buf.push(line);
       i++;
     }
     out.push(`<p>${inline(escapeHtml(buf.join('\n')))}</p>`);

@@ -26,50 +26,8 @@ const LEARN_ROOT = join(app.getPath('userData'), 'forgenote', 'learnings');
 /** sessionId → 主题目录 的内存缓存，避免每次切换文章都遍历所有主题并解析 index.json */
 const _dirCacheById = new Map<string, string>();
 
-/**
- * 文章正文的小型 LRU 缓存（按「sessionId|file」为键）：
- * - 切换文章时命中 → 直接返回，省去磁盘 IO；
- * - 容量上限 64 篇，避免长会话 + 多主题共用时占用过多内存。
- * - 仅做弱引用即可：学习页关掉或会话被删除时调 `invalidateContentCache(id)` 清空对应条目。
- */
-const ARTICLE_CACHE_LIMIT = 64;
-const _articleCache = new Map<string, string>();
-
-function articleCacheKey(sessionId: string, file: string): string {
-  return `${sessionId}|${file}`;
-}
-
-export function getCachedArticleContent(sessionId: string, file: string): string | undefined {
-  const key = articleCacheKey(sessionId, file);
-  const v = _articleCache.get(key);
-  if (v === undefined) return undefined;
-  // LRU：访问后挪到末尾
-  _articleCache.delete(key);
-  _articleCache.set(key, v);
-  return v;
-}
-
-export function setCachedArticleContent(sessionId: string, file: string, content: string): void {
-  const key = articleCacheKey(sessionId, file);
-  if (_articleCache.has(key)) _articleCache.delete(key);
-  _articleCache.set(key, content);
-  while (_articleCache.size > ARTICLE_CACHE_LIMIT) {
-    const first = _articleCache.keys().next().value;
-    if (!first) break;
-    _articleCache.delete(first);
-  }
-}
-
-export function invalidateContentCache(sessionId?: string): void {
-  if (!sessionId) {
-    _articleCache.clear();
-    return;
-  }
-  const prefix = `${sessionId}|`;
-  for (const k of Array.from(_articleCache.keys())) {
-    if (k.startsWith(prefix)) _articleCache.delete(k);
-  }
-}
+// 注意：正文不进进程级缓存 —— 单篇可达数百 KB，缓存会让大量正文常驻内存。
+// 每次读取直接走 readFileSync（本地磁盘 IO 通常在毫秒级），读完即用即弃。
 
 // index.json 的落盘结构（不含正文，正文在各自的 .md 里）
 interface StoredArticle {
@@ -276,12 +234,10 @@ export function deleteSessionDir(dir: string): void {
 }
 
 /**
- * 按需读取单篇文章正文：直接读 .md，不再 readFileSync + JSON.parse index.json。
+ * 按需读取单篇文章正文：直接读对应 .md，不解析 index.json，不驻留进程缓存。
  * 路径安全校验：拒绝包含分隔符或相对路径的 file 名，防止越界读取主题目录外的内容。
- * 进程级 LRU 缓存：同一篇文章重复访问时直接命中，省去磁盘 IO 与 IPC 序列化往返。
  */
 export function loadArticleByFile(
-  sessionId: string,
   dir: string,
   file: string
 ): { id?: string; title?: string; content: string } | null {
@@ -294,11 +250,7 @@ export function loadArticleByFile(
   ) {
     return null;
   }
-  const cached = getCachedArticleContent(sessionId, file);
-  if (cached !== undefined) return { content: cached };
-  const content = readArticleFile(dir, file);
-  setCachedArticleContent(sessionId, file, content);
-  return { content };
+  return { content: readArticleFile(dir, file) };
 }
 
 /**

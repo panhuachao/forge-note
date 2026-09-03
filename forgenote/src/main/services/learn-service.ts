@@ -16,16 +16,15 @@ import {
   deleteSessionDir,
   listTopicDirs,
   loadArticleByFile,
-  invalidateDirCache,
-  invalidateContentCache,
-  setCachedArticleContent
+  invalidateDirCache
 } from './learn-storage';
 import {
-  LEARN_MODES,
   getLearnMode,
+  getFixedSteps,
   type LearnMode,
   type LearnModule,
   type LearnArticle,
+  type LearnFixedStep,
   type LearningSession,
   type LearnSessionSummary,
   type LearnProgress,
@@ -178,7 +177,33 @@ function buildSystem(mode: LearnMode): string {
   ].join('\n');
 }
 
+/**
+ * 固定方法论模式（如「姜胡说快速学习」）的目录生成：
+ * 目录由内置步骤直接决定，不调用模型 —— 方法论的步骤顺序与数量是固定的，
+ * 交给模型自由规划反而可能被改写 / 遗漏，且白白多一次网络往返（这一步最慢）。
+ */
+function buildFixedPlan(mode: LearnMode): LearnModule[] {
+  const steps = getFixedSteps(mode.key);
+  if (!steps) return [];
+  return steps.map((s) => ({
+    id: nanoid(8),
+    title: s.moduleTitle,
+    articles: [
+      {
+        id: nanoid(8),
+        title: s.articleTitle,
+        outline: [s.summary],
+        content: '',
+        file: ''
+      }
+    ]
+  }));
+}
+
 async function generatePlan(topic: string, extra: string, mode: LearnMode): Promise<LearnModule[]> {
+  // 固定方法论：跳过模型规划，直接产出内置目录
+  if (mode.fixedMethodology) return buildFixedPlan(mode);
+
   const sys = buildSystem(mode) + '\n\n你同时是一位课程/知识体系架构师，擅长把主题拆成由浅入深的学习路径。';
   const prompt = [
     `主题：「${topic}」`,
@@ -242,14 +267,80 @@ function buildArticleSystem(mode: LearnMode): string {
   ].join('\n');
 }
 
+/** 把步骤提示词模板里的 [某某领域] 占位符替换为真实主题 */
+function fillTopic(tpl: string, topic: string): string {
+  return tpl.replace(/\[某某领域\]/g, topic);
+}
+
+/**
+ * 固定方法论模式的单步生成：直接用该步骤内置的提示词模板去问模型，
+ * 并把 dependsOn 声明的前序步骤正文作为上下文带上（例如第 3 步要用第 1 步的「3~5 条关键知识」）。
+ */
+function buildFixedStepPrompt(
+  topic: string,
+  extra: string,
+  stepIndex: number,
+  steps: LearnFixedStep[],
+  prevContents: Map<number, string>
+): string {
+  const step = steps[stepIndex - 1];
+  const parts: string[] = [fillTopic(step.prompt, topic)];
+
+  // 注入前序步骤产出，让依赖链成立
+  const deps = step.dependsOn ?? [];
+  if (deps.length) {
+    for (const d of deps) {
+      const prev = prevContents.get(d);
+      if (prev?.trim()) {
+        parts.push(
+          '',
+          `【第 ${d} 步的产出，供你参考（其中「3~5 条关键知识和概念」就是指以下内容）】`,
+          prev.trim()
+        );
+      }
+    }
+  }
+
+  parts.push(
+    '',
+    '【输出要求】',
+    '- 使用中文 Markdown，含多级标题与要点列表，必要时用表格；',
+    '- 直接给出该步骤要的干货，不要复述我的问题、不要写开场白与客套；',
+    '- 内容必须准确、不编造；结论要能回答「所以我现在该怎么做」。'
+  );
+  if (extra?.trim()) parts.push(`- 额外注意：${extra.trim()}`);
+
+  return parts.join('\n');
+}
+
 async function generateArticle(
   topic: string,
   extra: string,
   mode: LearnMode,
   moduleTitle: string,
-  art: LearnArticle
+  art: LearnArticle,
+  /** 固定方法论模式下的第几步（1-based）；常规模式传 0 忽略 */
+  stepIndex = 0,
+  /** 固定方法论模式下前面各步的正文：stepIndex → content */
+  prevContents?: Map<number, string>
 ): Promise<string> {
   const sys = buildArticleSystem(mode);
+
+  // 固定方法论：用内置步骤模板，而不是通用的「撰写文章」提示词
+  if (mode.fixedMethodology && stepIndex > 0) {
+    const steps = getFixedSteps(mode.key);
+    if (steps) {
+      return await chatWithRetry(
+        buildFixedStepPrompt(topic, extra, stepIndex, steps, prevContents ?? new Map()),
+        sys,
+        {
+          temperature: mode.sampling.temperature,
+          max_tokens: mode.sampling.max_tokens
+        }
+      );
+    }
+  }
+
   const outline = art.outline && art.outline.length
     ? art.outline.map((o, i) => `${i + 1}. ${o}`).join('\n')
     : '（请自行组织合理的结构）';
@@ -289,14 +380,14 @@ export const learnService = {
     return loadFullSession(dir, false);
   },
 
-  /** 按需获取单篇文章正文（只读对应 .md，不再读 index.json；进程内 LRU 命中即返回） */
+  /** 按需获取单篇文章正文：只读对应 .md，不解析 index.json，不做进程级缓存 */
   async getArticle(
     id: string,
     file: string
   ): Promise<{ content: string } | null> {
     const dir = findSessionDirById(id);
     if (!dir) return null;
-    return loadArticleByFile(id, dir, file);
+    return loadArticleByFile(dir, file);
   },
 
   /** 删除会话（整个主题文件夹） */
@@ -305,7 +396,6 @@ export const learnService = {
     if (dir) {
       deleteSessionDir(dir);
       invalidateDirCache(id);
-      invalidateContentCache(id);
     }
   },
 
@@ -340,7 +430,9 @@ export const learnService = {
         phase: 'planning',
         sessionId,
         step: 1,
-        message: '第一步：正在生成目录架构（模块与文章大纲）…'
+        message: mode.fixedMethodology
+          ? '第一步：正在装载内置方法论步骤…'
+          : '第一步：正在生成目录架构（模块与文章大纲）…'
       });
 
       const plan = await generatePlan(input.topic, input.extra, mode);
@@ -357,7 +449,9 @@ export const learnService = {
         step: 1,
         modules: plan,
         totalArticles,
-        message: `第一步完成：已规划 ${plan.length} 个模块 / ${totalArticles} 篇文章，开始第二步逐篇生成`
+        message: mode.fixedMethodology
+          ? `第一步完成：已装载 ${plan.length} 个方法论步骤，开始逐步执行`
+          : `第一步完成：已规划 ${plan.length} 个模块 / ${totalArticles} 篇文章，开始第二步逐篇生成`
       });
 
       // 预计算每个模块之前的累计文章数，用于换算全局序号（第 X/Y 篇）
@@ -367,6 +461,11 @@ export const learnService = {
         offsetBefore.push(acc);
         acc += m.articles.length;
       }
+
+      // 固定方法论模式：按「第 X 步」播报，并累积各步产出供后续步骤引用
+      const fixed = !!mode.fixedMethodology;
+      const unit = fixed ? '步' : '篇';
+      const stepContents = new Map<number, string>();
 
       for (let mi = 0; mi < session.modules.length; mi++) {
         const mod = session.modules[mi];
@@ -382,15 +481,24 @@ export const learnService = {
             moduleIndex: mi,
             articleIndex: ai,
             title: art.title,
-            message: `第二步：生成第 ${no}/${totalArticles} 篇 —「${mod.title} / ${art.title}」`
+            message: fixed
+              ? `第二步：执行第 ${no}/${totalArticles} ${unit} —「${mod.title}」`
+              : `第二步：生成第 ${no}/${totalArticles} ${unit} —「${mod.title} / ${art.title}」`
           });
-          const content = await generateArticle(input.topic, input.extra, mode, mod.title, art);
+          // 固定模式下 no 即步骤号，把前序产出一起传进去（第 3 步要用第 1 步的核心知识清单）
+          const content = await generateArticle(
+            input.topic,
+            input.extra,
+            mode,
+            mod.title,
+            art,
+            fixed ? no : 0,
+            stepContents
+          );
           art.content = content;
-          // 每完成一篇即落盘 .md + 进程缓存，避免中断丢失全部，也避免用户立刻点开再读一次磁盘
-          if (art.file) {
-            writeArticleFile(dir, art.file, content);
-            setCachedArticleContent(sessionId, art.file, content);
-          }
+          if (fixed) stepContents.set(no, content);
+          // 每完成一篇即落盘 .md，避免中断丢失全部
+          if (art.file) writeArticleFile(dir, art.file, content);
           onProgress?.({
             phase: 'article-done',
             sessionId,
@@ -401,7 +509,7 @@ export const learnService = {
             articleIndex: ai,
             title: art.title,
             content,
-            message: `✓ 第 ${no}/${totalArticles} 篇完成：${art.title}`
+            message: `✓ 第 ${no}/${totalArticles} ${unit}完成：${art.title}`
           });
           // 篇间小歇，避免触发模型服务侧的速率限制（强/专家模式更长）
           await new Promise((r) => setTimeout(r, mode.key === 'expert' ? 600 : 300));
@@ -428,5 +536,3 @@ export const learnService = {
     }
   }
 };
-
-export { LEARN_MODES };

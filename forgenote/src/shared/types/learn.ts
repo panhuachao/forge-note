@@ -1,7 +1,7 @@
 // 主题学习（Learn）功能相关类型与内置学习模式
 // 学习模式内置提示词与文体/严谨性约定，前端用于展示、后端用于组装系统提示。
 
-export type LearnModeKey = 'normal' | 'study' | 'expert';
+export type LearnModeKey = 'normal' | 'study' | 'expert' | 'jianghushuo';
 
 export interface LearnMode {
   key: LearnModeKey;
@@ -15,6 +15,11 @@ export interface LearnMode {
   style: string;
   /** 采样参数：不同模式对应不同 temperature 与篇幅 */
   sampling: { temperature: number; max_tokens?: number };
+  /**
+   * 固定方法论模式：置为 true 时，目录不交给模型自由规划，
+   * 而是直接用内置的 fixedSteps 生成（保证方法论步骤不被模型改写/遗漏）。
+   */
+  fixedMethodology?: boolean;
 }
 
 export const LEARN_MODES: LearnMode[] = [
@@ -50,8 +55,87 @@ export const LEARN_MODES: LearnMode[] = [
     style:
       '正式、精确、可落地；含形式化定义、复杂度 / 成本分析、反例与陷阱、参考文献思路；避免泛泛而谈与营销式措辞。',
     sampling: { temperature: 0.2, max_tokens: 1900 }
+  },
+  {
+    key: 'jianghushuo',
+    title: '姜胡说快速学习',
+    desc: '四步跨领域速成：抓核心 → 砍枝节 → 类比实战 → 取心法',
+    icon: 'bolt',
+    system:
+      '你是「姜胡说」式的跨领域快速学习教练，信奉二八原则与最小可行行动：先帮新手锁定能覆盖 80% 场景的核心知识，再果断砍掉可延迟的枝节，用生活化类比让人秒懂，最后给出高手的第一性原理心法。',
+    style:
+      '直接、务实、不说教；优先给可执行的清单与判断标准；善用生活化类比与表格对比；每个结论都要能回答「所以我现在该怎么做」；避免堆砌术语与空泛的正确废话。',
+    sampling: { temperature: 0.45, max_tokens: 1600 },
+    fixedMethodology: true
   }
 ];
+
+/**
+ * 「姜胡说快速跨领域学习」的固定四步方法论。
+ *
+ * 与常规模式不同：目录不交给模型自由规划，而是固定为这 4 个模块 / 4 篇文章，
+ * 保证方法论步骤不被模型改写或遗漏；每篇文章则用该步骤内置的提示词模板去问模型。
+ *
+ * prompt 模板里的 [某某领域] 会在运行时替换为用户输入的主题。
+ * 第 3 步依赖第 1 步的产出（"第一条提示词告诉我的 3~5 条关键知识"），
+ * 由 learn-service 在生成时把前序步骤正文注入上下文。
+ */
+export interface LearnFixedStep {
+  /** 模块（栏目）标题，展示在左侧大纲 */
+  moduleTitle: string;
+  /** 该步骤下那篇文章的标题 */
+  articleTitle: string;
+  /** 一句话说明这一步在做什么（用于 outline / 进度提示） */
+  summary: string;
+  /** 该步骤的提示词模板，[某某领域] 会被替换为主题 */
+  prompt: string;
+  /**
+   * 生成该步时，需要把前面哪些步骤（按顺序，1-based）的正文作为上下文注入。
+   * 第 3 步填 [1]，即把第 1 步产出的「3~5 条关键知识」带进去。
+   */
+  dependsOn?: number[];
+}
+
+export const JIANGHUSHUO_STEPS: LearnFixedStep[] = [
+  {
+    moduleTitle: '第一步 · 锁定 20% 核心知识',
+    articleTitle: '锁定覆盖 80% 场景的核心知识',
+    summary: '用二八原则找出最少且必备的知识',
+    prompt: `我是一个完全的新手，但我想快速进入[某某领域]。请你根据二八原则，告诉我这个领域最少且必备的知识，帮我列出3~5条最关键的知识。
+要求：
+1、能涵盖这个领域80%的使用场景
+2、告诉我这些概念为什么重要
+3、那些很重要、但在实操过程中一定会接触到的知识，不必列入`
+  },
+  {
+    moduleTitle: '第二步 · 排除可延迟的 80%',
+    articleTitle: '排除看似重要、实则可延迟的知识',
+    summary: '砍掉新手常犯的低效误区与可延后概念',
+    prompt: `在学习[某某领域]的过程中，作为新手经常陷入哪些低效的、或者完全没必要现在就学习的误区？帮我列出三条看起来很基础、但实际上完全可以延迟学习的概念。
+告诉我：
+1、为什么它可以被延迟
+2、暂时不学习它会造成什么影响`
+  },
+  {
+    moduleTitle: '第三步 · 类比理解 + 一周实战',
+    articleTitle: '用生活化类比理解，并交付一周可完成的最小任务',
+    summary: '把核心概念类比成生活场景，配一周可完成的最小任务',
+    prompt: `请你使用类比思维，尤其最好是生活化的场景，来给我解释第一条提示词告诉我的3~5条关键知识和概念。并且请你帮我设置一个最小可行的任务，让我能够在一周之内就完成这个任务，通过这个任务掌握这些相关知识，建立信心。`,
+    dependsOn: [1]
+  },
+  {
+    moduleTitle: '第四步 · 直击第一性原理',
+    articleTitle: '顶尖高手与普通人的核心差别与心法',
+    summary: '抛开噪音，拿到最接近核心的一条心法',
+    prompt: `[某某领域]的顶尖高手和普通人最大的区别是什么？请你给我一个最接近核心的心法或原则。`
+  }
+];
+
+/** 内置「固定方法论」模式 → 步骤清单；没有固定步骤的模式返回 null */
+export function getFixedSteps(key: LearnModeKey): LearnFixedStep[] | null {
+  if (key === 'jianghushuo') return JIANGHUSHUO_STEPS;
+  return null;
+}
 
 export function getLearnMode(key: string): LearnMode {
   return LEARN_MODES.find((m) => m.key === key) ?? LEARN_MODES[0];

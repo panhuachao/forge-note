@@ -1,32 +1,45 @@
 // 主题学习 · 学习页面（阅读视图）
 // 进入条件：learn-store 的 active 已设置为某次会话。从输入页点历史 / 生成完成后跳转至此。
 //
-// 性能要点（点击切换文章不卡顿）：
-// 1) 会话结构（模块 / 文章元信息）一次取齐，正文按需取 — 后端 getArticle 只读对应 .md，
-//    并有进程级 LRU 兜底二次访问零 IO。
-// 2) 渲染层 articleCache 同时缓存「原文 + 已渲染 HTML」，再次点击同一篇命中即 0 IPC / 0 解析。
-// 3) markdown 解析交给 requestIdleCallback（无则 setTimeout 兜底），避免在主线程同步阻塞长文解析。
-// 4) 渲染完成后在空闲时段预取下一篇 / 上下一篇，下次点击几乎瞬开。
-import { useEffect, useMemo, useRef, useState } from 'react';
+// 数据流（刻意保持最简，不做任何文章级缓存）：
+//   点击文章 → IPC 让后端读对应 .md → 返回正文 → 渲染成 HTML → 展示
+//   展示完即被下一次点击替换，交由 GC 回收，渲染进程内不驻留历史文章。
+//
+// 内存安全约束（曾因违反导致渲染进程 OOM 被杀，勿回退）：
+// - 不缓存「原文 / 已渲染 HTML」：这两者体积可达数百 KB / 篇，缓存会在反复切换与多会话后
+//   持续堆积，是渲染进程内存增长的主因；
+// - 不做后台预取、不做延迟排队解析：任意时刻只有「当前选中文章」的 1 次 IPC + 1 次同步解析，
+//   解析即用即弃；切走 / 卸载后由 effect cleanup 标记丢弃迟到的结果，杜绝任务无限堆积。
+import { useEffect, useRef, useState } from 'react';
 import { useKBStore } from '../stores/kb-store';
 import { useLearnStore } from '../stores/learn-store';
 import { useLayoutStore } from '../stores/layout-store';
 import { Icon } from '../components/Icon';
 import { PageHeader } from '../components/PageHeader';
 import { renderMarkdownPreview } from '../utils/markdown-preview';
-import { type LearningSession, type LearnArticle } from '@shared/types/learn';
+import { type LearningSession } from '@shared/types/learn';
 
-// 进程级 / 跨组件的渲染辅助：将 markdown 解析推迟到 idle / 下一帧，避免阻塞主线程
-function scheduleIdle(cb: () => void, timeout = 120): void {
-  const ric = (window as any).requestIdleCallback as
-    | ((cb: () => void, opts?: { timeout: number }) => number)
-    | undefined;
-  if (ric) ric(cb, { timeout });
-  else setTimeout(cb, 0);
-}
+// ==================== [LearnDbg] 排查日志（用于定位重复执行 / 泄漏，定位完成后请删除或置 DEBUG=false） ====================
+const DEBUG = true;
+let dbgClock = 0; // 全局事件序号：数“已发生多少事件”，若快速放大说明存在重复/循环
+let dbgViewSeq = 0; // LearnSessionView 实例唯一序号
+let dbgPageSeq = 0; // LearnSessionPage 实例唯一序号
+const dbg = (uid: string, msg: string, ...args: unknown[]) => {
+  if (!DEBUG) return;
+  console.log(
+    `[LearnDbg][${String(dbgClock++).padStart(5, '0')}][${performance.now().toFixed(1)}ms][${uid}] ${msg}`,
+    ...args
+  );
+};
+// ====================================================================
 
 // 隔离动态 markdown DOM 的子组件：key 用稳定 id，整体 remount，避免 React 对比几万字符的 HTML
 function MarkdownBlock({ html }: { html: string }) {
+  const prevHtml = useRef<string | null>(null);
+  if (prevHtml.current !== html) {
+    dbg('mdblock', `html ${prevHtml.current === null ? '首次注入' : '更新'} ${prevHtml.current?.length ?? 0}B -> ${html.length}B`);
+    prevHtml.current = html;
+  }
   return (
     <div
       className="markdown-preview learning-md w-full"
@@ -49,107 +62,110 @@ function LearnSessionView({ session }: { session: LearningSession }) {
       ? safeMod.articles[Math.min(selArt, safeMod.articles.length - 1)]
       : null;
 
-  // 渲染层缓存：articleId → { content, html }
-  // 命中时整篇文章零开销（不再 IPC、不再 markdown 解析、不再 React 文本 diff）
-  const articleCache = useRef<Map<string, { content: string; html: string }>>(new Map());
-
   // 当前文章的原文 / 已渲染 HTML / 加载态
+  // 不做任何文章级缓存：每次点击都重新向后端取正文并渲染，渲染完即被替换、交由 GC 回收。
+  // 这是为了避免「原文 + HTML」在渲染进程里长期驻留累积。
   const [articleContent, setArticleContent] = useState('');
   const [articleHtml, setArticleHtml] = useState('');
   const [loadingArticle, setLoadingArticle] = useState(false);
 
   const kbId = activeKb?.id || '';
 
-  // 顺序预取：当前文章加载完 → 在空闲时段预取下一篇 / 上上一篇的原文
-  const prefetch = useMemo(
-    () => async (article: LearnArticle | null) => {
-      if (!article || !article.file) return;
-      if (articleCache.current.has(article.id)) return;
-      try {
-        const res = await window.forge.learn.getArticle(session.id, article.file);
-        if (!res?.content) return;
-        const html = renderMarkdownPreview(res.content, kbId, '');
-        articleCache.current.set(article.id, { content: res.content, html });
-      } catch {
-        /* 预取失败不影响主路径 */
-      }
-    },
-    [session.id, kbId]
-  );
-
-  // 选中文章后按需加载 / 渲染；后端只读对应 .md + 命中 LRU 缓存，markdown 解析走 idle
+  // ===== [LearnDbg] 实例级追踪 =====
+  const uid = useRef(`view${++dbgViewSeq}`).current; // 本组件实例唯一编号：值若增大说明页面反复重建组件
+  const renderNo = useRef(0);
+  renderNo.current += 1;
+  // 渲染心跳：只打印第 1 次与每 200 次，识别“高频重渲染”（死循环渲染时 renderNo 会快速上涨）
+  if (renderNo.current === 1 || renderNo.current % 200 === 0) {
+    dbg(uid, `render 心跳 #${renderNo.current} (loading=${loadingArticle}, content=${articleContent.length}B, html=${articleHtml.length}B)`);
+  }
+  // 依赖变化追踪：打印 effect 的四项依赖签名，能定位“是哪一次 render / 哪个依赖在抖动”
+  const depsSig = `${session.id}|${safeArt?.id}|${safeArt?.file}|${kbId}`;
+  const prevDepsSig = useRef('');
+  if (prevDepsSig.current !== depsSig) {
+    dbg(uid, `deps 变化: "${prevDepsSig.current}" -> "${depsSig}" @render#${renderNo.current}`);
+    prevDepsSig.current = depsSig;
+  }
+  // 挂载 / 卸载追踪：连续 MOUNT 说明组件被反复新建（key 抖动 / 父级重挂载）
   useEffect(() => {
+    const artTotal = session.modules.reduce((n, m) => n + m.articles.length, 0);
+    dbg(uid, `MOUNT session=${session.id} modules=${session.modules.length} articles=${artTotal}`);
+    return () => dbg(uid, 'UNMOUNT（若有挂起 IPC / 定时器未清，此处可见）');
+  }, []);
+
+  // 选中文章后按需加载 / 渲染；后端只读对应 .md，正文取回后同步渲染
+  useEffect(() => {
+    const artKey = safeArt ? `${safeArt.id}/${safeArt.file ?? ''}` : 'null';
+    dbg(uid, `[load-effect] 触发 art=${artKey}`);
     if (!safeArt) {
       setArticleContent('');
       setArticleHtml('');
       setLoadingArticle(false);
       return;
     }
-    const cached = articleCache.current.get(safeArt.id);
-    if (cached) {
-      // 命中缓存：同步设置，无 IPC、无 markdown 解析
-      setArticleContent(cached.content);
-      setArticleHtml(cached.html);
-      setLoadingArticle(false);
-      return;
-    }
-
     let cancelled = false;
     setLoadingArticle(true);
-    // 缓存未命中：先展示 loading 占位（避免闪现旧文章）
+    dbg(uid, '[load-effect] loading=true，清空旧内容');
+    // 先清空旧内容并展示 loading 占位（避免闪现上一篇文章）
     setArticleContent('');
     setArticleHtml('');
 
     const file = safeArt.file;
     if (!file) {
       // 极少数情况（极早期文章或结构异常）：无 file 则无正文
+      dbg(uid, '[load-effect] file 为空 -> 直接结束 loading');
       setLoadingArticle(false);
       return;
     }
 
+    const t0 = performance.now();
+    dbg(uid, `[ipc] -> getArticle(${session.id}, ${file})`);
     window.forge.learn
       .getArticle(session.id, file)
       .then((res) => {
-        if (cancelled) return;
-        const content = res?.content ?? '';
-        setArticleContent(content);
-        // 异步渲染 markdown：让主线程先处理点击反馈、滚动等，避免长文解析卡顿
-        scheduleIdle(() => {
-          if (cancelled) return;
-          try {
-            const html = renderMarkdownPreview(content, kbId, '');
-            if (cancelled) return;
-            articleCache.current.set(safeArt.id, { content, html });
-            setArticleHtml(html);
-          } catch (e) {
-            console.error('[Learn] markdown render failed:', e);
-          } finally {
-            if (!cancelled) setLoadingArticle(false);
+        dbg(uid, `[ipc] <- resolve 耗时 ${(performance.now() - t0).toFixed(1)}ms, content=${res?.content?.length ?? 0}B`);
+        if (cancelled) {
+          dbg(uid, '[ipc] 迟到结果被丢弃(cancelled=true)');
+          return;
+        }
+        try {
+          const content = res?.content ?? '';
+          // IPC 返回后立即同步解析并提交；不缓存、不排队，渲染完即弃。
+          const t1 = performance.now();
+          const html = renderMarkdownPreview(content, kbId, '');
+          dbg(uid, `[render] markdown->html ${(performance.now() - t1).toFixed(1)}ms, content=${content.length}B -> html=${html.length}B`);
+          if (cancelled) {
+            dbg(uid, '[render] 渲染期间被取消(cancelled=true)');
+            return;
           }
-        });
+          // 原文与 HTML 一并提交，React 18 自动批处理，只触发一次渲染
+          setArticleContent(content);
+          setArticleHtml(html);
+          dbg(uid, '[state] setArticleContent + setArticleHtml 提交完成');
+        } catch (e) {
+          dbg(uid, `[render] 异常: ${String(e)}`);
+          console.error('[Learn] markdown render failed:', e);
+        } finally {
+          if (!cancelled) setLoadingArticle(false);
+        }
       })
-      .catch(() => {
+      .catch((e) => {
+        dbg(uid, `[ipc] reject: ${String(e)}`);
         if (!cancelled) {
           setArticleContent('');
+          setArticleHtml('');
           setLoadingArticle(false);
         }
       });
 
-    // 当前文章准备完成后，顺手预取下一篇 / 上一篇，让连续点击顺滑
-    const allArticles = session.modules.flatMap((m) => m.articles);
-    const curIdx = allArticles.findIndex((a) => a.id === safeArt.id);
-    const next = curIdx >= 0 ? allArticles[curIdx + 1] : null;
-    const prev = curIdx > 0 ? allArticles[curIdx - 1] : null;
-    scheduleIdle(() => {
-      if (cancelled) return;
-      void prefetch(next);
-      void prefetch(prev);
-    });
-
     return () => {
+      // 已切走 / 卸载：丢弃迟到的 IPC 结果，避免过期内容覆盖当前选中的文章
+      dbg(uid, '[load-effect] cleanup：cancelled=true（若相邻日志密集出现，说明 effect 被反复重启）');
       cancelled = true;
     };
-  }, [session.id, safeArt?.id, safeArt?.file, kbId, session.modules, prefetch]);
+    // 依赖只保留决定「读哪个文件、用哪个 kb 渲染」的最小集合。
+    // 不再依赖 session.modules（数组引用）与函数引用，避免无关重渲染反复触发本 effect。
+  }, [session.id, safeArt?.id, safeArt?.file, kbId]);
 
   const addToNote = () => {
     if (!safeArt) return;
@@ -286,6 +302,13 @@ function LearnSessionView({ session }: { session: LearningSession }) {
 export function LearnSessionPage() {
   const { active } = useLearnStore();
   const setMainView = useLayoutStore((s) => s.setMainView);
+
+  // ===== [LearnDbg] 页面级挂载追踪：判断页面是否被反复挂载/卸载 =====
+  const pageUid = useRef(`page${++dbgPageSeq}`).current;
+  useEffect(() => {
+    dbg(pageUid, `MOUNT active=${active?.id ?? 'null'}`);
+    return () => dbg(pageUid, `UNMOUNT active=${active?.id ?? 'null'}`);
+  }, []);
 
   if (!active) {
     return (
